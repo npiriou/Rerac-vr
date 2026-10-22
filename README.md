@@ -28,8 +28,8 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 
 | VR control (Touch / PICO through SteamVR) | Original game action |
 | --- | --- |
-| Left stick | Move Ratchet / navigate menus |
-| Right stick | Original follow camera |
+| Left stick | Move Ratchet relative to headset heading / navigate menus |
+| Right stick | Slower horizontal orbit of the original follow camera; head motion looks up/down |
 | Right A | Cross — jump / confirm |
 | Right B | Square — wrench |
 | Left X | Circle — equipped weapon |
@@ -41,10 +41,10 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Right grip | Crouch |
 | Keyboard F8 | Recenter headset |
 
-A regular gamepad and the original keyboard bindings remain usable. F8 recalibrates the physical headset pose without moving Ratchet. The original pause menus and HUD are reused in headset panels.
+A regular gamepad and the original keyboard bindings remain usable. Initial recenter waits until the headset is focused, rather than using its pose while on the desk. F8 recalibrates the physical headset pose without moving Ratchet. Camera pitch/roll come from physical head motion, keeping the virtual horizon level. The original pause menus and HUD are reused in headset panels.
 
 ## Implementation and validation
 
 Guarded source edits are in `patch-manifest.json`; new modules and scripts are in `overlay/`. `resolved-Cargo.lock` pins the verified dependency graph. The default desktop path remains available without `RC_VR=1` and without the optional `vr` feature.
 
-The build runs 15 standalone Rust unit tests for diagnostic math, the upstream quick suite, non-VR and VR compilation checks, and builds the Windows executable. See [local build evidence](LOCAL_BUILD.md), [runtime records](STARTUP_READINESS.json), and [VR implementation details](overlay/docs/vr/README.md). Physical comfort, GPU/compositor budget and full campaign completion require separate validation.
+The build script compiles by default without running tests. Only pass `-RunTests` when the user explicitly requests tests, as required by AGENTS.md. Tests from earlier runs are recorded separately. See [local build evidence](LOCAL_BUILD.md), [runtime records](STARTUP_READINESS.json), and [VR implementation details](overlay/docs/vr/README.md). Physical comfort, GPU/compositor budget and full campaign completion require separate validation.

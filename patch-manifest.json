@@ -104,7 +104,7 @@
       "replacements": [
         {
           "old": "    mouse: Res<ButtonInput<MouseButton>>,\n    motion: Res<AccumulatedMouseMotion>,\n    gamepads: Query<&Gamepad>,\n    mut frame: ResMut<PadFrame>,\n) {\n    frame.0 = sample(&keys, &mouse, &motion, gamepads.iter().next());\n}\n\n/// `RC_PLAY_SCRIPT`: pad input per gameplay tick, `item,item,...` with `item = range:action`.\n///\n",
-          "new": "    mouse: Res<ButtonInput<MouseButton>>,\n    motion: Res<AccumulatedMouseMotion>,\n    gamepads: Query<&Gamepad>,\n    mut frame: ResMut<PadFrame>,\n    #[cfg(feature = \"vr\")] xr: Option<Res<crate::vr::GamePad>>,\n) {\n    frame.0 = sample(&keys, &mouse, &motion, gamepads.iter().next());\n    #[cfg(feature = \"vr\")]\n    crate::vr::merge_pad(&mut frame.0, xr.as_deref());\n}\n\n/// `RC_PLAY_SCRIPT`: pad input per gameplay tick, `item,item,...` with `item = range:action`.\n///\n"
+          "new": "    mouse: Res<ButtonInput<MouseButton>>,\n    motion: Res<AccumulatedMouseMotion>,\n    gamepads: Query<&Gamepad>,\n    mut frame: ResMut<PadFrame>,\n    #[cfg(feature = \"vr\")] xr: Option<Res<crate::vr::GamePad>>,\n) {\n    let gamepad = gamepads.iter().next();\n    #[cfg(feature = \"vr\")]\n    let gamepad = if xr.as_ref().is_some_and(|p| p.active) {\n        // SteamVR controllers may also appear as a virtual gamepad. Avoid duplicate face buttons/R3.\n        None\n    } else { gamepad };\n    frame.0 = sample(&keys, &mouse, &motion, gamepad);\n    #[cfg(feature = \"vr\")]\n    crate::vr::merge_pad(&mut frame.0, xr.as_deref());\n}\n\n/// `RC_PLAY_SCRIPT`: pad input per gameplay tick, `item,item,...` with `item = range:action`.\n///\n"
         }
       ]
     },

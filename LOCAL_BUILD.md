@@ -132,3 +132,9 @@ A sends Cross, B sends Square, X sends Circle, Y sends Triangle. Left/right stic
 Rebuilt native executable SHA-256: `E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011`. Build, non-VR and VR checks passed. Workspace unit suite: 1,090 passed, 3 ignored; standalone diagnostic suite: 15 passed. The new regression checks each physical binding through the original pad decoder and verifies clean releases. Package checks: 21 passed.
 
 Relaunched Novalis in SteamVR with the new binary. Stereo cameras attached; runtime states: IDLE, READY, SYNCHRONIZED. Log: `work/vr/novalis-headset-20261022-210644.log`. Physical verification of the six remapped controls is pending; the earlier user confirmation covers the prior integration binary.
+
+## Camera and movement correction
+
+Initial headset recenter now waits for focus. The tracking rig keeps a level horizon and follows the original camera's yaw and position; physical head motion supplies pitch and roll. Left-stick movement follows horizontal headset heading before reaching the original pad decoder. Menus and the quick-select wheel retain their ordinary directions. Right-stick horizontal orbit is slower, with vertical look on the head. Virtual-gamepad input is ignored while XR input is active to prevent duplicate button/R3 presses.
+
+Native executable SHA-256: `79902F8CEDA780E8B4EEBEDE229F5E74C9F053176CF1CFF80DD16A7657924EDB`. Compilation completed with and without VR. No tests were run, as required by AGENTS.md; the build script now requires explicit `-RunTests` to execute tests. Earlier unit/package and headset evidence remains historical. The new executable was relaunched in SteamVR; log: `work/vr/novalis-headset-20261022-211402.log`. Ratchet visibility and control comfort await user feedback. Live logs now include visible Ratchet mesh count and camera-relative hero position.

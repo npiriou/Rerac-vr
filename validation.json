@@ -1,5 +1,5 @@
 {
-  "updated_utc": "2026-10-22T14:07:12.141753+00:00",
+  "updated_utc": "2026-10-22T14:14:31.403861+00:00",
   "delivery_status": "original_game_vr_started_and_basic_headset_play_confirmed",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
@@ -8,7 +8,8 @@
     "failures": 0,
     "errors": 0,
     "status": "PASS",
-    "raw_output": "validation-package-tests.txt"
+    "raw_output": "validation-package-tests.txt",
+    "scope": "Historical package tests; not rerun for the camera/input fix"
   },
   "rust_unit_tests": {
     "status": "PASS",
@@ -17,17 +18,16 @@
     "failed": 0,
     "log": "work/vr/controller-remap-build.log",
     "command": "RC_TEST_FEATURES=rc-engine/vr cargo xtask test-quick",
-    "standalone_diagnostic_tests_also_passed": 15
+    "standalone_diagnostic_tests_also_passed": 15,
+    "binary_sha256": "E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011",
+    "scope": "Historical result before the camera/input fix; not rerun"
   },
   "native_windows_build": {
     "profile": "debug",
-    "executable_sha256": "E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011",
-    "completed_utc": "2026-10-22T14:06:34.9813646Z",
+    "executable_sha256": "79902F8CEDA780E8B4EEBEDE229F5E74C9F053176CF1CFF80DD16A7657924EDB",
+    "completed_utc": "2026-10-22T14:13:45.7335385Z",
     "steps_passed": [
-      "Compile standalone VR core tests",
-      "Run standalone VR core tests",
       "Check unchanged non-VR build path",
-      "Upstream and VR game unit tests",
       "Check VR integration",
       "Build VR executable"
     ],
@@ -40,7 +40,8 @@
   "all_targets_check": {
     "status": "PASS",
     "command": "cargo check-all --locked --features rc-engine/vr",
-    "log": "work/vr/original-game-all-targets-final.log"
+    "log": "work/vr/original-game-all-targets-final.log",
+    "scope": "Historical compilation before the camera/input fix"
   },
   "original_game_stereo_preview": {
     "ticks": 487,
@@ -134,5 +135,30 @@
     "stereo_attached": true,
     "physical_remap_test_confirmed": false,
     "status": "rebuilt_and_relaunched; physical button verification pending"
+  },
+  "controller_camera_fix": {
+    "binary_sha256": "79902F8CEDA780E8B4EEBEDE229F5E74C9F053176CF1CFF80DD16A7657924EDB",
+    "headset_log": "work/vr/novalis-headset-20261022-211402.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED",
+      "VISIBLE",
+      "FOCUSED"
+    ],
+    "stereo_attached": true,
+    "focused_recenter_observed": true,
+    "hero_visibility_telemetry": [
+      "VR_GAME hero_view visible_meshes=8 local=Vec3(-1.083, 1.563, -5.393) distance=5.719 camera_class=0 first_person=false"
+    ],
+    "changes": [
+      "Initial recenter waits for headset focus",
+      "Level horizon: original camera yaw, physical head pitch/roll",
+      "Head-relative movement through original pad decoder; unchanged menu directions",
+      "Slower horizontal right-stick orbit; physical head handles vertical look",
+      "Suppress duplicate virtual-gamepad input while XR controllers are active"
+    ],
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_visibility_and_control_confirmation": "pending user feedback"
   }
 }

@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([switch]$Release,[switch]$SkipUpstreamQuickTests)
+param([switch]$Release,[switch]$RunTests,[switch]$SkipUpstreamQuickTests)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 $Root=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
@@ -44,11 +44,14 @@ try {
             }
         }
     }
-    $Test=Join-Path $Out 'vr-core-tests.exe'
-    Step 'Compile standalone VR core tests' 'rustc' @('--edition=2021','--test','crates/rc-engine/src/vr/core.rs','-o',$Test)
-    Step 'Run standalone VR core tests' $Test @('--nocapture')
+    # Tests are opt-in: AGENTS.md requires an explicit user request before running any.
+    if ($RunTests) {
+        $Test=Join-Path $Out 'vr-core-tests.exe'
+        Step 'Compile standalone VR core tests' 'rustc' @('--edition=2021','--test','crates/rc-engine/src/vr/core.rs','-o',$Test)
+        Step 'Run standalone VR core tests' $Test @('--nocapture')
+    }
     Step 'Check unchanged non-VR build path' 'cargo' @('check','--locked','-p','rc-engine')
-    if (-not $SkipUpstreamQuickTests) {
+    if ($RunTests -and -not $SkipUpstreamQuickTests) {
         $env:RC_TEST_FEATURES='rc-engine/vr'
         Step 'Upstream and VR game unit tests' 'cargo' @('xtask','test-quick')
         $env:RC_TEST_FEATURES=$OldTestFeatures
@@ -62,5 +65,5 @@ try {
     $State=[ordered]@{profile=$Profile;executable_sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $Exe).Hash;completed_utc=(Get-Date).ToUniversalTime().ToString('o');steps_passed=@($Steps.ToArray());
         headset_tested=$false;gpu_budget_measured=$false;git_worktree_dirty=[bool](& git status --porcelain);rustc=(& rustc --version);commit=(& git rev-parse HEAD);}
     $State|ConvertTo-Json -Depth 4|Set-Content -LiteralPath $StatePath -Encoding UTF8
-    Write-Host "Build checks passed. This does NOT establish headset compatibility or 90 Hz performance. Log: $Log"
+    Write-Host "Build checks passed. Tests requested: $RunTests. Log: $Log"
 } finally {$env:CMAKE_GENERATOR=$OldCMakeGenerator;$env:RC_TEST_FEATURES=$OldTestFeatures;Pop-Location}

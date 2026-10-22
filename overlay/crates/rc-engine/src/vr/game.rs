@@ -45,10 +45,19 @@ struct EyeSky;
 #[derive(Component)]
 struct Panel(u8);
 #[derive(Resource, Default)]
-struct Rig {
+pub(super) struct Rig {
     center: Option<Vec3>,
     yaw: f32,
     reset_held: bool,
+}
+impl Rig {
+    pub(super) fn movement_from_head(&self, movement: Vec2, head: Quat) -> Vec2 {
+        if self.center.is_none() {
+            return movement;
+        }
+        let relative = heading(head) - self.yaw;
+        Vec2::from_angle(relative).rotate(movement)
+    }
 }
 #[derive(Resource, Clone, Default)]
 struct Rendered(Arc<AtomicU64>);
@@ -420,7 +429,7 @@ fn spawn_panels(
         ));
     }
 }
-fn pose(views: Option<&OxrViews>) -> Option<Transform> {
+pub(super) fn pose(views: Option<&OxrViews>) -> Option<Transform> {
     let v = views?.first()?;
     let q = v.pose.orientation;
     let p = v.pose.position;
@@ -434,8 +443,13 @@ fn pose(views: Option<&OxrViews>) -> Option<Transform> {
     }
     Some(t)
 }
+fn heading(rotation: Quat) -> f32 {
+    let forward = rotation * Vec3::NEG_Z;
+    (-forward.x).atan2(-forward.z)
+}
 fn rig_transform(base: Transform, center: Vec3, yaw: f32, scale: f32) -> Transform {
-    let rotation = base.rotation * Quat::from_rotation_y(-yaw);
+    // Camera orbit changes yaw; only physical head motion supplies pitch and roll.
+    let rotation = Quat::from_rotation_y(heading(base.rotation) - yaw);
     Transform {
         translation: base.translation - rotation * (center * scale),
         rotation,
@@ -446,12 +460,17 @@ fn follow_game_camera(
     settings: Res<Settings>,
     views: Option<Res<OxrViews>>,
     view: Option<Res<crate::play_camera::PlayView>>,
+    focus: Option<Res<super::game_input::Focused>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut rig: ResMut<Rig>,
     mut roots: Query<&mut Transform, (With<XrTrackingRoot>, Without<crate::fly_cam::FlyCam>)>,
     mut main: Query<&mut Transform, (With<crate::fly_cam::FlyCam>, Without<XrTrackingRoot>)>,
 ) {
     let Some(view) = view else { return };
+    // Startup poses while the headset is on the desk are not the player's neutral pose.
+    if !settings.desktop_preview && !focus.as_ref().is_some_and(|f| f.0) {
+        return;
+    }
     let head = pose(views.as_deref()).or_else(|| {
         settings
             .desktop_preview
@@ -461,9 +480,8 @@ fn follow_game_camera(
     let reset = keys.pressed(KeyCode::F8);
     if rig.center.is_none() || (reset && !rig.reset_held) {
         rig.center = Some(head.translation);
-        let f = head.rotation * Vec3::NEG_Z;
-        rig.yaw = (-f.x).atan2(-f.z);
-        println!("VR_GAME recentered against original game camera (seated or standing)");
+        rig.yaw = heading(head.rotation);
+        println!("VR_GAME recentered from focused headset pose: center={:?} yaw={:.3}", head.translation, rig.yaw);
     }
     rig.reset_held = reset;
     let base = main
@@ -576,7 +594,8 @@ fn audit(
     eyes: Query<Entity, With<GameEye>>,
     sky: Query<Entity, With<EyeSky>>,
     meshes: Query<Entity, With<Mesh3d>>,
-    ratchet: Query<Entity, With<crate::gameplay::RatchetMesh>>,
+    ratchet: Query<(&Visibility, &InheritedVisibility), With<crate::gameplay::RatchetMesh>>,
+    main: Query<&Transform, With<crate::fly_cam::FlyCam>>,
     mut exit: MessageWriter<AppExit>,
 ) {
     let now = std::time::Instant::now();
@@ -591,6 +610,13 @@ fn audit(
             meshes.iter().count(),ratchet.iter().count(),eyes.iter().count(),sky.iter().count(),rendered.0.load(Ordering::Relaxed),
             draw.world.load(Ordering::Relaxed),draw.sky.load(Ordering::Relaxed),draw.waiting.load(Ordering::Relaxed),
             pad.as_ref().is_some_and(|p|p.active),xr_views.as_ref().map_or(0,|v|v.len()));
+        if let (Some(play), Some(camera)) = (play.as_ref(), main.iter().next()) {
+            let hero = crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y;
+            let local = camera.compute_affine().inverse().transform_point3(hero);
+            println!("VR_GAME hero_view visible_meshes={} local={local:.3?} distance={:.3} camera_class={} first_person={}",
+                ratchet.iter().filter(|(v, inherited)| **v != Visibility::Hidden && inherited.get()).count(),
+                camera.translation.distance(hero), play.game.camera.out.class, play.game.camera.first_person_flag());
+        }
         audit.last = now;
     }
     audit.last_tick = tick;

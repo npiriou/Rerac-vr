@@ -19,7 +19,7 @@ pub struct GamePad {
     pub active: bool,
 }
 #[derive(Resource, Default)]
-struct Focused(bool);
+pub(super) struct Focused(pub bool);
 #[derive(Resource)]
 struct Actions {
     set: ActionSet,
@@ -194,6 +194,9 @@ fn sample(
     a: Option<Res<Actions>>,
     session: Option<Res<OxrSession>>,
     focus: Res<Focused>,
+    rig: Res<super::game::Rig>,
+    views: Option<Res<bevy_mod_openxr::resources::OxrViews>>,
+    mode: Res<crate::menu_render::MenuMode>,
     mut out: ResMut<GamePad>,
     mut previous: Local<u32>,
 ) {
@@ -240,11 +243,18 @@ fn sample(
     if trigger(&a.crouch) {
         buttons |= button::R1;
     }
-    out.pad = encode(
-        movement.unwrap_or_default(),
-        camera.unwrap_or_default(),
-        buttons,
-    );
+    let gameplay = mode.state.mode == rc_game::menus::mode::Mode::Gameplay;
+    let mut movement = movement.unwrap_or_default();
+    let mut camera = camera.unwrap_or_default();
+    // Menus and the quick-select wheel retain their ordinary pad directions.
+    if gameplay && buttons & button::TRIANGLE == 0 {
+        if let Some(head) = super::game::pose(views.as_deref()) {
+            movement = rig.movement_from_head(movement, head.rotation);
+        }
+        // The head handles vertical look. Keep the original horizontal orbit, at a gentler rate.
+        camera = Vec2::new(camera.x * 0.6, 0.0);
+    }
+    out.pad = encode(movement, camera, buttons);
     if buttons != *previous {
         println!("VR_GAME controller_buttons={buttons:#06x} move={movement:?} camera={camera:?}");
         *previous = buttons;
