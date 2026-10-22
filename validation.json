@@ -1,0 +1,33 @@
+{
+  "created_utc": "2026-10-22T09:26:10.664242+00:00",
+  "delivery_status": "implementation_candidate_not_compiled_not_headset_tested_not_pushed",
+  "executed_checks": {
+    "command": "python -m unittest discover -s tests -v",
+    "suite": "package/static checks; Python reference patch validation only",
+    "tests": 20,
+    "failures": 0,
+    "errors": 0,
+    "status": "PASS",
+    "raw_output": "validation-package-tests.txt"
+  },
+  "rust_unit_tests": {
+    "authored": 15,
+    "status": "NOT RUN",
+    "reason": "No Rust compiler available in the authoring environment"
+  },
+  "cargo_resolution_and_build": "NOT RUN",
+  "powershell_script_execution": "NOT RUN",
+  "upstream_regression_tests": "NOT RUN",
+  "game_asset_loading": "NOT RUN",
+  "openxr_runtime_execution": "NOT RUN",
+  "pico_controller_bindings": "NOT VERIFIED",
+  "headset_stereo_scale_and_comfort": "NOT RUN",
+  "gpu_and_compositor_frame_timing": "NOT MEASURED",
+  "github": {
+    "owner_verified": "npiriou",
+    "new_repository_created": false,
+    "commits_pushed": false,
+    "reason": "Session exposes repository-read tools, not repository creation/push; no local authenticated GitHub CLI"
+  },
+  "claim_limit": "Passing package/static checks does not establish Rust syntax/types, PowerShell runtime correctness, OpenXR execution, PICO compatibility or gameplay correctness."
+}

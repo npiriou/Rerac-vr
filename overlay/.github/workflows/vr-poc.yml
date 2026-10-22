@@ -1,0 +1,30 @@
+name: VR PoC build checks (no headset)
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - name: Toolchain
+        shell: pwsh
+        run: |
+          rustup update stable
+          rustup default stable
+          rustc -vV
+          cmake --version
+      - name: Build and automated checks
+        shell: pwsh
+        run: ./scripts/vr/Build.ps1
+      - name: Preserve build logs (no game assets)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vr-poc-build-logs
+          path: |
+            work/vr/*.log
+            work/vr/last-build-*.json
+          if-no-files-found: ignore

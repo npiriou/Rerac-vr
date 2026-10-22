@@ -1,0 +1,36 @@
+{
+  "upstreamRepository": "https://github.com/re-rac/rerac.git",
+  "upstreamCommit": "89c87e98f9d8296187df2a6310c67b32144090d3",
+  "xrRepository": "https://github.com/awtterpip/bevy_oxr",
+  "xrCommit": "4e2998531bd4f7d9cdce156148f9a5b7dd5cd260",
+  "patches": [
+    {
+      "path": "crates/rc-engine/Cargo.toml",
+      "expectedBlobSha": "e129fbbd2790a4d0041da1a4fcd7c71cf12ed9e3",
+      "replacements": [
+        {
+          "old": "dev = [\"bevy/dynamic_linking\"]",
+          "new": "dev = [\"bevy/dynamic_linking\"]\n# Off by default: the original desktop app remains unchanged.\nvr = [\"dep:bevy_mod_openxr\", \"dep:bevy_mod_xr\", \"dep:openxr\"]"
+        },
+        {
+          "old": "[dependencies]\n",
+          "new": "[dependencies]\n# Experimental VR terrain PoC; pinned to a Bevy 0.19-compatible, internally consistent revision.\nbevy_mod_openxr = { git = \"https://github.com/awtterpip/bevy_oxr\", rev = \"4e2998531bd4f7d9cdce156148f9a5b7dd5cd260\", features = [\"window_support\"], optional = true }\nbevy_mod_xr = { git = \"https://github.com/awtterpip/bevy_oxr\", rev = \"4e2998531bd4f7d9cdce156148f9a5b7dd5cd260\", optional = true }\nopenxr = { version = \"=0.21.1\", optional = true }\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/main.rs",
+      "expectedBlobSha": "5b8b5349e17aef76abab480c16e285ae90cb39c9",
+      "replacements": [
+        {
+          "old": "mod crash_log;",
+          "new": "#[cfg(feature = \"vr\")]\nmod vr;\n\nmod crash_log;"
+        },
+        {
+          "old": "    crash_log::install();\n",
+          "new": "    crash_log::install();\n    #[cfg(feature = \"vr\")]\n    if vr::requested() { return vr::run(); }\n    #[cfg(not(feature = \"vr\"))]\n    if std::env::var(\"RC_VR\").is_ok_and(|s| s == \"1\") {\n        anyhow::bail!(\"RC_VR=1 requires a build with --features vr; refusing a silent desktop fallback\");\n    }\n"
+        }
+      ]
+    }
+  ]
+}

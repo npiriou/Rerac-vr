@@ -1,0 +1,45 @@
+[CmdletBinding()]
+param([switch]$Release,[switch]$SkipUpstreamQuickTests)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$Root=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$Out=Join-Path $Root 'work/vr'
+[IO.Directory]::CreateDirectory($Out)|Out-Null
+$Log=Join-Path $Out ("build-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'.log')
+$Profile=if ($Release) {'release'} else {'debug'}
+$StatePath=Join-Path $Out ("last-build-"+$Profile+'.json')
+# A failed rebuild must never leave a success marker for a stale binary.
+if (Test-Path -LiteralPath $StatePath) {Remove-Item -LiteralPath $StatePath}
+$Steps=New-Object System.Collections.Generic.List[string]
+function Step([string]$Name,[string]$Program,[string[]]$Arguments) {
+    Write-Host "== $Name =="
+    $PreviousPreference=$ErrorActionPreference
+    try {
+        # Windows PowerShell treats redirected native stderr as ErrorRecord objects.
+        # Cargo writes progress to stderr even on success; decide by exit code.
+        $ErrorActionPreference='Continue'
+        & $Program @Arguments 2>&1 | Tee-Object -FilePath $Log -Append | Out-Host
+        $Code=$LASTEXITCODE
+    } finally {$ErrorActionPreference=$PreviousPreference}
+    if ($Code -ne 0) {throw "$Name failed (exit $Code); see $Log"}
+    $Steps.Add($Name)
+}
+Push-Location $Root
+try {
+    foreach ($Tool in @('cargo','rustc','cmake')) { if (-not (Get-Command $Tool -ErrorAction SilentlyContinue)) {throw "Missing $Tool"} }
+    $Test=Join-Path $Out 'vr-core-tests.exe'
+    Step 'Compile standalone VR core tests' 'rustc' @('--edition=2021','--test','crates/rc-engine/src/vr/core.rs','-o',$Test)
+    Step 'Run standalone VR core tests' $Test @('--nocapture')
+    Step 'Check unchanged non-VR build path' 'cargo' @('check','-p','rc-engine')
+    if (-not $SkipUpstreamQuickTests) {Step 'Upstream quick tests' 'cargo' @('xtask','test-quick')}
+    Step 'Check VR integration' 'cargo' @('check','-p','rc-engine','--features','vr')
+    $BuildArgs=@('build','-p','rc-engine','--features','vr')
+    if ($Release) {$BuildArgs+='--release'}
+    Step 'Build VR executable' 'cargo' $BuildArgs
+    $Exe=Join-Path $Root "target/$Profile/rerac.exe"
+    if (-not (Test-Path -LiteralPath $Exe)) {throw 'Build exited successfully but the expected Windows executable is absent.'}
+    $State=[ordered]@{profile=$Profile;executable_sha256=(Get-FileHash -Algorithm SHA256 -LiteralPath $Exe).Hash;completed_utc=(Get-Date).ToUniversalTime().ToString('o');steps_passed=@($Steps.ToArray());
+        headset_tested=$false;gpu_budget_measured=$false;git_worktree_dirty=[bool](& git status --porcelain);rustc=(& rustc --version);commit=(& git rev-parse HEAD);}
+    $State|ConvertTo-Json -Depth 4|Set-Content -LiteralPath $StatePath -Encoding UTF8
+    Write-Host "Build checks passed. This does NOT establish headset compatibility or 90 Hz performance. Log: $Log"
+} finally {Pop-Location}

@@ -1,0 +1,32 @@
+[package]
+name = "rc-engine"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Faithful reimplementation runtime for Ratchet & Clank (PS2) on Bevy."
+
+# The runtime executable is `rerac` (launcher contract); the crate stays `rc-engine` (`cargo dev`, `-p rc-engine`).
+[[bin]]
+name = "rerac"
+path = "src/main.rs"
+
+[features]
+# `cargo run -p rc-engine --features dev` links Bevy as a dynamic library: seconds, not minutes, per rebuild.
+dev = ["bevy/dynamic_linking"]
+
+[dependencies]
+bevy = "0.19"
+rc-formats = { path = "../rc-formats" }
+rc-game = { path = "../rc-game" }
+# Going Commando's game logic (crate::rac2).
+rc-game2 = { path = "../rc-game2" }
+# Decompressed lumps through the Tier 1 engine cache (once per process).
+rc-data = { path = "../rc-data" }
+# The movies (FMV): MPEG-2 video decoder and PSS player core, ours (docs/formats/pss.md).
+rc-video = { path = "../rc-video" }
+anyhow.workspace = true
+
+# The save clock in the host's local time (crate::saves::clock_now: `localtime_r`; Windows calls kernel32 directly).
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
