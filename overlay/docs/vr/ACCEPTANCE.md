@@ -11,12 +11,12 @@
 
 ## Basic headset check passed
 
-On the current native binary the user confirmed that Ratchet and scenery are visible in the headset and that the left stick moves him. OpenXR stereo rendering and live controller input are observed in the log.
+Before the controller remap, the user confirmed that Ratchet and scenery are visible in the headset and that the left stick moves him. OpenXR stereo rendering and live controller input are observed in the log.
 
 ## Further physical validation pending
 
 - Inspect depth and completeness across more of the level and both eye images.
-- Move, jump, wrench, fire, quick-select and pause using the real controllers.
+- Verify the remapped A/B/X/Y and left/right stick clicks on the real controllers, including jump, wrench, fire, quick-select, Select and Start.
 - Check HUD/menu legibility, recenter, tracking loss and session restart.
 - Exercise death/respawn and a planet transition in the headset.
 - Measure GPU/compositor timing and assess camera comfort.

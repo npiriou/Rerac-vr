@@ -21,6 +21,6 @@ test_rust_tests_are_present_and_validation_scope_is_explicit (test_package.Packa
 test_upstream_engine_fixture_matches_verified_git_blob (test_package.PackageTests.test_upstream_engine_fixture_matches_verified_git_blob) ... ok
 
 ----------------------------------------------------------------------
-Ran 21 tests in 0.138s
+Ran 21 tests in 0.118s
 
 OK

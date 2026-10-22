@@ -20,6 +20,6 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original ReRAC application with OpenXR stereo views and original-pad controller input; calibration is diagnostic only",
-  "latest_build_sha256": "FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0",
+  "latest_build_sha256": "E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011",
   "validation_record": "STARTUP_READINESS.json"
 }

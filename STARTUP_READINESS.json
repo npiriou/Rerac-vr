@@ -1,15 +1,16 @@
 {
-  "checked_utc": "2026-10-22T13:55:52.213579+00:00",
+  "checked_utc": "2026-10-22T14:07:12.141753+00:00",
   "implementation": "OpenXR third-person views and pad input on the original ReRAC application",
   "status": "original_game_vr_started_and_basic_headset_play_confirmed",
   "build": {
     "profile": "debug",
-    "executable_sha256": "FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0",
-    "completed_utc": "2026-10-22T13:48:55.4634658Z",
+    "executable_sha256": "E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011",
+    "completed_utc": "2026-10-22T14:06:34.9813646Z",
     "steps_passed": [
       "Compile standalone VR core tests",
       "Run standalone VR core tests",
       "Check unchanged non-VR build path",
+      "Upstream and VR game unit tests",
       "Check VR integration",
       "Build VR executable"
     ],
@@ -21,10 +22,10 @@
   },
   "unit_tests": {
     "status": "PASS",
-    "passed": 1089,
+    "passed": 1090,
     "ignored": 3,
     "failed": 0,
-    "log": "work/vr/original-game-final-build.log",
+    "log": "work/vr/controller-remap-build.log",
     "command": "RC_TEST_FEATURES=rc-engine/vr cargo xtask test-quick",
     "standalone_diagnostic_tests_also_passed": 15
   },
@@ -91,7 +92,9 @@
     "eye_resolution": [
       1920,
       1920
-    ]
+    ],
+    "binary_sha256": "FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0",
+    "scope": "Original integration before the controller remap; remapped buttons await physical verification"
   },
   "level_content": {
     "level": 1,
@@ -112,5 +115,27 @@
     "Full controller/combat/menu/respawn coverage",
     "GPU/compositor frame budget and camera comfort",
     "Full campaign playthrough; inherits upstream unported behavior"
-  ]
+  ],
+  "controller_remap": {
+    "binary_sha256": "E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011",
+    "mapping": {
+      "A": "CROSS",
+      "B": "SQUARE",
+      "X": "CIRCLE",
+      "Y": "TRIANGLE",
+      "left_stick_click": "SELECT",
+      "right_stick_click": "START"
+    },
+    "recenter": "keyboard F8",
+    "regression_test": "requested_face_buttons_and_stick_clicks_reach_original_pad: PASS",
+    "headset_log": "work/vr/novalis-headset-20261022-210644.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED"
+    ],
+    "stereo_attached": true,
+    "physical_remap_test_confirmed": false,
+    "status": "rebuilt_and_relaunched; physical button verification pending"
+  }
 }

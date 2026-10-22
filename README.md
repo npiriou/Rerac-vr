@@ -30,15 +30,16 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | --- | --- |
 | Left stick | Move Ratchet / navigate menus |
 | Right stick | Original follow camera |
-| Right A | Jump / confirm |
-| Left X | Wrench |
-| Right trigger | Equipped weapon |
-| Right B | Quick select / back |
+| Right A | Cross — jump / confirm |
+| Right B | Square — wrench |
+| Left X | Circle — equipped weapon |
+| Left Y | Triangle — quick select / back |
+| Left stick click | Select — map |
+| Right stick click | Start — pause |
+| Right trigger | Equipped weapon (additional binding) |
 | Left trigger | Strafe / aim |
 | Right grip | Crouch |
-| Left menu | Pause |
-| Left Y | Map |
-| Left stick click / keyboard F8 | Recenter headset |
+| Keyboard F8 | Recenter headset |
 
 A regular gamepad and the original keyboard bindings remain usable. F8 recalibrates the physical headset pose without moving Ratchet. The original pause menus and HUD are reused in headset panels.
 

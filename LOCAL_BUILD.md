@@ -105,7 +105,7 @@ implement those later gameplay systems.
 
 The earlier terrain-only implementation is superseded for Novalis. `RC_VR=1` now enters the original application and plugin chain; only explicit calibration uses the isolated diagnostic app. The original hero and all game systems run once, with XR views and original-pad input added to them.
 
-Final Windows executable: `X:/codex/worktrees/rerac-vr-build/target/debug/rerac.exe`
+Original integration Windows executable (before the controller remap below): `X:/codex/worktrees/rerac-vr-build/target/debug/rerac.exe`
 
 SHA-256: `FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0`
 
@@ -124,3 +124,11 @@ PowerShell 7/.NET on this host preserves an empty native environment entry when 
 Start with `scripts/vr/Run.ps1 -Scene novalis -DataDir X:/dev/rerac/extracted`. SteamVR is elevated on this machine, so the local headset launcher uses the normal Windows RunAs/UAC flow to match it. No SteamVR security settings were changed.
 
 This does not implement tracked-hand aiming, new hero physics, or missing upstream ports. Full campaign completion, GPU/compositor budget and comfort are not certified by a startup smoke test.
+
+## Controller remap
+
+A sends Cross, B sends Square, X sends Circle, Y sends Triangle. Left/right stick clicks send Select/Start exclusively. Recenter is on keyboard F8; right trigger remains an additional weapon binding.
+
+Rebuilt native executable SHA-256: `E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011`. Build, non-VR and VR checks passed. Workspace unit suite: 1,090 passed, 3 ignored; standalone diagnostic suite: 15 passed. The new regression checks each physical binding through the original pad decoder and verifies clean releases. Package checks: 21 passed.
+
+Relaunched Novalis in SteamVR with the new binary. Stereo cameras attached; runtime states: IDLE, READY, SYNCHRONIZED. Log: `work/vr/novalis-headset-20261022-210644.log`. Physical verification of the six remapped controls is pending; the earlier user confirmation covers the prior integration binary.

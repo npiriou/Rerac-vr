@@ -96,7 +96,7 @@ pub fn prepare_game() -> anyhow::Result<()> {
         "VR_GAME original ReRAC application; scene={} preview={} simulation=60Hz third-person",
         s.scene, s.desktop_preview
     );
-    println!("VR_GAME controls: left stick move; right stick game camera; A jump/confirm; X wrench; right trigger weapon; B quick select/back; left trigger strafe; right grip crouch; menu pause; Y map; left stick click recenter");
+    println!("VR_GAME controls: left stick move; right stick game camera; A cross/jump/confirm; B square/wrench; X circle/weapon; Y triangle/quick select/back; left stick click select/map; right stick click start/pause; right trigger weapon; left trigger strafe; right grip crouch; keyboard F8 recenter");
     Ok(())
 }
 pub fn game_plugins(plugins: PluginGroupBuilder) -> PluginGroupBuilder {
@@ -446,7 +446,6 @@ fn follow_game_camera(
     settings: Res<Settings>,
     views: Option<Res<OxrViews>>,
     view: Option<Res<crate::play_camera::PlayView>>,
-    pad: Option<Res<GamePad>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut rig: ResMut<Rig>,
     mut roots: Query<&mut Transform, (With<XrTrackingRoot>, Without<crate::fly_cam::FlyCam>)>,
@@ -459,7 +458,7 @@ fn follow_game_camera(
             .then(|| Transform::from_xyz(0.0, 1.6, 0.0))
     });
     let Some(head) = head else { return };
-    let reset = pad.as_ref().is_some_and(|p| p.recenter) || keys.pressed(KeyCode::F8);
+    let reset = keys.pressed(KeyCode::F8);
     if rig.center.is_none() || (reset && !rig.reset_held) {
         rig.center = Some(head.translation);
         let f = head.rotation * Vec3::NEG_Z;

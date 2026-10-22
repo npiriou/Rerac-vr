@@ -17,7 +17,6 @@ use rc_game::pad::{button, PadInput};
 pub struct GamePad {
     pub pad: PadInput,
     pub active: bool,
-    pub recenter: bool,
 }
 #[derive(Resource, Default)]
 struct Focused(bool);
@@ -30,7 +29,6 @@ struct Actions {
     strafe: Action<f32>,
     crouch: Action<f32>,
     buttons: Vec<(u32, Action<bool>)>,
-    reset: Action<bool>,
 }
 
 pub struct GameInputPlugin;
@@ -63,15 +61,10 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
         for (bit, name, label) in [
             (button::CROSS, "jump", "Jump / confirm"),
             (button::SQUARE, "wrench", "Wrench"),
+            (button::CIRCLE, "weapon_button", "Weapon / circle"),
             (button::TRIANGLE, "quick_select", "Quick select / back"),
             (button::SELECT, "map", "Map"),
             (button::START, "pause", "Pause menu"),
-            (button::L3, "left_click", "Left stick click"),
-            (
-                button::R3,
-                "right_click",
-                "First person / right stick click",
-            ),
         ] {
             buttons.push((bit, set.create_action(name, label, &[])?));
         }
@@ -81,7 +74,6 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
             fire: set.create_action("fire", "Use equipped weapon", &[])?,
             strafe: set.create_action("strafe", "Strafe / aim", &[])?,
             crouch: set.create_action("crouch", "Crouch", &[])?,
-            reset: set.create_action("recenter", "Recenter headset", &[])?,
             buttons,
             set,
         })
@@ -157,61 +149,33 @@ fn bindings(a: Option<Res<Actions>>, mut out: MessageWriter<OxrSuggestActionBind
             },
         );
         for (bit, action) in &a.buttons {
-            let path = match *bit {
-                button::CROSS => {
-                    if microsoft {
-                        "/user/hand/right/input/trackpad/click"
-                    } else {
-                        "/user/hand/right/input/a/click"
-                    }
-                }
-                button::SQUARE => {
-                    if microsoft {
-                        "/user/hand/left/input/trackpad/click"
-                    } else if index {
-                        "/user/hand/left/input/a/click"
-                    } else {
-                        "/user/hand/left/input/x/click"
-                    }
-                }
-                button::TRIANGLE => {
-                    if microsoft {
-                        "/user/hand/right/input/menu/click"
-                    } else {
-                        "/user/hand/right/input/b/click"
-                    }
-                }
-                button::SELECT => {
-                    if microsoft {
-                        "/user/hand/left/input/thumbstick/click"
-                    } else if index {
-                        "/user/hand/left/input/b/click"
-                    } else {
-                        "/user/hand/left/input/y/click"
-                    }
-                }
-                button::START => {
-                    if index {
-                        "/user/hand/left/input/b/click"
-                    } else {
-                        "/user/hand/left/input/menu/click"
-                    }
-                }
-                button::L3 => "/user/hand/left/input/thumbstick/click",
-                _ => "/user/hand/right/input/thumbstick/click",
-            };
-            // Index has no menu key: B pauses; the map remains on keyboard/gamepad.
-            if index && *bit == button::SELECT {
-                continue;
+            if let Some(path) = button_path(*bit, profile) {
+                bind(action.as_raw(), profile, path);
             }
-            bind(action.as_raw(), profile, path);
         }
-        bind(
-            a.reset.as_raw(),
-            profile,
-            "/user/hand/left/input/thumbstick/click",
-        );
     }
+}
+
+// Touch/PICO: A/B on the right, X/Y on the left. Index uses left A/B for X/Y.
+// Stick clicks are exclusively Select/Start; headset recenter stays on keyboard F8.
+fn button_path(bit: u32, profile: &str) -> Option<&'static str> {
+    let index = profile.ends_with("index_controller");
+    let microsoft = profile.ends_with("motion_controller");
+    Some(match bit {
+        button::CROSS if microsoft => "/user/hand/right/input/trackpad/click",
+        button::CROSS => "/user/hand/right/input/a/click",
+        button::SQUARE if microsoft => "/user/hand/right/input/menu/click",
+        button::SQUARE => "/user/hand/right/input/b/click",
+        button::CIRCLE if microsoft => "/user/hand/left/input/trackpad/click",
+        button::CIRCLE if index => "/user/hand/left/input/a/click",
+        button::CIRCLE => "/user/hand/left/input/x/click",
+        button::TRIANGLE if microsoft => "/user/hand/left/input/menu/click",
+        button::TRIANGLE if index => "/user/hand/left/input/b/click",
+        button::TRIANGLE => "/user/hand/left/input/y/click",
+        button::SELECT => "/user/hand/left/input/thumbstick/click",
+        button::START => "/user/hand/right/input/thumbstick/click",
+        _ => return None,
+    })
 }
 
 pub fn encode(movement: Vec2, camera: Vec2, buttons: u32) -> PadInput {
@@ -281,7 +245,6 @@ fn sample(
         camera.unwrap_or_default(),
         buttons,
     );
-    out.recenter = held(&a.reset);
     if buttons != *previous {
         println!("VR_GAME controller_buttons={buttons:#06x} move={movement:?} camera={camera:?}");
         *previous = buttons;
@@ -308,6 +271,45 @@ mod tests {
     use super::*;
     use rc_game::pad::PadState;
     #[test]
+    fn requested_face_buttons_and_stick_clicks_reach_original_pad() {
+        let profile = "/interaction_profiles/oculus/touch_controller";
+        let expected = [
+            ("/user/hand/right/input/a/click", button::CROSS),
+            ("/user/hand/right/input/b/click", button::SQUARE),
+            ("/user/hand/left/input/x/click", button::CIRCLE),
+            ("/user/hand/left/input/y/click", button::TRIANGLE),
+            ("/user/hand/left/input/thumbstick/click", button::SELECT),
+            ("/user/hand/right/input/thumbstick/click", button::START),
+        ];
+        let bits = [
+            button::CROSS,
+            button::SQUARE,
+            button::CIRCLE,
+            button::TRIANGLE,
+            button::SELECT,
+            button::START,
+            button::L3,
+            button::R3,
+        ];
+        for (path, expected_bit) in expected {
+            let pressed = bits
+                .into_iter()
+                .filter(|bit| button_path(*bit, profile) == Some(path))
+                .fold(0, |mask, bit| mask | bit);
+            let mut decoded = PadState::default();
+            decoded.update(
+                Some(&encode(Vec2::ZERO, Vec2::ZERO, pressed).bytes()),
+                false,
+            );
+            assert_eq!(
+                decoded.raw, expected_bit,
+                "{path} must send exactly one PS2 button"
+            );
+            decoded.update(Some(&PadInput::neutral().bytes()), false);
+            assert_eq!(decoded.raw, 0, "{path} must release cleanly");
+        }
+    }
+    #[test]
     fn controller_bytes_run_through_original_pad_decoder() {
         let p = encode(
             Vec2::new(0.71, 0.71),
@@ -333,7 +335,6 @@ mod tests {
             Some(&GamePad {
                 pad: encode(Vec2::Y, Vec2::ZERO, button::CIRCLE),
                 active: true,
-                recenter: false,
             }),
         );
         assert_eq!(p.ly, 0);

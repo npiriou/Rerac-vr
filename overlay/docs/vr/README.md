@@ -4,7 +4,7 @@ Novalis runs through `main.rs`, `level_switch::load_bundle`, and the original Re
 
 `vr/game.rs` installs OpenXR cameras on the original Bevy world. Each eye has the original world materials and a sky view with the same runtime pose/projection. Both use the existing render passes, including shadows and display effects. The original mono game frame remains available for the window, menu snapshots and menus shown inside the headset.
 
-`vr/game_input.rs` maps OpenXR controller actions into `input_map::PadFrame`. The original fixed tick consumes those libpad2 bytes. Hero physics, animations, enemy updates, pickups, hits, weapon use, inventory, pause and respawn are still the original game systems. Controller loss clears XR input. Keyboard and ordinary gamepad input remain available.
+`vr/game_input.rs` maps OpenXR controller actions into `input_map::PadFrame`. The original fixed tick consumes those libpad2 bytes. Hero physics, animations, enemy updates, pickups, hits, weapon use, inventory, pause and respawn are still the original game systems. Touch/PICO face buttons map A to Cross, B to Square, X to Circle, and Y to Triangle. Left/right stick clicks send only Select/Start; F8 recenters the headset. Controller loss clears XR input. Keyboard and ordinary gamepad input remain available.
 
 The game remains at 60 Hz. The desktop 60 fps limiter is disabled in VR and OpenXR paces headset rendering. The original shared culling/LOD/lighting systems explicitly use the main camera instead of accidentally choosing an eye, sky or menu camera. Its culling envelope is expanded for head tracking; the single-view authored PS2 occlusion mask is disabled for VR.
 
