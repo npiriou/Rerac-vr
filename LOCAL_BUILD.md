@@ -138,3 +138,47 @@ Relaunched Novalis in SteamVR with the new binary. Stereo cameras attached; runt
 Initial headset recenter now waits for focus. The tracking rig keeps a level horizon and follows the original camera's yaw and position; physical head motion supplies pitch and roll. Left-stick movement follows horizontal headset heading before reaching the original pad decoder. Menus and the quick-select wheel retain their ordinary directions. Right-stick horizontal orbit is slower, with vertical look on the head. Virtual-gamepad input is ignored while XR input is active to prevent duplicate button/R3 presses.
 
 Native executable SHA-256: `79902F8CEDA780E8B4EEBEDE229F5E74C9F053176CF1CFF80DD16A7657924EDB`. Compilation completed with and without VR. No tests were run, as required by AGENTS.md; the build script now requires explicit `-RunTests` to execute tests. Earlier unit/package and headset evidence remains historical. The new executable was relaunched in SteamVR; log: `work/vr/novalis-headset-20261022-211402.log`. Ratchet visibility and control comfort await user feedback. Live logs now include visible Ratchet mesh count and camera-relative hero position.
+
+## First-person tracked wrench
+
+The existing complete Novalis gameplay path is retained. The view is anchored 1.6 game units above the hero's feet, independent of animated bones and the original follow camera. Left stick remains head-relative movement through the original pad decoder, right stick snap-turns by 30 degrees about the headset, and A retains jump/double jump. XR crouch, firearms and teleportation are not bound.
+
+Both tracked hands have provisional glove visuals. Hold right grip to hold the original wrench model; a physical swing delivers native wrench hits. A moving grip release launches the original outgoing/returning wrench flight, whose catch point now follows the tracked hand. Slow releases stow it. Gesture history clears on focus/tracking loss, menus, snap turns and recentering.
+
+Native build with and without VR: completed. SHA-256: `9B13FA47FBD4C186EADC7965A6C8B1D038E9F1ACB243FED1D8C10E35D6F684A0`. Build log: `work/vr/first-person-build.log`. No tests or commits were performed. Normal Novalis headset launch: `work/vr/novalis-headset-20261022-214231.log`. Physical view/alignment/combat/comfort remain pending user feedback. The previous executable and its build record are preserved under `work/vr/before-first-person/`.
+
+## Tracked Bomb Glove
+
+Right trigger press prepares one original class-121 bomb at the tracked right palm, held without a running fuse until release. A tracked release gesture launches it with hand-derived velocity into the original bomb simulation. A slow release or interruption cancels it without ammunition cost; a valid throw consumes one original ammo unit through the native use-ammo/statistics path. The existing wrench grip controls and full Novalis path remain. Prepared bombs have priority over wrench melee.
+
+Native builds with and without VR completed. SHA-256: `5542FEEC6F74A9C1A69D95DD9F556D55D7108B496C24D85DE8392F4B60A9D5B5`. Build log: `work/vr/bomb-glove-build.log`. No tests or commits performed. Normal Novalis headset launch: `work/vr/novalis-headset-20261022-215447.log`. Physical bomb alignment, launch strength, damage and ammo feedback remain pending. The previous executable/build record are retained under `work/vr/before-bomb-glove/`.
+
+## Body/camera and wrench grip alignment
+
+Physical horizontal headset movement now moves Ratchet through the original capsule collision resolver, with the camera above the resolved body. Snap turns no longer accumulate pivot translation. The original wrench attachment-list-0 frame (chain [0, 1], held sequence 1) has a model-space offset of approximately 0.154 game units and a rotated basis; both are compensated to place the grip at the tracked palm. Rendering, melee, launch and native return share this corrected attachment. Novalis, controls and Bomb Glove remain available.
+
+Native builds with and without VR completed. SHA-256: `ABF3076FA72DAB9FE0DDBE2990363BCA6C744E450DA4EFC84C17DEB1010A2C8F`. Build log: `work/vr/body-hand-build.log`. No tests or commits performed. Normal headset launch: `work/vr/novalis-headset-20261022-222647.log`. Stereo attached; physical user feedback remains pending. Prior executable/build record retained under `work/vr/before-body-hand-alignment/`.
+
+## Y quick select and contextual interactions restored
+
+Left Y now passes Triangle during gameplay as well as menus, restoring native contextual interactions and quick select. Holding Y preserves native left-stick wheel coordinates; release commits through the original menu system. Physical wrench equipment is requested once on a fresh grip press instead of continuously overriding native quick-select choices.
+
+Native checks with/without VR and executable build completed. SHA-256: `C9BA508ECAAAD5D6496D268AE6BAB558F5B0F5275C457265A3A10D95EE6C4E67`. Build log: `work/vr/y-quick-select-build.log`; normal headset launch: `work/vr/novalis-headset-20261022-223102.log`. No tests or commits performed. Physical Y/wheel validation awaits user feedback. Prior executable/build record retained under `work/vr/before-y-quick-select/`.
+
+## Controller-forward wrench and left-hand quick select
+
+The wrench grip frame is rotated -90 degrees about controller-local X, preserving the palm anchor while pointing the shaft forward along the controller. Quick select now uses left-hand displacement from the Y-press position in the view plane captured at press time (6 cm activation / 3.5 cm inner dead zone). Release Y confirms. Joystick input is ignored during selection; gestures update menu-only copied axes after physics, so they cannot drive Ratchet. Native contextual Triangle interactions remain available.
+
+Native checks with/without VR and executable build completed. SHA-256: `E9C468F28978DFF90C31794B29DAED4702860B210335F71F953DE7E08182D111`. Build log: `work/vr/forward-wrench-hand-select-build.log`; normal headset launch: `work/vr/novalis-headset-20261022-224045.log`. No tests or commits performed. Physical orientation/gesture feedback remains pending. Prior executable/build record retained under `work/vr/before-forward-wrench-hand-select/`.
+
+## Tracked Blaster and starting inventory
+
+The Blaster (item 15 / class 168) is added through native GiveItem only when missing, with normal starting ammo, vendor ownership and a free quick-select slot. Existing ammo is preserved. Select it with Y plus left-hand movement; the original mesh follows the right controller and its trigger drives native automatic fire. Optional tracked muzzle/forward override native body/camera aim and target correction while retaining original projectiles (305), cadence, ammo/statistics, collisions, damage, effects and sound. Blocked/lost tracking and menus suspend firing. The original animated Bomb Glove cannot prepare a duplicate bomb in tracked mode. A fresh grip recalls the wrench; snap/recenter preserves its physical grip edge.
+
+Native checks with/without VR and executable build completed. SHA-256: `5776AC0946BF33F9C2A66DC206B09EC311AD0896B5FDF4F3C4AD166839076294`. Build log: `work/vr/blaster-build.log`; normal headset launch: `work/vr/novalis-headset-20261022-225256.log`. Starting inventory observation: `{'observed': True, 'owned': 1, 'ammo': 100, 'quick_select': [10, 15, 0, 0, 0, 0, 0, 0]}`. No tests or commits performed. Physical fire/aim/impact validation remains pending. Prior executable/build record retained under `work/vr/before-blaster/`.
+
+## Pyrocitor, original brown hands, gun roll and startup ammunition
+
+Corrected the Blaster's 90-degree left roll while preserving its muzzle/aim. Replaced the procedural hand meshes with original class-0 hand triangles, UVs and textures mounted independently on both controllers. The original Bomb Glove substitutes the right hand when used. Added native Pyrocitor with tracked nozzle/aim, continuous flames, native damage/collisions/audio/particles and ammunition use. Blaster/Pyrocitor are granted when missing; all owned ammo-using weapons are filled once per application launch to their native record capacity.
+
+Native builds/checks with and without VR completed. SHA-256: `385EAEFE19F4838A92D050DCD7B24940EF40FEC55E09A21C86638364DFAF367A`. Build log: `work/vr/pyro-brown-hands-build.log`; normal launch: `work/vr/novalis-headset-20261022-230802.log`. Observed starting ammo: `[(10, 40), (15, 200), (16, 240)]`; quick select: `[10, 15, 16, 0, 0, 0, 0, 0]`; original hand geometry: `[{'side': 0, 'triangles': 582}, {'side': 1, 'triangles': 452}]`. No tests or commits performed. Physical fit/fire feedback remains pending. Previous executable/build record retained under `work/vr/before-pyro-brown-hands/`.

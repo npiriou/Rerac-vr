@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-22T14:14:31.403861+00:00",
-  "delivery_status": "original_game_vr_started_and_basic_headset_play_confirmed",
+  "updated_utc": "2026-10-22T16:08:35.696844+00:00",
+  "delivery_status": "pyrocitor_brown_hands_max_ammo_built_and_launched_physical_validation_pending",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -9,7 +9,7 @@
     "errors": 0,
     "status": "PASS",
     "raw_output": "validation-package-tests.txt",
-    "scope": "Historical package tests; not rerun for the camera/input fix"
+    "scope": "Historical result; not rerun for Pyrocitor, original hand meshes, gun roll and maximum starting ammo"
   },
   "rust_unit_tests": {
     "status": "PASS",
@@ -20,12 +20,12 @@
     "command": "RC_TEST_FEATURES=rc-engine/vr cargo xtask test-quick",
     "standalone_diagnostic_tests_also_passed": 15,
     "binary_sha256": "E8D58CD360640BECD389EEC0190182CE7D847F1760771D1D47A1470B936B3011",
-    "scope": "Historical result before the camera/input fix; not rerun"
+    "scope": "Historical result; not rerun for Pyrocitor, original hand meshes, gun roll and maximum starting ammo"
   },
   "native_windows_build": {
     "profile": "debug",
-    "executable_sha256": "79902F8CEDA780E8B4EEBEDE229F5E74C9F053176CF1CFF80DD16A7657924EDB",
-    "completed_utc": "2026-10-22T14:13:45.7335385Z",
+    "executable_sha256": "385EAEFE19F4838A92D050DCD7B24940EF40FEC55E09A21C86638364DFAF367A",
+    "completed_utc": "2026-10-22T16:07:27.0641306Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -41,7 +41,7 @@
     "status": "PASS",
     "command": "cargo check-all --locked --features rc-engine/vr",
     "log": "work/vr/original-game-all-targets-final.log",
-    "scope": "Historical compilation before the camera/input fix"
+    "scope": "Historical result; not rerun for Pyrocitor, original hand meshes, gun roll and maximum starting ammo"
   },
   "original_game_stereo_preview": {
     "ticks": 487,
@@ -160,5 +160,203 @@
     ],
     "tests": "NOT RUN: explicit user instruction",
     "physical_visibility_and_control_confirmation": "pending user feedback"
+  },
+  "first_person_wrench": {
+    "binary_sha256": "9B13FA47FBD4C186EADC7965A6C8B1D038E9F1ACB243FED1D8C10E35D6F684A0",
+    "headset_log": "work/vr/novalis-headset-20261022-214231.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED"
+    ],
+    "stereo_attached": true,
+    "focused_recenter_observed": false,
+    "camera": "first person at original hero feet + 1.6 game units; physical head pitch/roll; independent snap yaw",
+    "locomotion": "original controller and collisions; head-relative stick; A jump/double jump; 30 degree snap turn",
+    "wrench": "original mesh/animation; physical swept melee and native hit records; grip release launches native Comet-Strike, returning to tracked hand",
+    "hands": "provisional glove meshes; no full-body IK",
+    "controls_omitted": [
+      "XR crouch",
+      "XR teleportation",
+      "XR firearms"
+    ],
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending user feedback on first-person view, hand/weapon alignment, hit and throw thresholds, and comfort"
+  },
+  "bomb_glove": {
+    "binary_sha256": "5542FEEC6F74A9C1A69D95DD9F556D55D7108B496C24D85DE8392F4B60A9D5B5",
+    "headset_log": "work/vr/novalis-headset-20261022-215447.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED"
+    ],
+    "stereo_attached": true,
+    "focused_recenter_observed": false,
+    "control": "Right trigger: press prepares one bomb, hold keeps it at the tracked right palm, tracked moving release throws it",
+    "gesture": "1 m/s release threshold, tracking-space motion only, velocity gain 3, cap 18 m/s before inherited hero movement",
+    "ammunition": "Requires owned Bomb Glove and original ammo; native use-ammo consumes one unit only on throw, updating both mirrors before GameTick",
+    "held": "Original class-121 model in native dynamic renderer; NO_UPDATE and disabled passive collision suspend autonomous updates/fuse; per-render hand pose refresh",
+    "flight": "Native bomb::release and native scheduler, gravity, collision sweeps, fuse, water, explosion, damage, effects and audio; native passive collider remains disabled",
+    "cancellation": "Slow release, lost tracking/focus, menus, death or obstruction deletes the prepared bomb without using ammunition",
+    "wrench": "Existing grip controls preserved; the prepared bomb takes priority over held wrench/melee, while an already thrown wrench continues its native flight",
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending user feedback on bomb visibility/alignment, trigger hold, gesture launch strength, collisions, explosions and ammo"
+  },
+  "body_hand_alignment": {
+    "binary_sha256": "ABF3076FA72DAB9FE0DDBE2990363BCA6C744E450DA4EFC84C17DEB1010A2C8F",
+    "headset_log": "work/vr/novalis-headset-20261022-222647.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED"
+    ],
+    "stereo_attached": true,
+    "body": "Physical horizontal HMD deltas move the original hero capsule using its world/moby collision resolver; eyes remain above resolved hero position; snap turns have no accumulated pivot translation",
+    "synchronization": "Hero moby, collision grid and render upload refreshed after room motion; no second gameplay tick or platform carry; original stick/jump velocity preserved",
+    "tracking": "Rebase after focus/menu transition; ignore tracking jumps above 0.5 m per frame; vertical head motion remains relative to calibrated eye height",
+    "wrench": "Inverse of original wrench attachment-list-0 frame aligns its authored translation and rotation with tracked palm, shared by held rendering, melee sweep, throw origin and return target",
+    "asset_inspection": {
+      "class_number": 71,
+      "attachment_list": 0,
+      "chain": [
+        0,
+        1
+      ],
+      "class_scale": 0.12553303,
+      "held_frame_translation": [
+        -89.897415,
+        -1203.0828,
+        -350.20035
+      ],
+      "model_origin_offset_game_units": 0.154,
+      "source": "Read-only original Novalis wrench asset inspection; held sequence 1 frame 0; not a gameplay test"
+    },
+    "diagnostics": "Runtime body_alignment and wrench_alignment messages report actual tracked transforms when available",
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending user feedback in headset on body/camera collision alignment, physical movement near walls, snap turns and wrench grip/orientation"
+  },
+  "y_quick_select": {
+    "binary_sha256": "C9BA508ECAAAD5D6496D268AE6BAB558F5B0F5275C457265A3A10D95EE6C4E67",
+    "headset_log": "work/vr/novalis-headset-20261022-223102.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED",
+      "VISIBLE",
+      "FOCUSED"
+    ],
+    "stereo_attached": true,
+    "binding": "Left Y passes native Triangle in gameplay and menus; native context interaction priority preserved",
+    "quick_select": "Hold Y, select with the left stick in native menu coordinates, release to confirm; native double-tap handling preserved",
+    "inventory": "A fresh right-grip press requests the wrench once through the original slot swap; subsequent quick-select choices are not overwritten every tick",
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending headset feedback on Y contextual interactions and quick-select hold/choice/release"
+  },
+  "forward_wrench_hand_select": {
+    "binary_sha256": "E9C468F28978DFF90C31794B29DAED4702860B210335F71F953DE7E08182D111",
+    "headset_log": "work/vr/novalis-headset-20261022-224045.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED",
+      "VISIBLE",
+      "FOCUSED"
+    ],
+    "stereo_attached": true,
+    "wrench": "Rotate the desired grip frame -90 degrees about controller-local X, keeping the authored grip at the palm and pointing the shaft along controller forward (-Z). Shared placement for rendering, melee, launch and native return",
+    "quick_select": "Hold Y to anchor the left controller position and view plane; move the left hand toward an icon; release Y to confirm using the original ring",
+    "thresholds": "6 cm outward activation, 3.5 cm inward deactivation; project physical displacement onto the fixed view-plane right/up axes; ignore controller depth motion",
+    "tracking": "Valid tracked position and HMD pose required; focus/menu/recenter resets the anchor; tracking jumps above 0.5 m rebase; snap turning paused during Y hold",
+    "isolation": "Joystick ignored during Y selection. Hand direction goes only into menu analog_copy/stick_active after GameTick and before MenuFrameSet; hero locomotion receives neutral axes. Native Triangle input and contextual interaction priority retained",
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending headset feedback on controller-forward wrench orientation and hand-based quick-select direction/thresholds"
+  },
+  "tracked_blaster": {
+    "binary_sha256": "5776AC0946BF33F9C2A66DC206B09EC311AD0896B5FDF4F3C4AD166839076294",
+    "headset_log": "work/vr/novalis-headset-20261022-225256.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED",
+      "VISIBLE",
+      "FOCUSED"
+    ],
+    "stereo_attached": true,
+    "starting_inventory": {
+      "observed": true,
+      "owned": 1,
+      "ammo": 100,
+      "quick_select": [
+        10,
+        15,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ]
+    },
+    "inventory": "Native GiveItem(15, equip=false) only when not owned; normal starting ammo, vendor ownership and first free quick-select slot. Existing ammo is not refilled",
+    "controls": "Hold Y and move left hand to select Blaster; aim right controller; hold right trigger for native automatic fire. Fresh right grip recalls wrench",
+    "rendering": "Original class-168 mesh/material/animation; authored list-0 muzzle and local -Y barrel aligned with controller forward, muzzle 40 cm ahead and 3 cm above palm",
+    "simulation": "Native Blaster fire/update with optional tracked muzzle/forward, original cadence, ammo/statistics, shot class 305, collisions/damage/particles/audio; no body/camera aim assist; muzzle light/contact hits moved to muzzle",
+    "cancellation": "No tracked firing on lost/blocked hand, hidden-hand/death state, pause or hand-based quick select",
+    "compatibility": "Non-VR and desktop preview keep native aim; existing tracked wrench and Bomb Glove remain. Selected/requested Blaster consumes trigger edge so a held trigger cannot prepare a bomb on swap. Native animated Bomb Glove idle preparation suppressed in tracked mode to avoid duplicates",
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending headset feedback on Blaster grip/aim, visible projectiles, impacts/damage, cadence, ammo and weapon switching"
+  },
+  "pyrocitor_brown_hands_max_ammo": {
+    "binary_sha256": "385EAEFE19F4838A92D050DCD7B24940EF40FEC55E09A21C86638364DFAF367A",
+    "headset_log": "work/vr/novalis-headset-20261022-230802.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED"
+    ],
+    "stereo_attached": true,
+    "startup_ammo": [
+      [
+        10,
+        40
+      ],
+      [
+        15,
+        200
+      ],
+      [
+        16,
+        240
+      ]
+    ],
+    "quick_select": [
+      10,
+      15,
+      16,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "original_hand_triangles": [
+      {
+        "side": 0,
+        "triangles": 582
+      },
+      {
+        "side": 1,
+        "triangles": 452
+      }
+    ],
+    "blaster_roll": "Authored gun top +X mapped to controller up; corrects previous left roll without changing muzzle position/forward aim",
+    "hands": "Original Ratchet class-0 hand triangles/UVs/textures and native skinning; joints 75..90 left, 55..70 right; independently mounted palm frames 76/56 in a fixed pose. Procedural sphere hands removed",
+    "bomb_glove": "Original class-192 model replaces right brown glove while selected/preparing a bomb. Flying wrench can remain visible alongside it",
+    "pyrocitor": "Native item 16/class 176 granted through GiveItem, hand-aimed muzzle/forward override, original continuous flame, pilot flame, collisions, kept-flame hit spheres, damage, audio, particles and ammo consumption",
+    "controls": "Y plus left-hand gesture selects either gun; right controller aims and right trigger fires; fresh right grip recalls wrench. Tracking loss/obstruction/menus pause firing",
+    "ammunition": "Once per application launch, every owned ammo-using item is filled from its original record's +0x0e capacity; normal consumption afterward. Blaster and Pyrocitor are granted when missing and added to free quick-select slots",
+    "tests": "NOT RUN: explicit user instruction",
+    "physical_validation": "Pending headset feedback on brown-glove fit/visibility, corrected gun roll, Pyrocitor flame/impacts/audio and Bomb Glove substitution"
   }
 }

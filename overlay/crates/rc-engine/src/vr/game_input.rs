@@ -8,26 +8,88 @@ use bevy_mod_openxr::{
     poll_events::{OxrEventHandlerExt, OxrEventIn},
     resources::OxrInstance,
     session::OxrSession,
+    spaces::OxrSpaceLocationFlags,
 };
-use bevy_mod_xr::session::{session_available, XrPreDestroySession, XrSessionCreated};
-use openxr::{Action, ActionSet, Path, Vector2f};
-use rc_game::pad::{button, PadInput};
+use bevy_mod_xr::{
+    session::{XrPreDestroySession, XrSessionCreated, session_available},
+    spaces::XrSpaceSyncSet,
+};
+use openxr::{Action, ActionSet, Path, Posef, Vector2f};
+use rc_game::pad::{PadInput, button};
 
 #[derive(Resource, Default)]
 pub struct GamePad {
     pub pad: PadInput,
     pub active: bool,
+    pub quick_select: Option<Vec2>,
 }
 #[derive(Resource, Default)]
 pub(super) struct Focused(pub bool);
+#[derive(Resource, Default)]
+pub(super) struct HandInput {
+    pub grip: Option<f32>,
+    pub trigger: Option<f32>,
+    firing: bool,
+}
+#[derive(Component, Clone, Copy)]
+pub(super) struct Hand(pub usize);
+
+#[derive(Default)]
+pub(super) struct HandSelect {
+    held: bool,
+    anchor: Option<(Vec3, Quat)>,
+    previous: Option<Vec3>,
+    revision: u64,
+    selecting: bool,
+}
+impl HandSelect {
+    fn direction(&mut self, hand: Option<Vec3>, head: Option<Transform>, revision: u64) -> Vec2 {
+        if self.revision != revision {
+            *self = Self {
+                held: true,
+                revision,
+                ..default()
+            };
+        }
+        let (Some(hand), Some(head)) = (hand, head) else {
+            self.anchor = None;
+            self.previous = None;
+            self.selecting = false;
+            return Vec2::ZERO;
+        };
+        if self
+            .previous
+            .replace(hand)
+            .is_some_and(|p| p.distance(hand) > 0.5)
+        {
+            self.anchor = None;
+            self.selecting = false;
+        }
+        // Fixed tracking-space origin and view plane at Y press: head/rig motion cannot move the choice.
+        let (origin, orientation) = *self.anchor.get_or_insert((hand, head.rotation));
+        let delta = orientation.inverse() * (hand - origin);
+        let direction = Vec2::new(delta.x, delta.y);
+        let distance = direction.length();
+        if distance > 0.06 {
+            self.selecting = true;
+        } else if distance < 0.035 {
+            self.selecting = false;
+        }
+        if self.selecting {
+            direction.normalize_or_zero()
+        } else {
+            Vec2::ZERO
+        }
+    }
+}
 #[derive(Resource)]
-struct Actions {
+pub(super) struct Actions {
     set: ActionSet,
     movement: Action<Vector2f>,
     camera: Action<Vector2f>,
-    fire: Action<f32>,
-    strafe: Action<f32>,
-    crouch: Action<f32>,
+    grip: Action<f32>,
+    trigger: Action<f32>,
+    hands: [Action<Posef>; 2],
     buttons: Vec<(u32, Action<bool>)>,
 }
 
@@ -36,11 +98,18 @@ impl Plugin for GameInputPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<GamePad>()
             .init_resource::<Focused>()
+            .init_resource::<HandInput>()
             .add_oxr_event_handler(focus_event)
             .add_systems(Startup, create.run_if(session_available))
             .add_systems(OxrSendActionBindings, bindings)
-            .add_systems(XrSessionCreated, attach)
+            .add_systems(XrSessionCreated, (attach, spawn_hands))
             .add_systems(XrPreDestroySession, clear)
+            .add_systems(
+                FixedUpdate,
+                hand_select_menu
+                    .after(crate::gameplay::GameTick)
+                    .before(crate::menu_render::MenuFrameSet),
+            )
             .add_systems(
                 PreUpdate,
                 sync.before(OxrActionSetSyncSet)
@@ -50,6 +119,7 @@ impl Plugin for GameInputPlugin {
                 PreUpdate,
                 sample
                     .after(OxrActionSetSyncSet)
+                    .after(XrSpaceSyncSet)
                     .before(crate::input_map::sample_system),
             );
     }
@@ -62,7 +132,11 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
             (button::CROSS, "jump", "Jump / confirm"),
             (button::SQUARE, "wrench", "Wrench"),
             (button::CIRCLE, "weapon_button", "Weapon / circle"),
-            (button::TRIANGLE, "quick_select", "Quick select / back"),
+            (
+                button::TRIANGLE,
+                "quick_select",
+                "Quick select / interact / back",
+            ),
             (button::SELECT, "map", "Map"),
             (button::START, "pause", "Pause menu"),
         ] {
@@ -70,10 +144,13 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
         }
         Ok(Actions {
             movement: set.create_action("move", "Move Ratchet", &[])?,
-            camera: set.create_action("camera", "Original follow camera", &[])?,
-            fire: set.create_action("fire", "Use equipped weapon", &[])?,
-            strafe: set.create_action("strafe", "Strafe / aim", &[])?,
-            crouch: set.create_action("crouch", "Crouch", &[])?,
+            camera: set.create_action("camera", "Snap turn", &[])?,
+            grip: set.create_action("grip", "Hold wrench / release to throw", &[])?,
+            trigger: set.create_action("bomb_trigger", "Hold bomb / release to throw", &[])?,
+            hands: [
+                set.create_action("left_hand", "Left hand pose", &[])?,
+                set.create_action("right_hand", "Right hand pose", &[])?,
+            ],
             buttons,
             set,
         })
@@ -91,9 +168,34 @@ fn attach(a: Res<Actions>, mut out: MessageWriter<OxrAttachActionSet>) {
 fn sync(a: Res<Actions>, mut out: MessageWriter<OxrSyncActionSet>) {
     out.write(OxrSyncActionSet(a.set.clone()));
 }
-fn clear(mut pad: ResMut<GamePad>, mut focus: ResMut<Focused>) {
+fn clear(
+    mut commands: Commands,
+    hands: Query<Entity, With<Hand>>,
+    mut input: ResMut<HandInput>,
+    mut pad: ResMut<GamePad>,
+    mut focus: ResMut<Focused>,
+) {
+    for e in &hands {
+        commands.entity(e).despawn();
+    }
+    *input = HandInput::default();
     *pad = GamePad::default();
     focus.0 = false;
+}
+fn spawn_hands(a: Res<Actions>, session: Res<OxrSession>, mut commands: Commands) {
+    for (side, action) in a.hands.iter().enumerate() {
+        match session.create_action_space(action, Path::NULL, Isometry3d::IDENTITY) {
+            Ok(space) => {
+                commands.spawn((
+                    Hand(side),
+                    space,
+                    crate::level_switch::KeepAcrossLevels,
+                    Name::new(format!("Ratchet tracked hand {side}")),
+                ));
+            }
+            Err(e) => error!("VR_GAME cannot create hand tracking space: {e}"),
+        }
+    }
 }
 fn focus_event(event: OxrEventIn, mut focus: ResMut<Focused>) {
     if let openxr::Event::SessionStateChanged(state) = *event {
@@ -126,19 +228,24 @@ fn bindings(a: Option<Res<Actions>>, mut out: MessageWriter<OxrSuggestActionBind
             "/user/hand/right/input/thumbstick",
         );
         bind(
-            a.fire.as_raw(),
+            a.hands[0].as_raw(),
             profile,
-            "/user/hand/right/input/trigger/value",
+            "/user/hand/left/input/grip/pose",
         );
         bind(
-            a.strafe.as_raw(),
+            a.hands[1].as_raw(),
             profile,
-            "/user/hand/left/input/trigger/value",
+            "/user/hand/right/input/grip/pose",
+        );
+        bind(
+            a.trigger.as_raw(),
+            profile,
+            "/user/hand/right/input/trigger/value",
         );
         let index = profile.ends_with("index_controller");
         let microsoft = profile.ends_with("motion_controller");
         bind(
-            a.crouch.as_raw(),
+            a.grip.as_raw(),
             profile,
             if index {
                 "/user/hand/right/input/squeeze/force"
@@ -190,19 +297,27 @@ pub fn encode(movement: Vec2, camera: Vec2, buttons: u32) -> PadInput {
     p.ry = raw(-camera.y);
     p
 }
-fn sample(
+pub(super) fn sample(
     a: Option<Res<Actions>>,
     session: Option<Res<OxrSession>>,
     focus: Res<Focused>,
-    rig: Res<super::game::Rig>,
+    mut rig: ResMut<super::game::Rig>,
+    play: Option<Res<crate::gameplay::Play>>,
+    mut hand: ResMut<HandInput>,
     views: Option<Res<bevy_mod_openxr::resources::OxrViews>>,
     mode: Res<crate::menu_render::MenuMode>,
     mut out: ResMut<GamePad>,
     mut previous: Local<u32>,
+    tracked: Query<(&Hand, &Transform, &OxrSpaceLocationFlags)>,
+    mut selection: Local<HandSelect>,
 ) {
     *out = GamePad::default();
+    hand.grip = None;
+    hand.trigger = None;
     if !focus.0 {
+        hand.firing = false;
         *previous = 0;
+        *selection = HandSelect::default();
         return;
     }
     let (Some(a), Some(session)) = (a, session) else {
@@ -220,11 +335,23 @@ fn sample(
             .ok()
             .is_some_and(|s| s.is_active && s.current_state)
     };
-    let trigger = |a: &Action<f32>| {
-        a.state(&session, Path::NULL)
-            .ok()
-            .is_some_and(|s| s.is_active && s.current_state > 0.55)
-    };
+    hand.grip = a
+        .grip
+        .state(&session, Path::NULL)
+        .ok()
+        .filter(|s| s.is_active)
+        .map(|s| s.current_state);
+    hand.trigger = a
+        .trigger
+        .state(&session, Path::NULL)
+        .ok()
+        .filter(|s| s.is_active)
+        .map(|s| s.current_state);
+    if hand.trigger.is_some_and(|v| v > 0.6) {
+        hand.firing = true;
+    } else if hand.trigger.is_none_or(|v| v < 0.35) {
+        hand.firing = false;
+    }
     let movement = vector(&a.movement);
     let camera = vector(&a.camera);
     out.active = movement.is_some() || camera.is_some();
@@ -234,31 +361,80 @@ fn sample(
             buttons |= *bit;
         }
     }
-    if trigger(&a.fire) {
-        buttons |= button::CIRCLE;
-    }
-    if trigger(&a.strafe) {
-        buttons |= button::L1;
-    }
-    if trigger(&a.crouch) {
-        buttons |= button::R1;
-    }
     let gameplay = mode.state.mode == rc_game::menus::mode::Mode::Gameplay;
     let mut movement = movement.unwrap_or_default();
     let mut camera = camera.unwrap_or_default();
-    // Menus and the quick-select wheel retain their ordinary pad directions.
-    if gameplay && buttons & button::TRIANGLE == 0 {
-        if let Some(head) = super::game::pose(views.as_deref()) {
-            movement = rig.movement_from_head(movement, head.rotation);
+    if gameplay {
+        // Circle is exclusively the trigger while the native Blaster is equipped; X remains a menu key.
+        buttons &= !button::CIRCLE;
+        if hand.firing
+            && buttons & button::TRIANGLE == 0
+            && play.as_ref().is_some_and(|p| {
+                matches!(
+                    p.game.hero.items.slot.id,
+                    rc_game::hero::blaster::BLASTER | rc_game::hero::pyrocitor::PYROCITOR
+                ) && p.game.hero.items.slot.state == 2
+            })
+            && tracked.iter().any(|(h, _, f)| {
+                h.0 == 1 && f.pos_valid() && f.pos_tracked() && f.rot_valid() && f.rot_tracked()
+            })
+        {
+            buttons |= button::CIRCLE;
         }
-        // The head handles vertical look. Keep the original horizontal orbit, at a gentler rate.
-        camera = Vec2::new(camera.x * 0.6, 0.0);
+        let selecting = buttons & button::TRIANGLE != 0;
+        if selecting {
+            rig.snap(0.0);
+            selection.held = true;
+            let left = tracked.iter().find_map(|(hand, pose, flags)| {
+                (hand.0 == 0 && flags.pos_valid() && flags.pos_tracked())
+                    .then_some(pose.translation)
+            });
+            out.quick_select =
+                Some(selection.direction(left, super::game::pose(views.as_deref()), rig.revision));
+            movement = Vec2::ZERO;
+        } else if selection.held {
+            // Release confirms the last hand-selected sector without leaking the locomotion stick.
+            movement = Vec2::ZERO;
+            *selection = HandSelect::default();
+            rig.snap(camera.x);
+        } else {
+            rig.snap(camera.x);
+            if let (Some(head), Some(play)) = (super::game::pose(views.as_deref()), play.as_ref()) {
+                movement = rig.movement_for_camera(movement, head.rotation, &play.game);
+            }
+        }
+        camera = Vec2::ZERO;
+        // Triangle keeps the native quick-select/context interaction priority.
+        buttons &=
+            button::CROSS | button::CIRCLE | button::TRIANGLE | button::START | button::SELECT;
+    } else {
+        *selection = HandSelect::default();
+        rig.snap(0.0);
     }
     out.pad = encode(movement, camera, buttons);
     if buttons != *previous {
         println!("VR_GAME controller_buttons={buttons:#06x} move={movement:?} camera={camera:?}");
         *previous = buttons;
     }
+}
+
+fn hand_select_menu(
+    input: Res<GamePad>,
+    mode: Res<crate::menu_render::MenuMode>,
+    play: Option<ResMut<crate::gameplay::Play>>,
+) {
+    if !input.active || mode.state.mode != rc_game::menus::mode::Mode::Gameplay {
+        return;
+    }
+    let (Some(direction), Some(mut play)) = (input.quick_select, play) else {
+        return;
+    };
+    // Only the menu's copied axes receive the gesture, after physics has consumed a neutral stick.
+    // Triangle remains untouched for the original contextual interactions and wheel confirmation.
+    let axes = encode(direction, Vec2::ZERO, 0);
+    play.game.pad.analog_copy[2] = rc_game::pad::axis(axes.lx);
+    play.game.pad.analog_copy[3] = rc_game::pad::axis(axes.ly);
+    play.game.pad.stick_active = direction != Vec2::ZERO;
 }
 
 pub fn merge_pad(pad: &mut PadInput, xr: Option<&GamePad>) {
@@ -345,6 +521,7 @@ mod tests {
             Some(&GamePad {
                 pad: encode(Vec2::Y, Vec2::ZERO, button::CIRCLE),
                 active: true,
+                ..default()
             }),
         );
         assert_eq!(p.ly, 0);

@@ -1,6 +1,9 @@
 //! OpenXR integration into the original game. Calibration is an explicit diagnostic mode.
 mod game;
 mod game_input;
+mod embodied;
+mod bomb_glove;
+mod blaster;
 pub use game_input::{GamePad,merge_pad};
 pub use game::{prepare_game,game_plugins,install_game};
 mod actions;

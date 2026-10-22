@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_original_game_vr_play_confirmed",
+  "status": "native_windows_pyrocitor_brown_hands_max_ammo_built_and_launched",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -19,8 +19,8 @@
     "https://docs.github.com/en/pull-requests/reference/forks"
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
-  "implementation": "Original ReRAC application with OpenXR stereo views and original-pad controller input; calibration is diagnostic only",
-  "latest_build_sha256": "79902F8CEDA780E8B4EEBEDE229F5E74C9F053176CF1CFF80DD16A7657924EDB",
+  "implementation": "Original full game with first-person VR, original brown Ratchet hand meshes/Bomb Glove, tracked wrench and native controller-aimed Blaster/Pyrocitor",
+  "latest_build_sha256": "385EAEFE19F4838A92D050DCD7B24940EF40FEC55E09A21C86638364DFAF367A",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Camera/input correction awaiting user feedback; no tests run"
+  "latest_build_physical_validation": "Pending headset feedback on brown-glove fit/visibility, corrected gun roll, Pyrocitor flame/impacts/audio and Bomb Glove substitution"
 }

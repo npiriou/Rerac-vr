@@ -1,25 +1,25 @@
 //! Stereo views of the ORIGINAL ReRAC world and its live game, including level changes.
 //! No level loader, entity renderer, hero physics or weapon implementation is duplicated here.
 use super::{
-    game_input::{GameInputPlugin, GamePad},
     Settings,
+    game_input::{GameInputPlugin, GamePad},
 };
 use bevy::{
     app::PluginGroupBuilder,
     camera::{
-        visibility::RenderLayers, Camera3dDepthLoadOp, CameraOutputMode, ClearColorConfig,
-        RenderTarget,
+        Camera3dDepthLoadOp, CameraOutputMode, ClearColorConfig, RenderTarget,
+        visibility::RenderLayers,
     },
     core_pipeline::core_3d::Transparent3d,
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
     prelude::*,
     render::{
+        Render, RenderApp, RenderSystems,
         extract_component::{ExtractComponent, ExtractComponentPlugin},
         pipelined_rendering::PipelinedRenderingPlugin,
         render_phase::ViewSortedRenderPhases,
         render_resource::{BlendState, PipelineCache, TextureFormat},
         view::{ExtractedView, Msaa},
-        Render, RenderApp, RenderSystems,
     },
     transform::TransformSystems,
 };
@@ -33,8 +33,8 @@ use bevy_mod_xr::{
     session::{XrPreDestroySession, XrSessionCreated, XrTrackingRoot},
 };
 use std::sync::{
-    atomic::{AtomicU64, Ordering},
     Arc,
+    atomic::{AtomicU64, Ordering},
 };
 
 const PANEL_LAYER: usize = 62;
@@ -48,15 +48,51 @@ struct Panel(u8);
 pub(super) struct Rig {
     center: Option<Vec3>,
     yaw: f32,
+    world_yaw: f32,
+    turn: f32,
+    head: Option<Vec3>,
+    previous_head: Option<Vec3>,
+    snap_held: bool,
+    pub(super) revision: u64,
     reset_held: bool,
 }
 impl Rig {
-    pub(super) fn movement_from_head(&self, movement: Vec2, head: Quat) -> Vec2 {
+    pub(super) fn movement_for_camera(
+        &self,
+        movement: Vec2,
+        head: Quat,
+        game: &rc_game::tick::Game,
+    ) -> Vec2 {
         if self.center.is_none() {
             return movement;
         }
-        let relative = heading(head) - self.yaw;
+        let camera = crate::play_camera::view_transform(&game.camera.out);
+        let relative =
+            self.world_yaw + self.turn - self.yaw + heading(head) - heading(camera.rotation);
         Vec2::from_angle(relative).rotate(movement)
+    }
+    pub(super) fn snap(&mut self, x: f32) {
+        if x.abs() < 0.25 {
+            self.snap_held = false;
+        }
+        if x.abs() > 0.7 && !self.snap_held && self.center.is_some() {
+            self.turn -= x.signum() * std::f32::consts::FRAC_PI_6;
+            self.snap_held = true;
+            self.revision = self.revision.wrapping_add(1);
+        }
+    }
+    pub(super) fn root_for(&self, game: &rc_game::tick::Game, scale: f32) -> Option<Transform> {
+        let mut center = self.center?;
+        if let Some(head) = self.head {
+            center.x = head.x;
+            center.z = head.z;
+        }
+        let base = Transform::from_translation(
+            crate::tfrag_render::game_to_bevy(game.hero.position()) + Vec3::Y * 1.6,
+        )
+        .with_rotation(Quat::from_rotation_y(self.world_yaw + self.turn));
+        // The horizontal HMD position has been consumed by the native capsule; never add it twice.
+        Some(rig_transform(base, center, self.yaw, scale))
     }
 }
 #[derive(Resource, Clone, Default)]
@@ -102,10 +138,12 @@ pub fn prepare_game() -> anyhow::Result<()> {
         }
     }
     println!(
-        "VR_GAME original ReRAC application; scene={} preview={} simulation=60Hz third-person",
+        "VR_GAME original ReRAC application; scene={} preview={} simulation=60Hz first-person",
         s.scene, s.desktop_preview
     );
-    println!("VR_GAME controls: left stick move; right stick game camera; A cross/jump/confirm; B square/wrench; X circle/weapon; Y triangle/quick select/back; left stick click select/map; right stick click start/pause; right trigger weapon; left trigger strafe; right grip crouch; keyboard F8 recenter");
+    println!(
+        "VR_GAME first person: left stick move; right stick snap turn 30 degrees; A jump/double jump; right grip hold wrench, swing to hit, release a moving hand to throw; Y interact or hold and move left hand for quick select; right trigger fires the selected Blaster/Pyrocitor or prepares a bomb for gesture release; Ratchet brown gloves; F8 recenter"
+    );
     Ok(())
 }
 pub fn game_plugins(plugins: PluginGroupBuilder) -> PluginGroupBuilder {
@@ -145,6 +183,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     let now = std::time::Instant::now();
     app.insert_resource(settings.clone())
         .init_resource::<Rig>()
+        .add_plugins(super::embodied::EmbodiedPlugin)
         .insert_resource(frames.clone())
         .insert_resource(draw.clone())
         .insert_resource(MonitorCadence {
@@ -157,6 +196,13 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
             restore: Vec::new(),
         })
         .add_systems(First, restore_monitor_cameras)
+        .add_systems(
+            PreUpdate,
+            (align_body, follow_game_camera)
+                .chain()
+                .after(bevy_mod_xr::spaces::XrSpaceSyncSet)
+                .before(super::game_input::sample),
+        )
         .add_systems(
             PostUpdate,
             pace_monitor_cameras.before(bevy::camera::CameraUpdateSystems),
@@ -173,7 +219,8 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         })
         .add_systems(
             RunFixedMainLoop,
-            follow_game_camera
+            (follow_game_camera, super::bomb_glove::follow_held)
+                .chain()
                 .in_set(RunFixedMainLoopSystems::AfterFixedMainLoop)
                 .after(crate::play_camera::apply)
                 .after(crate::scene_render::apply_camera)
@@ -349,7 +396,9 @@ fn configure_eyes(
         ));
     }
     spawn_panels(&mut commands, *root, &mut meshes, &mut mats);
-    println!("VR_GAME stereo attached to original world; hero, mobys, ties, shrubs, sky, water and audio use upstream plugins");
+    println!(
+        "VR_GAME stereo attached to original world; hero, mobys, ties, shrubs, sky, water and audio use upstream plugins"
+    );
 }
 fn preview_eyes(
     mut commands: Commands,
@@ -398,7 +447,9 @@ fn preview_eyes(
         }
     }
     spawn_panels(&mut commands, root, &mut meshes, &mut mats);
-    println!("VR_GAME desktop verification: original playable window plus two offscreen stereo views; no headset simulation");
+    println!(
+        "VR_GAME desktop verification: original playable window plus two offscreen stereo views; no headset simulation"
+    );
 }
 fn spawn_panels(
     commands: &mut Commands,
@@ -448,7 +499,7 @@ fn heading(rotation: Quat) -> f32 {
     (-forward.x).atan2(-forward.z)
 }
 fn rig_transform(base: Transform, center: Vec3, yaw: f32, scale: f32) -> Transform {
-    // Camera orbit changes yaw; only physical head motion supplies pitch and roll.
+    // Only snap turning changes virtual yaw; physical head motion supplies pitch and roll.
     let rotation = Quat::from_rotation_y(heading(base.rotation) - yaw);
     Transform {
         translation: base.translation - rotation * (center * scale),
@@ -456,17 +507,68 @@ fn rig_transform(base: Transform, center: Vec3, yaw: f32, scale: f32) -> Transfo
         scale: Vec3::splat(scale),
     }
 }
+fn align_body(
+    settings: Res<Settings>,
+    views: Option<Res<OxrViews>>,
+    focus: Option<Res<super::game_input::Focused>>,
+    mode: Res<crate::menu_render::MenuMode>,
+    play: Option<ResMut<crate::gameplay::Play>>,
+    level: Res<crate::Level>,
+    mut rig: ResMut<Rig>,
+) {
+    if !settings.desktop_preview && !focus.as_ref().is_some_and(|f| f.0) {
+        rig.previous_head = None;
+        return;
+    }
+    let Some(head) = pose(views.as_deref()) else {
+        return;
+    };
+    rig.head = Some(head.translation);
+    if rig.center.is_none() || mode.state.mode != rc_game::menus::mode::Mode::Gameplay {
+        rig.previous_head = None;
+        return;
+    }
+    let previous = rig.previous_head.replace(head.translation);
+    let Some(previous) = previous else {
+        // Rebase after focus/menu changes instead of moving the avatar from an old desk/room pose.
+        if let Some(center) = rig.center.as_mut() {
+            center.y = head.translation.y;
+        }
+        rig.revision = rig.revision.wrapping_add(1);
+        return;
+    };
+    let mut delta = head.translation - previous;
+    delta.y = 0.0;
+    if delta.length() > 0.5 {
+        rig.revision = rig.revision.wrapping_add(1);
+        return;
+    }
+    if delta.length_squared() < 1e-10 {
+        return;
+    }
+    let (Some(mut play), Some(coll)) = (play, level.0.collision.as_ref()) else {
+        return;
+    };
+    if play.death_pending || play.game.hero.health <= 0 {
+        return;
+    }
+    let rotation = Quat::from_rotation_y(rig.world_yaw + rig.turn - rig.yaw);
+    let delta = rotation * delta * settings.units_per_metre;
+    play.roomscale_move(coll, [delta.x, -delta.z, 0.0]);
+}
+
 fn follow_game_camera(
     settings: Res<Settings>,
     views: Option<Res<OxrViews>>,
-    view: Option<Res<crate::play_camera::PlayView>>,
+    play: Option<Res<crate::gameplay::Play>>,
+    mode: Res<crate::menu_render::MenuMode>,
     focus: Option<Res<super::game_input::Focused>>,
     keys: Res<ButtonInput<KeyCode>>,
     mut rig: ResMut<Rig>,
     mut roots: Query<&mut Transform, (With<XrTrackingRoot>, Without<crate::fly_cam::FlyCam>)>,
     mut main: Query<&mut Transform, (With<crate::fly_cam::FlyCam>, Without<XrTrackingRoot>)>,
 ) {
-    let Some(view) = view else { return };
+    let Some(play) = play else { return };
     // Startup poses while the headset is on the desk are not the player's neutral pose.
     if !settings.desktop_preview && !focus.as_ref().is_some_and(|f| f.0) {
         return;
@@ -481,22 +583,29 @@ fn follow_game_camera(
     if rig.center.is_none() || (reset && !rig.reset_held) {
         rig.center = Some(head.translation);
         rig.yaw = heading(head.rotation);
-        println!("VR_GAME recentered from focused headset pose: center={:?} yaw={:.3}", head.translation, rig.yaw);
+        rig.world_yaw = play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2;
+        rig.turn = 0.0;
+        rig.head = Some(head.translation);
+        rig.previous_head = Some(head.translation);
+        rig.revision = rig.revision.wrapping_add(1);
+        println!(
+            "VR_GAME recentered from focused headset pose: center={:?} yaw={:.3}",
+            head.translation, rig.yaw
+        );
     }
     rig.reset_held = reset;
-    let base = main
-        .iter()
-        .next()
-        .map(|t| *t)
-        .unwrap_or_else(|| crate::play_camera::view_transform(&view.view));
-    let root = rig_transform(base, rig.center.unwrap(), rig.yaw, settings.units_per_metre);
+    let Some(root) = rig.root_for(&play.game, settings.units_per_metre) else {
+        return;
+    };
     for mut r in &mut roots {
         *r = root;
     }
     let center = root.mul_transform(head);
-    for mut t in &mut main {
-        // Original camera projection stays intact for the window; projection_tans expands only culling.
-        *t = center;
+    if mode.state.mode == rc_game::menus::mode::Mode::Gameplay {
+        for mut t in &mut main {
+            // Keep authored camera shots in the original menu/cinematic panel.
+            *t = center;
+        }
     }
 }
 fn sky_policy(
@@ -585,6 +694,8 @@ fn update_panels(
 }
 fn audit(
     settings: Res<Settings>,
+    rig: Res<Rig>,
+    focus: Option<Res<super::game_input::Focused>>,
     mut audit: ResMut<Audit>,
     rendered: Res<Rendered>,
     draw: Res<DrawAudit>,
@@ -605,17 +716,49 @@ fn audit(
         audit.first_tick = Some(tick);
     }
     if now.duration_since(audit.last).as_secs_f32() > 5.0 {
-        println!("VR_GAME live level={} ticks={} hero={:?} hero_state={:?} mesh_entities={} ratchet_meshes={} world_eyes={} sky_eyes={} render_frames={} min_world_draws={} min_sky_draws={} waiting_pipelines={} controls_active={} head_views={}",
-            crate::level_load::level_index(),tick,play.as_ref().map(|p|p.game.hero.position()),play.as_ref().map(|p|p.game.hero.state),
-            meshes.iter().count(),ratchet.iter().count(),eyes.iter().count(),sky.iter().count(),rendered.0.load(Ordering::Relaxed),
-            draw.world.load(Ordering::Relaxed),draw.sky.load(Ordering::Relaxed),draw.waiting.load(Ordering::Relaxed),
-            pad.as_ref().is_some_and(|p|p.active),xr_views.as_ref().map_or(0,|v|v.len()));
+        println!(
+            "VR_GAME live level={} ticks={} hero={:?} hero_state={:?} mesh_entities={} ratchet_meshes={} world_eyes={} sky_eyes={} render_frames={} min_world_draws={} min_sky_draws={} waiting_pipelines={} controls_active={} head_views={}",
+            crate::level_load::level_index(),
+            tick,
+            play.as_ref().map(|p| p.game.hero.position()),
+            play.as_ref().map(|p| p.game.hero.state),
+            meshes.iter().count(),
+            ratchet.iter().count(),
+            eyes.iter().count(),
+            sky.iter().count(),
+            rendered.0.load(Ordering::Relaxed),
+            draw.world.load(Ordering::Relaxed),
+            draw.sky.load(Ordering::Relaxed),
+            draw.waiting.load(Ordering::Relaxed),
+            pad.as_ref().is_some_and(|p| p.active),
+            xr_views.as_ref().map_or(0, |v| v.len())
+        );
         if let (Some(play), Some(camera)) = (play.as_ref(), main.iter().next()) {
+            if let (Some(root), Some(head)) = (
+                rig.root_for(&play.game, settings.units_per_metre),
+                pose(xr_views.as_deref()),
+            ) {
+                let eye = root.mul_transform(head).translation;
+                let body = crate::tfrag_render::game_to_bevy(play.game.hero.position());
+                let horizontal = Vec2::new(eye.x - body.x, eye.z - body.z).length();
+                println!(
+                    "VR_GAME body_alignment horizontal_error={horizontal:.5} eye_height={:.3} focused={}",
+                    eye.y - body.y,
+                    focus.as_ref().is_some_and(|f| f.0)
+                );
+            }
             let hero = crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y;
             let local = camera.compute_affine().inverse().transform_point3(hero);
-            println!("VR_GAME hero_view visible_meshes={} local={local:.3?} distance={:.3} camera_class={} first_person={}",
-                ratchet.iter().filter(|(v, inherited)| **v != Visibility::Hidden && inherited.get()).count(),
-                camera.translation.distance(hero), play.game.camera.out.class, play.game.camera.first_person_flag());
+            println!(
+                "VR_GAME hero_view visible_meshes={} local={local:.3?} distance={:.3} camera_class={} first_person=true native_camera_first_person={}",
+                ratchet
+                    .iter()
+                    .filter(|(v, inherited)| **v != Visibility::Hidden && inherited.get())
+                    .count(),
+                camera.translation.distance(hero),
+                play.game.camera.out.class,
+                play.game.camera.first_person_flag()
+            );
         }
         audit.last = now;
     }
@@ -631,8 +774,17 @@ fn audit(
                 && sky.iter().count() == 2
                 && !ratchet.is_empty()
                 && tick > audit.first_tick.unwrap_or(tick) + 10;
-            println!("VR_GAME ORIGINAL_GAME_SMOKE_{} ticks={tick} ratchet_meshes={} mesh_entities={} stereo_world_views={} sky_views={} render_frames={} min_world_draws={} min_sky_draws={}",
-                if ok {"PASS"}else{"FAIL"},ratchet.iter().count(),meshes.iter().count(),eyes.iter().count(),sky.iter().count(),rendered.0.load(Ordering::Relaxed),draw.world.load(Ordering::Relaxed),draw.sky.load(Ordering::Relaxed));
+            println!(
+                "VR_GAME ORIGINAL_GAME_SMOKE_{} ticks={tick} ratchet_meshes={} mesh_entities={} stereo_world_views={} sky_views={} render_frames={} min_world_draws={} min_sky_draws={}",
+                if ok { "PASS" } else { "FAIL" },
+                ratchet.iter().count(),
+                meshes.iter().count(),
+                eyes.iter().count(),
+                sky.iter().count(),
+                rendered.0.load(Ordering::Relaxed),
+                draw.world.load(Ordering::Relaxed),
+                draw.sky.load(Ordering::Relaxed)
+            );
             exit.write(if ok {
                 AppExit::Success
             } else {
