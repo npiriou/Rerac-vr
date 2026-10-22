@@ -29,9 +29,10 @@ class PackageTests(unittest.TestCase):
         digest = hashlib.sha1(b'blob ' + str(len(data)).encode() + b'\0' + data).hexdigest()
         self.assertEqual(digest, MANIFEST['patches'][0]['expectedBlobSha'])
 
-    def test_manifest_patches_only_engine_manifest_and_entrypoint(self):
-        self.assertEqual([p['path'] for p in MANIFEST['patches']],
-                         ['crates/rc-engine/Cargo.toml', 'crates/rc-engine/src/main.rs'])
+    def test_manifest_patches_engine_and_windows_trace_transport(self):
+        self.assertEqual([p['path'] for p in MANIFEST['patches'][:3]],
+                         ['crates/rc-engine/Cargo.toml', 'crates/rc-engine/src/main.rs', 'tools/trace/src/pine.rs'])
+        self.assertIn('crates/rc-engine/src/input_map.rs', [p['path'] for p in MANIFEST['patches']])
         for patch in MANIFEST['patches']:
             p = PurePosixPath(patch['path'])
             self.assertFalse(p.is_absolute())
@@ -70,13 +71,25 @@ class PackageTests(unittest.TestCase):
         applier = text('Apply-Overlay.ps1')
         self.assertIn('$Blob -ne $Patch.expectedBlobSha', applier)
 
-    def test_entrypoint_branch_precedes_disc_startup_in_synthetic_fixture(self):
-        synthetic = 'mod crash_log;\nfn main() -> anyhow::Result<()> {\n    crash_log::install();\n    let root = disc_source::startup();\n    Ok(())\n}\n'
-        out = apply_reference(synthetic, MANIFEST['patches'][1]['replacements'])
-        self.assertLess(out.index('return vr::run()'), out.index('disc_source::startup()'))
-        self.assertIn('#[cfg(feature = "vr")]', out)
-        self.assertIn('#[cfg(not(feature = "vr"))]', out)
+    def test_game_entrypoint_preserves_original_application(self):
+        out = apply_reference(text('tests/main.rs.fixture'), MANIFEST['patches'][1]['replacements'])
+        self.assertLess(out.index('vr::prepare_game()'), out.index('disc_source::startup()'))
+        self.assertIn('if vr::diagnostic_requested() { return vr::run(); }', out)
+        self.assertNotIn('if vr::requested() { return vr::run(); }', out)
+        for plugin in ['GameplayPlugin', 'MobyRenderPlugin', 'TieRenderPlugin', 'ShrubRenderPlugin', 'SkyRenderPlugin', 'AudioOutPlugin', 'LevelSwitchPlugin']:
+            self.assertIn(plugin, out)
+        self.assertIn('vr::install_game(&mut app)', out)
+        self.assertIn('Original-game VR exited with an error', out)
         self.assertIn('refusing a silent desktop fallback', out)
+
+    def test_game_input_uses_original_pad_and_default_launch_is_game(self):
+        source = text('overlay/crates/rc-engine/src/vr/game_input.rs')
+        self.assertIn('rc_game::pad::{button, PadInput}', source)
+        self.assertIn('before(crate::input_map::sample_system)', source)
+        launch = text('overlay/scripts/vr/Run.ps1')
+        self.assertIn("$Scene='novalis'", launch)
+        self.assertNotIn("$env:RC_AUDIO='0'", launch)
+        self.assertNotIn("$SpawnGame='162.", launch)
 
     def test_bootstrap_does_not_stage_entire_worktree(self):
         body = '\n'.join(line for line in text('Bootstrap.ps1').splitlines() if not line.lstrip().startswith('#'))
@@ -124,10 +137,10 @@ class PackageTests(unittest.TestCase):
         self.assertNotIn('extracted/', ci)
         self.assertNotIn('pull_request_target', ci)
 
-    def test_rust_tests_are_present_not_claimed_executed(self):
+    def test_rust_tests_are_present_and_validation_scope_is_explicit(self):
         source = text('overlay/crates/rc-engine/src/vr/core.rs')
         self.assertEqual(len(re.findall(r'#\[test\]', source)), 15)
-        self.assertIn('unexecuted Rust unit tests', text('README.md'))
+        self.assertIn('15 standalone Rust unit tests', text('README.md'))
 
     def test_all_declared_vr_modules_have_payload_files(self):
         mod = text('overlay/crates/rc-engine/src/vr/mod.rs')
@@ -141,14 +154,13 @@ class PackageTests(unittest.TestCase):
         self.assertIn('XrProjection', interaction)
         self.assertNotIn('GameProjection', interaction)
 
-    def test_scope_limitations_are_explicit(self):
+    def test_original_game_scope_and_physical_validation_are_explicit(self):
         scope = text('overlay/docs/vr/README.md')
-        for phrase in ['not the original renderer', 'not GPU duration', 'not verified', 'no spectator mirror']:
+        for phrase in ['original ReRAC', 'third-person', 'not tracked-hand aiming', 'not GPU duration']:
             self.assertIn(phrase, scope)
         acceptance = text('overlay/docs/vr/ACCEPTANCE.md')
-        self.assertIn('Milestone B', acceptance)
-        self.assertIn('NOT IMPLEMENTED', acceptance)
-        self.assertIn('NOT RUN', acceptance)
+        self.assertIn('Further physical validation pending', acceptance)
+        self.assertIn('Full campaign completion', acceptance)
 
     def test_payload_is_text_and_contains_no_game_assets_or_credentials(self):
         for p in (ROOT / 'overlay').rglob('*'):
@@ -164,7 +176,7 @@ class PackageTests(unittest.TestCase):
         provenance = json.loads(text('overlay/docs/vr/PROVENANCE.json'))
         self.assertEqual(provenance['upstream']['commit'], MANIFEST['upstreamCommit'])
         self.assertEqual(provenance['xr']['commit'], MANIFEST['xrCommit'])
-        self.assertEqual(provenance['status'], 'uncompiled_source_candidate')
+        self.assertEqual(provenance['status'], 'native_windows_original_game_vr_play_confirmed')
 
     def test_pins_are_full_commit_ids(self):
         for key in ['upstreamCommit','xrCommit']:

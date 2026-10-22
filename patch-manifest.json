@@ -9,12 +9,8 @@
       "expectedBlobSha": "e129fbbd2790a4d0041da1a4fcd7c71cf12ed9e3",
       "replacements": [
         {
-          "old": "dev = [\"bevy/dynamic_linking\"]",
-          "new": "dev = [\"bevy/dynamic_linking\"]\n# Off by default: the original desktop app remains unchanged.\nvr = [\"dep:bevy_mod_openxr\", \"dep:bevy_mod_xr\", \"dep:openxr\"]"
-        },
-        {
-          "old": "[dependencies]\n",
-          "new": "[dependencies]\n# Experimental VR terrain PoC; pinned to a Bevy 0.19-compatible, internally consistent revision.\nbevy_mod_openxr = { git = \"https://github.com/awtterpip/bevy_oxr\", rev = \"4e2998531bd4f7d9cdce156148f9a5b7dd5cd260\", features = [\"window_support\"], optional = true }\nbevy_mod_xr = { git = \"https://github.com/awtterpip/bevy_oxr\", rev = \"4e2998531bd4f7d9cdce156148f9a5b7dd5cd260\", optional = true }\nopenxr = { version = \"=0.21.1\", optional = true }\n"
+          "old": "\n[features]\n# `cargo run -p rc-engine --features dev` links Bevy as a dynamic library: seconds, not minutes, per rebuild.\ndev = [\"bevy/dynamic_linking\"]\n\n[dependencies]\nbevy = \"0.19\"\nrc-formats = { path = \"../rc-formats\" }\nrc-game = { path = \"../rc-game\" }\n# Going Commando's game logic (crate::rac2).\n",
+          "new": "\n[features]\n# `cargo run -p rc-engine --features dev` links Bevy as a dynamic library: seconds, not minutes, per rebuild.\ndev = [\"bevy/dynamic_linking\"]\n# Off by default: the original desktop app remains unchanged.\nvr = [\"dep:bevy_mod_openxr\", \"dep:bevy_mod_xr\", \"dep:openxr\"]\n\n[dependencies]\n# Experimental VR terrain PoC; pinned to a Bevy 0.19-compatible, internally consistent revision.\nbevy_mod_openxr = { git = \"https://github.com/awtterpip/bevy_oxr\", rev = \"4e2998531bd4f7d9cdce156148f9a5b7dd5cd260\", features = [\"window_support\"], optional = true }\nbevy_mod_xr = { git = \"https://github.com/awtterpip/bevy_oxr\", rev = \"4e2998531bd4f7d9cdce156148f9a5b7dd5cd260\", optional = true }\nopenxr = { version = \"=0.21.1\", optional = true }\nbevy = \"0.19\"\nrc-formats = { path = \"../rc-formats\" }\nrc-game = { path = \"../rc-game\" }\n# Going Commando's game logic (crate::rac2).\n"
         }
       ]
     },
@@ -23,14 +19,276 @@
       "expectedBlobSha": "5b8b5349e17aef76abab480c16e285ae90cb39c9",
       "replacements": [
         {
-          "old": "mod crash_log;",
-          "new": "#[cfg(feature = \"vr\")]\nmod vr;\n\nmod crash_log;"
+          "old": "//! - `RC_MSAA=0|2|4|8` the Anti-aliasing option at start: Off or that multisampling (default: Original, the game's own softening passes), crate::graphics\n//! - `RC_SETTINGS_FILE=<path>` the port-settings file (`0` or empty: none), crate::render_settings;\n//!   `RC_SETTINGS_PAGE=0` no \"Port Options\" page in the Options menu, crate::menu_render\n//! - `RC_SHADOWS=0|1`, `RC_SHADOW_DEBUG=1`, `RC_SHADOW_TRACE=1` the moby shadows, crate::shadow_render\n\nmod crash_log;\nmod asset_write;\nmod audio_out;\n",
+          "new": "//! - `RC_MSAA=0|2|4|8` the Anti-aliasing option at start: Off or that multisampling (default: Original, the game's own softening passes), crate::graphics\n//! - `RC_SETTINGS_FILE=<path>` the port-settings file (`0` or empty: none), crate::render_settings;\n//!   `RC_SETTINGS_PAGE=0` no \"Port Options\" page in the Options menu, crate::menu_render\n//! - `RC_SHADOWS=0|1`, `RC_SHADOW_DEBUG=1`, `RC_SHADOW_TRACE=1` the moby shadows, crate::shadow_render\n\n#[cfg(feature = \"vr\")]\nmod vr;\n\nmod crash_log;\nmod asset_write;\nmod audio_out;\n"
         },
         {
-          "old": "    crash_log::install();\n",
-          "new": "    crash_log::install();\n    #[cfg(feature = \"vr\")]\n    if vr::requested() { return vr::run(); }\n    #[cfg(not(feature = \"vr\"))]\n    if std::env::var(\"RC_VR\").is_ok_and(|s| s == \"1\") {\n        anyhow::bail!(\"RC_VR=1 requires a build with --features vr; refusing a silent desktop fallback\");\n    }\n"
+          "old": "}\n\nfn main() -> anyhow::Result<()> {\n    crash_log::install();\n    // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).\n    let root = disc_source::startup();\n    // Going Commando's data folder: its own front end (crate::rac2).\n    // Going Commando runs the same app on its level (crate::rac2_level), its front end over it (crate::rac2).\n",
+          "new": "}\n\nfn main() -> anyhow::Result<()> {\n    crash_log::install();\n    #[cfg(feature = \"vr\")]\n    if vr::requested() {\n        if vr::diagnostic_requested() { return vr::run(); }\n        vr::prepare_game()?;\n    }\n    #[cfg(not(feature = \"vr\"))]\n    if std::env::var(\"RC_VR\").is_ok_and(|s| s == \"1\") {\n        anyhow::bail!(\"RC_VR=1 requires a build with --features vr; refusing a silent desktop fallback\");\n    }\n    // `--version-json` exits here; a missing or wrong data folder exits with a clear error (crate::disc_source).\n    let root = disc_source::startup();\n    // Going Commando's data folder: its own front end (crate::rac2).\n    // Going Commando runs the same app on its level (crate::rac2_level), its front end over it (crate::rac2).\n"
+        },
+        {
+          "old": "    println!(\"background (GS clear colour): {bg:?}\");\n    println!(\"{}\", fly_cam::CONTROLS);\n\n    let mut app = App::new();\n    app.add_plugins(\n        DefaultPlugins\n            .set(WindowPlugin {\n                // 4:3, as the TV showed the 512x416 GS draw buffer (crate::display; docs/plan/render_pipeline.md).\n                primary_window: Some(Window { title: \"ReRAC\".into(), resolution: (1024u32, 768u32).into(), ..default() }),\n",
+          "new": "    println!(\"background (GS clear colour): {bg:?}\");\n    println!(\"{}\", fly_cam::CONTROLS);\n\n    let mut app = App::new();\n    let plugins =\n        DefaultPlugins\n            .set(WindowPlugin {\n                // 4:3, as the TV showed the 512x416 GS draw buffer (crate::display; docs/plan/render_pipeline.md).\n                primary_window: Some(Window { title: \"ReRAC\".into(), resolution: (1024u32, 768u32).into(), ..default() }),\n"
+        },
+        {
+          "old": "                task_pool_options: match std::env::var(\"RC_THREADS\").ok().and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(0) {\n                    0 => TaskPoolOptions::default(),\n                    n => TaskPoolOptions::with_num_threads(n),\n                },\n            }),\n    )\n    // The game frame every camera renders into and its presentation in the window (before anything spawns a camera,\n    // and before the capture, which captures the frame).\n    .add_plugins(display::DisplayPlugin)\n    // Frame-exact ticks / capture and the deterministic phase order, before anything spawns a camera.\n",
+          "new": "                task_pool_options: match std::env::var(\"RC_THREADS\").ok().and_then(|v| v.trim().parse::<usize>().ok()).unwrap_or(0) {\n                    0 => TaskPoolOptions::default(),\n                    n => TaskPoolOptions::with_num_threads(n),\n                },\n            });\n    #[cfg(feature = \"vr\")]\n    let plugins = vr::game_plugins(plugins);\n    app.add_plugins(plugins)\n    // The game frame every camera renders into and its presentation in the window (before anything spawns a camera,\n    // and before the capture, which captures the frame).\n    .add_plugins(display::DisplayPlugin)\n    // Frame-exact ticks / capture and the deterministic phase order, before anything spawns a camera.\n"
+        },
+        {
+          "old": "    .add_plugins(title_world::TitleWorldPlugin)\n    .add_systems(Startup, setup_camera)\n    .add_systems(level_switch::LevelStartup, setup)\n    .add_systems(Update, report_fps);\n    if rac2 && rac2::requested() { app.add_plugins(rac2::FrontEndPlugin::new(&root)?); }\n    if rac2 { app.add_plugins(rac2_play::Rac2PlayPlugin); }\n    // RC_RENDER_DIAG=1: Bevy's per-pass render timings (CPU only on Metal) and the views rendered, logged every 5 s.\n    if std::env::var(\"RC_RENDER_DIAG\").is_ok_and(|v| v.trim() == \"1\") {\n",
+          "new": "    .add_plugins(title_world::TitleWorldPlugin)\n    .add_systems(Startup, setup_camera)\n    .add_systems(level_switch::LevelStartup, setup)\n    .add_systems(Update, report_fps);\n    #[cfg(feature = \"vr\")]\n    if vr::game_requested() { vr::install_game(&mut app)?; }\n    if rac2 && rac2::requested() { app.add_plugins(rac2::FrontEndPlugin::new(&root)?); }\n    if rac2 { app.add_plugins(rac2_play::Rac2PlayPlugin); }\n    // RC_RENDER_DIAG=1: Bevy's per-pass render timings (CPU only on Metal) and the views rendered, logged every 5 s.\n    if std::env::var(\"RC_RENDER_DIAG\").is_ok_and(|v| v.trim() == \"1\") {\n"
+        },
+        {
+          "old": "        let secs = std::env::var(\"RC_SCREENSHOT_DELAY\").ok().and_then(|s| s.parse().ok()).unwrap_or(3.0);\n        app.insert_resource(ScreenshotRequest { path: path.into(), delay: Duration::from_secs_f32(secs), min_frames: 30 })\n            .add_systems(Update, take_screenshot);\n    }\n    app.run();\n    Ok(())\n}\n\nfn ms(d: Duration) -> f64 { d.as_secs_f64() * 1e3 }\n",
+          "new": "        let secs = std::env::var(\"RC_SCREENSHOT_DELAY\").ok().and_then(|s| s.parse().ok()).unwrap_or(3.0);\n        app.insert_resource(ScreenshotRequest { path: path.into(), delay: Duration::from_secs_f32(secs), min_frames: 30 })\n            .add_systems(Update, take_screenshot);\n    }\n    let _exit = app.run();\n    #[cfg(feature = \"vr\")]\n    if vr::game_requested() {\n        anyhow::ensure!(matches!(_exit, AppExit::Success), \"Original-game VR exited with an error; inspect work/vr logs\");\n    }\n    Ok(())\n}\n\nfn ms(d: Duration) -> f64 { d.as_secs_f64() * 1e3 }\n"
+        }
+      ]
+    },
+    {
+      "path": "tools/trace/src/pine.rs",
+      "expectedBlobSha": "56b260d3edc6bedea13b8373d12b1354c313e467",
+      "replacements": [
+        {
+          "old": "//! game without a savestate. Enable it in PCSX2: Settings > Advanced > \"Enable PINE\" (slot 28011).\n//!\n//! Transport on macOS/Linux: Unix socket `$TMPDIR/pcsx2.sock` (macOS; `$XDG_RUNTIME_DIR` on\n//! Linux, `/tmp` fallback), with `.<slot>` appended when the slot is not 28011.\n//! Message: `u32 total_len` then commands back to back (`u8 opcode, args`). Reply: `u32 total_len,\n//! u8 status (0 ok, 0xff fail)`, then each command's result in order. Limits: request < 650000\n//! bytes, reply < 450000 bytes, so reads are batched as up to 50000 `MsgRead64` per message.\n\nuse anyhow::{bail, ensure, Context, Result};\nuse std::io::{Read, Write};\nuse std::os::unix::net::UnixStream;\nuse std::path::PathBuf;\n\npub const DEFAULT_SLOT: u16 = 28011;\nconst MSG_READ64: u8 = 3;\n",
+          "new": "//! game without a savestate. Enable it in PCSX2: Settings > Advanced > \"Enable PINE\" (slot 28011).\n//!\n//! Transport on macOS/Linux: Unix socket `$TMPDIR/pcsx2.sock` (macOS; `$XDG_RUNTIME_DIR` on\n//! Linux, `/tmp` fallback), with `.<slot>` appended when the slot is not 28011.\n//! Windows uses TCP on 127.0.0.1, with the slot as the port (PCSX2's native transport).\n//! Message: `u32 total_len` then commands back to back (`u8 opcode, args`). Reply: `u32 total_len,\n//! u8 status (0 ok, 0xff fail)`, then each command's result in order. Limits: request < 650000\n//! bytes, reply < 450000 bytes, so reads are batched as up to 50000 `MsgRead64` per message.\n\nuse anyhow::{bail, ensure, Context, Result};\nuse std::io::{Read, Write};\n#[cfg(unix)]\nuse std::os::unix::net::UnixStream as PineStream;\n#[cfg(windows)]\nuse std::net::TcpStream as PineStream;\nuse std::path::PathBuf;\n\npub const DEFAULT_SLOT: u16 = 28011;\nconst MSG_READ64: u8 = 3;\n"
+        },
+        {
+          "old": "const MSG_ID: u8 = 0xc;\nconst MSG_STATUS: u8 = 0xf;\nconst READS_PER_MSG: usize = 50_000;\n\npub struct Pine { s: UnixStream }\n\npub fn socket_path(slot: u16) -> PathBuf {\n    let dir = std::env::var_os(if cfg!(target_os = \"macos\") { \"TMPDIR\" } else { \"XDG_RUNTIME_DIR\" }).map(PathBuf::from).unwrap_or_else(|| \"/tmp\".into());\n    let mut name = \"pcsx2.sock\".to_string();\n    if slot != DEFAULT_SLOT { name += &format!(\".{slot}\"); }\n    dir.join(name)\n}\n\nimpl Pine {\n    pub fn connect(slot: u16) -> Result<Pine> {\n        let p = socket_path(slot);\n        let s = UnixStream::connect(&p).with_context(|| {\n            format!(\"connecting to PINE socket {} (is PCSX2 running with Settings > Advanced > Enable PINE, slot {slot}?)\", p.display())\n        })?;\n        Ok(Pine { s })\n    }\n",
+          "new": "const MSG_ID: u8 = 0xc;\nconst MSG_STATUS: u8 = 0xf;\nconst READS_PER_MSG: usize = 50_000;\n\npub struct Pine { s: PineStream }\n\npub fn socket_path(slot: u16) -> PathBuf {\n    #[cfg(windows)]\n    { return format!(\"127.0.0.1:{slot}\").into(); }\n    #[cfg(unix)]\n    {\n    let dir = std::env::var_os(if cfg!(target_os = \"macos\") { \"TMPDIR\" } else { \"XDG_RUNTIME_DIR\" }).map(PathBuf::from).unwrap_or_else(|| \"/tmp\".into());\n    let mut name = \"pcsx2.sock\".to_string();\n    if slot != DEFAULT_SLOT { name += &format!(\".{slot}\"); }\n    dir.join(name)\n    }\n}\n\nimpl Pine {\n    pub fn connect(slot: u16) -> Result<Pine> {\n        let p = socket_path(slot);\n        #[cfg(unix)]\n        let endpoint = &p;\n        #[cfg(windows)]\n        let endpoint = (std::net::Ipv4Addr::LOCALHOST, slot);\n        let s = PineStream::connect(endpoint).with_context(|| {\n            format!(\"connecting to PINE socket {} (is PCSX2 running with Settings > Advanced > Enable PINE, slot {slot}?)\", p.display())\n        })?;\n        Ok(Pine { s })\n    }\n"
+        },
+        {
+          "old": "\n#[cfg(test)]\nmod tests {\n    use super::*;\n    use std::os::unix::net::UnixListener;\n\n    /// A fake PINE server answering MsgRead64 with the address itself, to check framing and batching.\n    #[test]\n    fn batched_read_framing() {\n        let dir = std::env::temp_dir().join(format!(\"rc-trace-pine-{}\", std::process::id()));\n        std::fs::create_dir_all(&dir).unwrap();\n        let path = dir.join(\"pcsx2.sock\");\n        let _ = std::fs::remove_file(&path);\n        let l = UnixListener::bind(&path).unwrap();\n        let server = std::thread::spawn(move || {\n            let (mut s, _) = l.accept().unwrap();\n            let mut msgs = 0;\n            loop {\n                let mut h = [0u8; 4];\n                if s.read_exact(&mut h).is_err() { break; }\n",
+          "new": "\n#[cfg(test)]\nmod tests {\n    use super::*;\n    fn stream_pair() -> (PineStream, PineStream) {\n        #[cfg(unix)]\n        { PineStream::pair().unwrap() }\n        #[cfg(windows)]\n        {\n            let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::LOCALHOST, 0)).unwrap();\n            let client = PineStream::connect(listener.local_addr().unwrap()).unwrap();\n            let (server, _) = listener.accept().unwrap();\n            (client, server)\n        }\n    }\n\n    /// A fake PINE server answering MsgRead64 with the address itself, to check framing and batching.\n    #[test]\n    fn batched_read_framing() {\n        let (client, mut s) = stream_pair();\n        let server = std::thread::spawn(move || {\n            let mut msgs = 0;\n            loop {\n                let mut h = [0u8; 4];\n                if s.read_exact(&mut h).is_err() { break; }\n"
+        },
+        {
+          "old": "                msgs += 1;\n            }\n            msgs\n        });\n        let mut c = Pine { s: UnixStream::connect(&path).unwrap() };\n        let n = 120_000 * 8;\n        let r = c.read(0x10_0000, n).unwrap();\n        drop(c);\n        assert_eq!(server.join().unwrap(), 3); // 50000 + 50000 + 20000\n        for (i, w) in r.chunks(8).enumerate() {\n            assert_eq!(u64::from_le_bytes(w.try_into().unwrap()), 0x10_0000 + 8 * i as u64);\n        }\n        std::fs::remove_dir_all(&dir).ok();\n    }\n\n    /// `read_many`: one message, the replies in request order.\n    #[test]\n    fn read_many_framing() {\n        let dir = std::env::temp_dir().join(format!(\"rc-trace-pine-many-{}\", std::process::id()));\n        std::fs::create_dir_all(&dir).unwrap();\n        let path = dir.join(\"pcsx2.sock\");\n        let _ = std::fs::remove_file(&path);\n        let l = UnixListener::bind(&path).unwrap();\n        let server = std::thread::spawn(move || {\n            let (mut s, _) = l.accept().unwrap();\n            let mut h = [0u8; 4];\n            s.read_exact(&mut h).unwrap();\n            let mut b = vec![0u8; u32::from_le_bytes(h) as usize - 4];\n            s.read_exact(&mut b).unwrap();\n",
+          "new": "                msgs += 1;\n            }\n            msgs\n        });\n        let mut c = Pine { s: client };\n        let n = 120_000 * 8;\n        let r = c.read(0x10_0000, n).unwrap();\n        drop(c);\n        assert_eq!(server.join().unwrap(), 3); // 50000 + 50000 + 20000\n        for (i, w) in r.chunks(8).enumerate() {\n            assert_eq!(u64::from_le_bytes(w.try_into().unwrap()), 0x10_0000 + 8 * i as u64);\n        }\n    }\n\n    /// `read_many`: one message, the replies in request order.\n    #[test]\n    fn read_many_framing() {\n        let (client, mut s) = stream_pair();\n        let server = std::thread::spawn(move || {\n            let mut h = [0u8; 4];\n            s.read_exact(&mut h).unwrap();\n            let mut b = vec![0u8; u32::from_le_bytes(h) as usize - 4];\n            s.read_exact(&mut b).unwrap();\n"
+        },
+        {
+          "old": "            let n = reply.len() as u32;\n            reply[..4].copy_from_slice(&n.to_le_bytes());\n            s.write_all(&reply).unwrap();\n        });\n        let mut c = Pine { s: UnixStream::connect(&path).unwrap() };\n        let addrs = [0x15f5c8u32, 0x13f3d0, 0x100];\n        let r = c.read_many(&addrs).unwrap();\n        server.join().unwrap();\n        for (a, w) in addrs.iter().zip(&r) { assert_eq!(u64::from_le_bytes(*w), !(*a as u64)); }\n        assert!(c.read_many(&[3]).is_err());\n        std::fs::remove_dir_all(&dir).ok();\n    }\n}\n",
+          "new": "            let n = reply.len() as u32;\n            reply[..4].copy_from_slice(&n.to_le_bytes());\n            s.write_all(&reply).unwrap();\n        });\n        let mut c = Pine { s: client };\n        let addrs = [0x15f5c8u32, 0x13f3d0, 0x100];\n        let r = c.read_many(&addrs).unwrap();\n        server.join().unwrap();\n        for (a, w) in addrs.iter().zip(&r) { assert_eq!(u64::from_le_bytes(*w), !(*a as u64)); }\n        assert!(c.read_many(&[3]).is_err());\n    }\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/game_camera.rs",
+      "expectedBlobSha": "f9c50d381ee48cb169ffa0e526348bd4de09be57",
+      "replacements": [
+        {
+          "old": "/// Main camera only: the sky camera copies its transform, so it would print the same line again.\nfn print_game_camera(\n    keys: Res<ButtonInput<KeyCode>>,\n    fog: Res<GameFog>,\n    cams: Query<&Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>,\n) {\n    if !keys.just_pressed(KeyCode::KeyP) { return; }\n    for t in &cams {\n        let (eye, rows) = (game_eye(t), game_rows(t));\n",
+          "new": "/// Main camera only: the sky camera copies its transform, so it would print the same line again.\nfn print_game_camera(\n    keys: Res<ButtonInput<KeyCode>>,\n    fog: Res<GameFog>,\n    cams: Query<&Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>,\n) {\n    if !keys.just_pressed(KeyCode::KeyP) { return; }\n    for t in &cams {\n        let (eye, rows) = (game_eye(t), game_rows(t));\n"
+        },
+        {
+          "old": "/// The half-angle tangents (x, y) of a camera's projection (the game's 0.63, 0.63\u00b70.775 for any other projection):\n/// `UpdateViewContext`'s frustum planes. In 16:9 x carries the Hor+ factor and y stays the game's (crate::display),\n/// so every cull and LOD test takes both from here rather than deriving y from x.\npub fn projection_tans(p: Option<&Projection>) -> (f32, f32) {\n    let d = GameProjection::default();\n    match p {\n        Some(Projection::Custom(c)) => c.get::<GameProjection>().map_or((d.tan_x, d.tan_y), |g| (g.tan_x, g.tan_y)),\n        _ => (d.tan_x, d.tan_y),\n",
+          "new": "/// The half-angle tangents (x, y) of a camera's projection (the game's 0.63, 0.63\u00b70.775 for any other projection):\n/// `UpdateViewContext`'s frustum planes. In 16:9 x carries the Hor+ factor and y stays the game's (crate::display),\n/// so every cull and LOD test takes both from here rather than deriving y from x.\npub fn projection_tans(p: Option<&Projection>) -> (f32, f32) {\n    #[cfg(feature = \"vr\")]\n    if crate::vr::game_requested() { return (3.0, 3.0); }\n    let d = GameProjection::default();\n    match p {\n        Some(Projection::Custom(c)) => c.get::<GameProjection>().map_or((d.tan_x, d.tan_y), |g| (g.tan_x, g.tan_y)),\n        _ => (d.tan_x, d.tan_y),\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/gameplay.rs",
+      "expectedBlobSha": "0e0530b29fe1c97492b45bd44d79327eb0b9c20d",
+      "replacements": [
+        {
+          "old": "\n/// The tick's HUD weapon slot, the ammo table and the sound layer (one system parameter).\ntype HudAudio<'w> = (Option<ResMut<'w, HeldWeapon>>, Option<Res<'w, AmmoTable>>, Option<ResMut<'w, crate::audio_out::AudioOut>>, Option<ResMut<'w, crate::hud_render::HudFeed>>);\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>;\n\n/// One 60 Hz gameplay tick (see the module docs). Skipped in the modes whose update does not run the game\n/// tick (crate::menu_render: `Mode::advances_tick`, e.g. the mode-3 menus).\n#[allow(clippy::too_many_arguments)]\n",
+          "new": "\n/// The tick's HUD weapon slot, the ammo table and the sound layer (one system parameter).\ntype HudAudio<'w> = (Option<ResMut<'w, HeldWeapon>>, Option<Res<'w, AmmoTable>>, Option<ResMut<'w, crate::audio_out::AudioOut>>, Option<ResMut<'w, crate::hud_render::HudFeed>>);\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>;\n\n/// One 60 Hz gameplay tick (see the module docs). Skipped in the modes whose update does not run the game\n/// tick (crate::menu_render: `Mode::advances_tick`, e.g. the mode-3 menus).\n#[allow(clippy::too_many_arguments)]\n"
+        },
+        {
+          "old": "    mut commands: Commands,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n    mut transforms: Query<&mut Transform, Without<Camera3d>>,\n    cams: MainCamera,\n    projs: Query<&Projection, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>,\n    mut meshes: ResMut<Assets<Mesh>>,\n    mut images: ResMut<Assets<Image>>,\n    mut materials: ResMut<Assets<MobyMaterial>>,\n    mut point_lights: ResMut<moby_render::PointLightFrame>,\n",
+          "new": "    mut commands: Commands,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n    mut transforms: Query<&mut Transform, Without<Camera3d>>,\n    cams: MainCamera,\n    projs: Query<&Projection, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>,\n    mut meshes: ResMut<Assets<Mesh>>,\n    mut images: ResMut<Assets<Image>>,\n    mut materials: ResMut<Assets<MobyMaterial>>,\n    mut point_lights: ResMut<moby_render::PointLightFrame>,\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/input_map.rs",
+      "expectedBlobSha": "c29a328882ef5d6dbbacfa9efaf916dedaaf85ed",
+      "replacements": [
+        {
+          "old": "    mouse: Res<ButtonInput<MouseButton>>,\n    motion: Res<AccumulatedMouseMotion>,\n    gamepads: Query<&Gamepad>,\n    mut frame: ResMut<PadFrame>,\n) {\n    frame.0 = sample(&keys, &mouse, &motion, gamepads.iter().next());\n}\n\n/// `RC_PLAY_SCRIPT`: pad input per gameplay tick, `item,item,...` with `item = range:action`.\n///\n",
+          "new": "    mouse: Res<ButtonInput<MouseButton>>,\n    motion: Res<AccumulatedMouseMotion>,\n    gamepads: Query<&Gamepad>,\n    mut frame: ResMut<PadFrame>,\n    #[cfg(feature = \"vr\")] xr: Option<Res<crate::vr::GamePad>>,\n) {\n    frame.0 = sample(&keys, &mouse, &motion, gamepads.iter().next());\n    #[cfg(feature = \"vr\")]\n    crate::vr::merge_pad(&mut frame.0, xr.as_deref());\n}\n\n/// `RC_PLAY_SCRIPT`: pad input per gameplay tick, `item,item,...` with `item = range:action`.\n///\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/moby_render.rs",
+      "expectedBlobSha": "2be3fc61af373201e066901f5f78ba341a0b5b17",
+      "replacements": [
+        {
+          "old": "    pending_hide: Vec<Entity>,\n}\n\n/// The main camera with its projection (the view tangent MobyProc's frustum cull takes).\ntype MainCameraView<'w, 's> = Query<'w, 's, (&'static Transform, Option<&'static Projection>), (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>;\n\n/// `MobyProc` for every placed instance (module doc): the occlusion test (after the \"dead\" check, which no\n/// static instance fails in the port), then crate::moby_lod, then the GS state ([`MobyBlend`], from moby+0x23 /\n/// +0x34 and the fade). Changes `Visibility` only when an instance's pick changes (spawning a group the first time\n",
+          "new": "    pending_hide: Vec<Entity>,\n}\n\n/// The main camera with its projection (the view tangent MobyProc's frustum cull takes).\ntype MainCameraView<'w, 's> = Query<'w, 's, (&'static Transform, Option<&'static Projection>), (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>;\n\n/// `MobyProc` for every placed instance (module doc): the occlusion test (after the \"dead\" check, which no\n/// static instance fails in the port), then crate::moby_lod, then the GS state ([`MobyBlend`], from moby+0x23 /\n/// +0x34 and the fade). Changes `Visibility` only when an instance's pick changes (spawning a group the first time\n"
+        },
+        {
+          "old": "/// (`game_to_bevy \u00b7 [s/1024 \u00b7 R | p]`, written by moby_attach) and the class sphere. The draw-distance, LOD\n/// and fade tests are not applied to extras.\nfn update_extra_metal(\n    q: Query<&ExtraMetal>,\n    cams: Query<&Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n) {\n    let Some(t) = cams.iter().next() else { return };\n    let [fwd, left, up] = crate::game_camera::game_rows(t);\n",
+          "new": "/// (`game_to_bevy \u00b7 [s/1024 \u00b7 R | p]`, written by moby_attach) and the class sphere. The draw-distance, LOD\n/// and fade tests are not applied to extras.\nfn update_extra_metal(\n    q: Query<&ExtraMetal>,\n    cams: Query<&Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n) {\n    let Some(t) = cams.iter().next() else { return };\n    let [fwd, left, up] = crate::game_camera::game_rows(t);\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/occlusion.rs",
+      "expectedBlobSha": "a389860c320a4c36b6f26c8480f85f92794394f9",
+      "replacements": [
+        {
+          "old": "/// `UpdateOcclusion` once per frame, at the camera `tfrag_lod` scales by 1024 (the game's 0x167240).\n/// Fallback 0 (`0x15f608` is cleared at the end of every frame render), else the value a tick set for its frame (1 the\n/// Visibomb's missile, 2 `UpdateModeFreeze` and Gemlik's exploding ship: crate::visibomb_view::occlusion_fallback),\n/// debug camera off (`0x16c4ec` = 0 in play).\nfn update_occlusion(frame: Option<ResMut<OcclusionFrame>>, level: Res<crate::Level>, cams: Query<&Transform, With<Camera3d>>, play: Option<Res<crate::gameplay::Play>>) {\n    let (Some(mut f), Some(cam)) = (frame, cams.iter().next()) else { return };\n    let eye = crate::game_camera::game_eye(cam);\n    let grid = level.0.occlusion.grid.as_ref();\n    let mode = f.mode;\n",
+          "new": "/// `UpdateOcclusion` once per frame, at the camera `tfrag_lod` scales by 1024 (the game's 0x167240).\n/// Fallback 0 (`0x15f608` is cleared at the end of every frame render), else the value a tick set for its frame (1 the\n/// Visibomb's missile, 2 `UpdateModeFreeze` and Gemlik's exploding ship: crate::visibomb_view::occlusion_fallback),\n/// debug camera off (`0x16c4ec` = 0 in play).\nfn update_occlusion(frame: Option<ResMut<OcclusionFrame>>, level: Res<crate::Level>, cams: Query<&Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>)>, play: Option<Res<crate::gameplay::Play>>) {\n    let (Some(mut f), Some(cam)) = (frame, cams.iter().next()) else { return };\n    let eye = crate::game_camera::game_eye(cam);\n    let grid = level.0.occlusion.grid.as_ref();\n    let mode = f.mode;\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/particle_render.rs",
+      "expectedBlobSha": "f612817ca03f68b25f2f78f6b87dde33ccfd2100",
+      "replacements": [
+        {
+          "old": "\n/// The view's (tan_x, tan_y) = 0x16cf70 / 0x16cf74: the main camera's game projection (the default field of view\n/// when it has none).\npub(crate) fn view_tans(p: Option<&Projection>) -> (f32, f32) {\n    match p {\n        Some(Projection::Custom(c)) => c.get::<crate::game_camera::GameProjection>().map_or((TAN_HALF_FOV_X, TAN_HALF_FOV_X * NTSC_Y_RATIO), |g| (g.tan_x, g.tan_y)),\n        _ => (TAN_HALF_FOV_X, TAN_HALF_FOV_X * NTSC_Y_RATIO),\n    }\n",
+          "new": "\n/// The view's (tan_x, tan_y) = 0x16cf70 / 0x16cf74: the main camera's game projection (the default field of view\n/// when it has none).\npub(crate) fn view_tans(p: Option<&Projection>) -> (f32, f32) {\n    #[cfg(feature = \"vr\")]\n    if crate::vr::game_requested() { return crate::game_camera::projection_tans(p); }\n    match p {\n        Some(Projection::Custom(c)) => c.get::<crate::game_camera::GameProjection>().map_or((TAN_HALF_FOV_X, TAN_HALF_FOV_X * NTSC_Y_RATIO), |g| (g.tan_x, g.tan_y)),\n        _ => (TAN_HALF_FOV_X, TAN_HALF_FOV_X * NTSC_Y_RATIO),\n    }\n"
+        },
+        {
+          "old": "    let (eye, [f, l, u]) = camera(t);\n    BSphereView::from_camera(eye, f.to_array(), l.to_array(), u.to_array(), tx, ty)\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, (&'static Transform, Option<&'static Projection>), (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>;\n\n/// One 60 Hz game tick: the emitters (moby loop), then `UpdateParts`.\n/// `pub(crate)` so the sky star step (`crate::sky_stars`) can run after it on the same tick (it shares `rng`).\npub(crate) fn tick(sim: Option<ResMut<ParticleSim>>, cams: MainCamera) {\n",
+          "new": "    let (eye, [f, l, u]) = camera(t);\n    BSphereView::from_camera(eye, f.to_array(), l.to_array(), u.to_array(), tx, ty)\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, (&'static Transform, Option<&'static Projection>), (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>;\n\n/// One 60 Hz game tick: the emitters (moby loop), then `UpdateParts`.\n/// `pub(crate)` so the sky star step (`crate::sky_stars`) can run after it on the same tick (it shares `rng`).\npub(crate) fn tick(sim: Option<ResMut<ParticleSim>>, cams: MainCamera) {\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/scene_render.rs",
+      "expectedBlobSha": "b1a5e2ff22de231329398427dcb463851989dd7a",
+      "replacements": [
+        {
+          "old": "    }\n}\n\n/// The scene camera over the play camera (after `play_camera::apply`, before any reader of the transform).\nfn apply_camera(active: Res<ActiveScene>, source: Option<Res<CameraSource>>, display: Res<crate::display::DisplaySettings>, mut cams: Query<(&mut Transform, &mut Projection), With<FlyCam>>) {\n    let Some(c) = active.camera else { return };\n    if source.is_some_and(|s| *s == CameraSource::Fly) { return; }\n    let [fwd, _left, up] = c.rows;\n    let t = Transform::from_translation(game_to_bevy(c.eye)).looking_to(game_to_bevy(fwd), game_to_bevy(up));\n",
+          "new": "    }\n}\n\n/// The scene camera over the play camera (after `play_camera::apply`, before any reader of the transform).\npub(crate) fn apply_camera(active: Res<ActiveScene>, source: Option<Res<CameraSource>>, display: Res<crate::display::DisplaySettings>, mut cams: Query<(&mut Transform, &mut Projection), With<FlyCam>>) {\n    let Some(c) = active.camera else { return };\n    if source.is_some_and(|s| *s == CameraSource::Fly) { return; }\n    let [fwd, _left, up] = c.rows;\n    let t = Transform::from_translation(game_to_bevy(c.eye)).looking_to(game_to_bevy(fwd), game_to_bevy(up));\n"
+        },
+        {
+          "old": "    *hold = FadeHold { frames: n, k: 0, tail, view, before: view };\n}\n\n/// The held view over the play camera while a hold runs.\nfn hold_camera(hold: Res<FadeHold>, source: Option<Res<CameraSource>>, mut cams: Query<&mut Transform, With<FlyCam>>) {\n    let Some(v) = hold.view.filter(|_| hold.frames > 0) else { return };\n    if source.is_some_and(|s| *s != CameraSource::Play) { return; }\n    let t = crate::play_camera::view_transform(&v.view);\n    for mut tf in &mut cams { if *tf != t { *tf = t; } }\n",
+          "new": "    *hold = FadeHold { frames: n, k: 0, tail, view, before: view };\n}\n\n/// The held view over the play camera while a hold runs.\npub(crate) fn hold_camera(hold: Res<FadeHold>, source: Option<Res<CameraSource>>, mut cams: Query<&mut Transform, With<FlyCam>>) {\n    let Some(v) = hold.view.filter(|_| hold.frames > 0) else { return };\n    if source.is_some_and(|s| *s != CameraSource::Play) { return; }\n    let t = crate::play_camera::view_transform(&v.view);\n    for mut tf in &mut cams { if *tf != t { *tf = t; } }\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/sea_render.rs",
+      "expectedBlobSha": "43542e5dc3b64f0ad93518d44adb49dc2ff0a7e2",
+      "replacements": [
+        {
+          "old": "        app.init_resource::<SeaDraw>().add_systems(crate::level_switch::LevelUnload, crate::level_switch::reset::<SeaDraw>).add_systems(PostUpdate, draw.before(bevy::asset::AssetEventSystems));\n    }\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>;\n\nfn repeat_sampler() -> ImageSampler {\n    ImageSampler::Descriptor(ImageSamplerDescriptor {\n        address_mode_u: ImageAddressMode::Repeat,\n",
+          "new": "        app.init_resource::<SeaDraw>().add_systems(crate::level_switch::LevelUnload, crate::level_switch::reset::<SeaDraw>).add_systems(PostUpdate, draw.before(bevy::asset::AssetEventSystems));\n    }\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>;\n\nfn repeat_sampler() -> ImageSampler {\n    ImageSampler::Descriptor(ImageSamplerDescriptor {\n        address_mode_u: ImageAddressMode::Repeat,\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/shadow_render.rs",
+      "expectedBlobSha": "6e12f602aecaebe279590dc8ba6266ea1509f0b4",
+      "replacements": [
+        {
+          "old": "    settings: Res<ShadowSettings>,\n    play: Option<Res<Play>>,\n    level: Res<crate::Level>,\n    game: Option<Res<ShadowGame>>,\n    cams: Query<(&Transform, Option<&Projection>), With<ShadowCamera>>,\n    (scene, vendor_hidden): (Option<Res<crate::scene_render::ActiveScene>>, Query<(), With<crate::interact_render::VendorHidden>>),\n    mut out: ResMut<ShadowVolumes>,\n    mut trace_frame: Local<u64>,\n    mut perf: Local<(std::time::Duration, u32, usize)>,\n",
+          "new": "    settings: Res<ShadowSettings>,\n    play: Option<Res<Play>>,\n    level: Res<crate::Level>,\n    game: Option<Res<ShadowGame>>,\n    cams: Query<(&Transform, Option<&Projection>), (With<ShadowCamera>, With<FlyCam>)>,\n    (scene, vendor_hidden): (Option<Res<crate::scene_render::ActiveScene>>, Query<(), With<crate::interact_render::VendorHidden>>),\n    mut out: ResMut<ShadowVolumes>,\n    mut trace_frame: Local<u64>,\n    mut perf: Local<(std::time::Duration, u32, usize)>,\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/shrub_render.rs",
+      "expectedBlobSha": "b42cbe60d159b25255b7f5b8b32d027a1ae5dedb",
+      "replacements": [
+        {
+          "old": "    if fs >= d - 24.0 { -1.0 } else { fs }\n}\n\nfn cull_system(\n    cams: Query<&Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>,\n    mut q: Query<(&ShrubCull, &mut Visibility)>,\n    gfx: Res<crate::graphics::GraphicsSettings>,\n) {\n    let Some(cam) = cams.iter().next() else { return };\n",
+          "new": "    if fs >= d - 24.0 { -1.0 } else { fs }\n}\n\nfn cull_system(\n    cams: Query<&Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>,\n    mut q: Query<(&ShrubCull, &mut Visibility)>,\n    gfx: Res<crate::graphics::GraphicsSettings>,\n) {\n    let Some(cam) = cams.iter().next() else { return };\n"
+        },
+        {
+          "old": "/// read as `elapsed / timestep`) and the camera position.\nfn update_sway(\n    sway: Option<ResMut<ShrubSway>>,\n    fixed: Res<Time<Fixed>>,\n    cams: Query<&Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n) {\n    let Some(mut sway) = sway else { return };\n    if !sway.enabled || sway.instances.is_empty() { return; }\n",
+          "new": "/// read as `elapsed / timestep`) and the camera position.\nfn update_sway(\n    sway: Option<ResMut<ShrubSway>>,\n    fixed: Res<Time<Fixed>>,\n    cams: Query<&Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n) {\n    let Some(mut sway) = sway else { return };\n    if !sway.enabled || sway.instances.is_empty() { return; }\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/tfrag_lod.rs",
+      "expectedBlobSha": "1cc82577748be38e1c9045180fa5052e24345906",
+      "replacements": [
+        {
+          "old": "fn update_tfrag_modes(\n    state: Option<ResMut<TfragLodState>>,\n    occl: Option<ResMut<crate::occlusion::OcclusionFrame>>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n    cams: Query<(&Transform, Option<&Projection>), With<Camera3d>>,\n    (time, gfx): (Res<Time>, Res<crate::graphics::GraphicsSettings>),\n    mut last_print: Local<f32>,\n) {\n    let (Some(mut state), Some((cam, proj))) = (state, cams.iter().next()) else { return };\n",
+          "new": "fn update_tfrag_modes(\n    state: Option<ResMut<TfragLodState>>,\n    occl: Option<ResMut<crate::occlusion::OcclusionFrame>>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n    cams: Query<(&Transform, Option<&Projection>), (With<Camera3d>, With<crate::fly_cam::FlyCam>)>,\n    (time, gfx): (Res<Time>, Res<crate::graphics::GraphicsSettings>),\n    mut last_print: Local<f32>,\n) {\n    let (Some(mut state), Some((cam, proj))) = (state, cams.iter().next()) else { return };\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/tie_lod.rs",
+      "expectedBlobSha": "653674e770e251ba08f4be9590b13d045233e36e",
+      "replacements": [
+        {
+          "old": "pub fn update_tie_lods(\n    state: Option<ResMut<TieLodState>>,\n    occl: Option<ResMut<crate::occlusion::OcclusionFrame>>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n    cams: Query<(&Transform, Option<&Projection>), With<Camera3d>>,\n    (time, fixed, gfx): (Res<Time>, Res<Time<Fixed>>, Res<crate::graphics::GraphicsSettings>),\n    mut last_print: Local<f32>,\n    mut vis: Query<&mut Visibility>,\n) {\n",
+          "new": "pub fn update_tie_lods(\n    state: Option<ResMut<TieLodState>>,\n    occl: Option<ResMut<crate::occlusion::OcclusionFrame>>,\n    mut buffers: ResMut<Assets<ShaderBuffer>>,\n    cams: Query<(&Transform, Option<&Projection>), (With<Camera3d>, With<crate::fly_cam::FlyCam>)>,\n    (time, fixed, gfx): (Res<Time>, Res<Time<Fixed>>, Res<crate::graphics::GraphicsSettings>),\n    mut last_print: Local<f32>,\n    mut vis: Query<&mut Visibility>,\n) {\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/water_render.rs",
+      "expectedBlobSha": "73bb409e852fe41f94b9fa72fd3cae84a2beb5d9",
+      "replacements": [
+        {
+          "old": "            .add_systems(PostUpdate, (draw, draw_fire_fields).before(bevy::asset::AssetEventSystems));\n    }\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>;\n\nfn strip_mesh(d: &StripDescriptor) -> Mesh {\n    let pos: Vec<[f32; 3]> = d.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();\n    let z1: Vec<f32> = d.vertices.iter().map(|v| v[3]).collect();\n",
+          "new": "            .add_systems(PostUpdate, (draw, draw_fire_fields).before(bevy::asset::AssetEventSystems));\n    }\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>;\n\nfn strip_mesh(d: &StripDescriptor) -> Mesh {\n    let pos: Vec<[f32; 3]> = d.vertices.iter().map(|v| [v[0], v[1], v[2]]).collect();\n    let z1: Vec<f32> = d.vertices.iter().map(|v| v[3]).collect();\n"
+        },
+        {
+          "old": "    // The view's tangent as the game's camera writes it (0x16cf70: Gemlik's ship widens it), as the main camera's.\n    let tan = play.as_deref().map_or(crate::game_camera::TAN_HALF_FOV_X, |p| p.svc.view_tan_x);\n    // Through crate::display's Hor+ (16:9 widens x, as the main camera's projection).\n    let (tan_x, tan_y) = crate::display::view_tans(tan, display.map_or(crate::display::Aspect::Original, |d| d.aspect));\n    let proj = GameProjection { tan_x, tan_y, ..GameProjection::default() };\n    let clip_from_world = proj.get_clip_from_view() * cam_t.to_matrix().inverse();\n    // The ripple module and whether its callback was registered this tick (the moby system's; else the fallback).\n    let mut fallback = st.fallback.take();\n",
+          "new": "    // The view's tangent as the game's camera writes it (0x16cf70: Gemlik's ship widens it), as the main camera's.\n    let tan = play.as_deref().map_or(crate::game_camera::TAN_HALF_FOV_X, |p| p.svc.view_tan_x);\n    // Through crate::display's Hor+ (16:9 widens x, as the main camera's projection).\n    let (tan_x, tan_y) = crate::display::view_tans(tan, display.map_or(crate::display::Aspect::Original, |d| d.aspect));\n    #[cfg(feature = \"vr\")]\n    let (tan_x, tan_y) = if crate::vr::game_requested() { crate::game_camera::projection_tans(None) } else { (tan_x, tan_y) };\n    let proj = GameProjection { tan_x, tan_y, ..GameProjection::default() };\n    let clip_from_world = proj.get_clip_from_view() * cam_t.to_matrix().inverse();\n    // The ripple module and whether its callback was registered this tick (the moby system's; else the fallback).\n    let mut fallback = st.fallback.take();\n"
+        }
+      ]
+    },
+    {
+      "path": "docs/workflows/testing.md",
+      "expectedBlobSha": "a9fa4f9574aaa390a77da8ba440d488104aaaa3a",
+      "replacements": [
+        {
+          "old": "(plain `cargo test --workspace` would compile a second, static Bevy). `cargo check-all` and `cargo clippy-all`\n(aliases in `.cargo/config.toml`) add `--all-targets` with the same features; they share one Bevy check build\n(metadata only, which a test build cannot reuse). Release builds and `tools/package` stay static (never\n`--features dev`).\n",
+          "new": "(plain `cargo test --workspace` would compile a second, static Bevy). `cargo check-all` and `cargo clippy-all`\n(aliases in `.cargo/config.toml`) add `--all-targets` with the same features; they share one Bevy check build\n(metadata only, which a test build cannot reuse). Release builds and `tools/package` stay static (never\n`--features dev`).\n\n## Optional VR feature tests\n\nSet `RC_TEST_FEATURES=rc-engine/vr` when invoking `cargo xtask test-quick` to include the VR unit tests while preserving the workspace dev feature graph. The runner inserts these Cargo features before any libtest arguments. Leave it unset for the original suite. No headset or runtime is required by the unit tests.\n"
+        }
+      ]
+    },
+    {
+      "path": "tools/xtask/src/test.rs",
+      "expectedBlobSha": "950253efa001cc280a198110e7187e260aa0dad2",
+      "replacements": [
+        {
+          "old": "}\n\nfn run_step(s: &Step, extra: &[OsString]) -> bool {\n    let mut c = cargo();\n    c.args(&s.args).current_dir(repo_root()).env(\"RC_AUDIO\", \"0\");\n    // Extra arguments go to the test binaries: after the `--` a step already has, else after a new one.\n    if !extra.is_empty() {\n        if !s.args.iter().any(|a| a == \"--\") && s.args.first().is_some_and(|a| a != \"nextest\") { c.arg(\"--\"); }\n        c.args(extra);\n",
+          "new": "}\n\nfn run_step(s: &Step, extra: &[OsString]) -> bool {\n    let mut c = cargo();\n    let features = std::env::var(\"RC_TEST_FEATURES\").ok();\n    c.args(with_features(&s.args, features.as_deref())).current_dir(repo_root()).env(\"RC_AUDIO\", \"0\");\n    // Extra arguments go to the test binaries: after the `--` a step already has, else after a new one.\n    if !extra.is_empty() {\n        if !s.args.iter().any(|a| a == \"--\") && s.args.first().is_some_and(|a| a != \"nextest\") { c.arg(\"--\"); }\n        c.args(extra);\n"
+        },
+        {
+          "old": "    match c.status() {\n        Ok(st) => st.success(),\n        Err(e) => { eprintln!(\"error: cannot run cargo: {e}\"); false }\n    }\n}\n\nfn run_all(steps: &[Step], extra: &[OsString]) -> bool {\n    // Every step runs (a failing unit test does not hide an area's failures); the result is their conjunction.\n",
+          "new": "    match c.status() {\n        Ok(st) => st.success(),\n        Err(e) => { eprintln!(\"error: cannot run cargo: {e}\"); false }\n    }\n}\n\n/// Optional workspace features for tests (VR), before libtest's `--`, preserving the dev graph.\nfn with_features(args: &[String], features: Option<&str>) -> Vec<String> {\n    let mut args = args.to_vec();\n    if let Some(features) = features.filter(|s| !s.trim().is_empty()) {\n        let at = args.iter().position(|s| s == \"--\").unwrap_or(args.len());\n        args.splice(at..at, [\"--features\".into(), features.into()]);\n    }\n    args\n}\n\nfn run_all(steps: &[Step], extra: &[OsString]) -> bool {\n    // Every step runs (a failing unit test does not hide an area's failures); the result is their conjunction.\n"
+        },
+        {
+          "old": "mod tests {\n    use super::*;\n\n    fn os(v: &[&str]) -> Vec<OsString> { v.iter().map(OsString::from).collect() }\n\n    #[test]\n    fn parses_names_flags_and_extra() {\n        let o = parse(&os(&[\"hero\", \"--cargo-test\", \"ui\", \"--\", \"--nocapture\", \"x\"])).unwrap();\n",
+          "new": "mod tests {\n    use super::*;\n\n    fn os(v: &[&str]) -> Vec<OsString> { v.iter().map(OsString::from).collect() }\n\n    #[test]\n    fn optional_features_precede_libtest_arguments() {\n        let args: Vec<String> = [\"test\", \"--workspace\", \"--features\", \"rc-engine/dev\", \"--\", \"vr::\"].map(String::from).into();\n        let result = with_features(&args, Some(\"rc-engine/vr\"));\n        assert_eq!(result, [\"test\", \"--workspace\", \"--features\", \"rc-engine/dev\", \"--features\", \"rc-engine/vr\", \"--\", \"vr::\"]);\n        assert_eq!(with_features(&args, None), args);\n        assert_eq!(with_features(&args, Some(\"\")), args);\n    }\n\n    #[test]\n    fn parses_names_flags_and_extra() {\n        let o = parse(&os(&[\"hero\", \"--cargo-test\", \"ui\", \"--\", \"--nocapture\", \"x\"])).unwrap();\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/fx_draw.rs",
+      "expectedBlobSha": "3d97592a99b2f9b526a53a550cffd116f9fd218b",
+      "replacements": [
+        {
+          "old": "    /// The ship glass's near / far state per ship moby ([`GlassFade`]).\n    glass: std::collections::HashMap<usize, GlassFade>,\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, Without<crate::sky_render::SkyCamera>)>;\n\n/// The callbacks of this tick that draw here (the nanotech glow, the ship glass, the vendor's glow points), per list in\n/// registration order.\n#[allow(clippy::too_many_arguments)]\n",
+          "new": "    /// The ship glass's near / far state per ship moby ([`GlassFade`]).\n    glass: std::collections::HashMap<usize, GlassFade>,\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, &'static Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<crate::sky_render::SkyCamera>)>;\n\n/// The callbacks of this tick that draw here (the nanotech glow, the ship glass, the vendor's glow points), per list in\n/// registration order.\n#[allow(clippy::too_many_arguments)]\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/moby_anim.rs",
+      "expectedBlobSha": "908ce556892de31b5d5f7aaccaa381296cbd023a",
+      "replacements": [
+        {
+          "old": "}\n\n/// `MobyAnimAdvance` for every instance (the update loops skip mode-0x40 mobys), then the pending\n/// first-update sequence changes of the instances that are active this tick.\nfn tick(anim: Option<ResMut<MobyAnim>>, level: Res<crate::Level>, cams: Query<&Transform, With<Camera3d>>) {\n    let Some(mut anim) = anim else { return };\n    if !anim.enabled { return; }\n    let classes = &level.0.mobys.anim;\n    let camera = cams.iter().next().map(crate::game_camera::game_eye);\n",
+          "new": "}\n\n/// `MobyAnimAdvance` for every instance (the update loops skip mode-0x40 mobys), then the pending\n/// first-update sequence changes of the instances that are active this tick.\nfn tick(anim: Option<ResMut<MobyAnim>>, level: Res<crate::Level>, cams: Query<&Transform, (With<Camera3d>, With<crate::fly_cam::FlyCam>)>) {\n    let Some(mut anim) = anim else { return };\n    if !anim.enabled { return; }\n    let classes = &level.0.mobys.anim;\n    let camera = cams.iter().next().map(crate::game_camera::game_eye);\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/sky_stars.rs",
+      "expectedBlobSha": "77ceaef374f84df71e2a1f31e4605c12559e2c50",
+      "replacements": [
+        {
+          "old": "        );\n    }\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, (&'static Transform, Option<&'static Projection>), (With<Camera3d>, Without<SkyCamera>)>;\n\n/// `SkySpriteProc` on the CPU: cull and write this frame's sprites per texture.\nfn build_meshes(\n    sim: Option<ResMut<StarSim>>,\n",
+          "new": "        );\n    }\n}\n\ntype MainCamera<'w, 's> = Query<'w, 's, (&'static Transform, Option<&'static Projection>), (With<Camera3d>, With<crate::fly_cam::FlyCam>, Without<SkyCamera>)>;\n\n/// `SkySpriteProc` on the CPU: cull and write this frame's sprites per texture.\nfn build_meshes(\n    sim: Option<ResMut<StarSim>>,\n"
         }
       ]
     }
-  ]
+  ],
+  "lockfile": {
+    "source": "resolved-Cargo.lock",
+    "expectedBlobSha": "22dc2ac62c5e556ecd93f1d6c66dbdecc0209543"
+  }
 }

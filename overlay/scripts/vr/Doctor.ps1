@@ -1,5 +1,5 @@
 $ErrorActionPreference='Stop'
-Write-Host 'ReRAC VR PoC environment check (no software is installed and nothing is uploaded)'
+Write-Host 'ReRAC original-game VR environment check (no software is installed and nothing is uploaded)'
 foreach ($Tool in @('git','gh','rustc','cargo','cmake')) {
     $Found=Get-Command $Tool -ErrorAction SilentlyContinue
     if ($Found) {Write-Host "$Tool : $($Found.Source)"} else {Write-Warning "Missing: $Tool"}
@@ -11,4 +11,4 @@ foreach ($Key in @('HKLM:\SOFTWARE\Khronos\OpenXR\1','HKCU:\SOFTWARE\Khronos\Ope
 }
 try {Get-CimInstance Win32_VideoController|Select-Object Name,DriverVersion} catch {Write-Warning 'GPU query unavailable.'}
 Write-Host 'Expected: native Windows MSVC Rust target, C++ build tools + Windows SDK, CMake, PICO Connect, SteamVR as active OpenXR runtime.'
-Write-Host 'Missing headset/controller binding support is a test failure, not proof that PICO hardware is unsupported.'
+Write-Host 'Without a headset, use Run.ps1 -Scene novalis -DataDir <extracted-folder> -DesktopPreview. Tracking and controller checks remain pending until hardware is connected.'

@@ -25,6 +25,10 @@ try {
         }
         $Changes += [PSCustomObject]@{ Path=$Path; Text=$Text }
     }
+    $LockBlob = (& git hash-object -- Cargo.lock).Trim()
+    if ($LASTEXITCODE -ne 0 -or $LockBlob -ne $Manifest.lockfile.expectedBlobSha) { throw 'Upstream lockfile mismatch. No files changed.' }
+    $LockText = [IO.File]::ReadAllText((Join-Path $PSScriptRoot $Manifest.lockfile.source))
+    $Changes += [PSCustomObject]@{ Path=(Join-Path $Root 'Cargo.lock'); Text=$LockText }
     $PayloadRoot = (Resolve-Path -LiteralPath (Join-Path $PSScriptRoot 'overlay')).Path
     $Payload = @(Get-ChildItem -LiteralPath $PayloadRoot -File -Recurse -Force)
     foreach ($File in $Payload) {

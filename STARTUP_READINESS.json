@@ -1,0 +1,116 @@
+{
+  "checked_utc": "2026-10-22T13:55:52.213579+00:00",
+  "implementation": "OpenXR third-person views and pad input on the original ReRAC application",
+  "status": "original_game_vr_started_and_basic_headset_play_confirmed",
+  "build": {
+    "profile": "debug",
+    "executable_sha256": "FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0",
+    "completed_utc": "2026-10-22T13:48:55.4634658Z",
+    "steps_passed": [
+      "Compile standalone VR core tests",
+      "Run standalone VR core tests",
+      "Check unchanged non-VR build path",
+      "Check VR integration",
+      "Build VR executable"
+    ],
+    "headset_tested": false,
+    "gpu_budget_measured": false,
+    "git_worktree_dirty": true,
+    "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
+    "commit": "89c87e98f9d8296187df2a6310c67b32144090d3"
+  },
+  "unit_tests": {
+    "status": "PASS",
+    "passed": 1089,
+    "ignored": 3,
+    "failed": 0,
+    "log": "work/vr/original-game-final-build.log",
+    "command": "RC_TEST_FEATURES=rc-engine/vr cargo xtask test-quick",
+    "standalone_diagnostic_tests_also_passed": 15
+  },
+  "all_targets_check": {
+    "status": "PASS",
+    "command": "cargo check-all --locked --features rc-engine/vr",
+    "log": "work/vr/original-game-all-targets-final.log"
+  },
+  "package_tests": {
+    "status": "PASS",
+    "passed": 21
+  },
+  "desktop_original_game": {
+    "ticks": 487,
+    "ratchet_meshes": 14,
+    "mesh_entities": 25383,
+    "world_views": 2,
+    "sky_views": 2,
+    "render_frames": 327,
+    "minimum_world_draws_per_eye": 701,
+    "minimum_sky_draws_per_eye": 5,
+    "status": "PASS",
+    "binary_sha256": "FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0",
+    "log": "work/vr/original-game-ready-smoke.log",
+    "first_position": [
+      162.5303,
+      136.3935,
+      60.0
+    ],
+    "last_position": [
+      159.8904,
+      142.3601,
+      60.0
+    ],
+    "maximum_jump_z": 61.2268,
+    "hero_states": [
+      "0x00",
+      "0x02",
+      "0x03",
+      "0x07",
+      "0x13"
+    ],
+    "script": "0-60:stick 0 -1,5:press X,90:press SQUARE,130:press CIRCLE",
+    "saves_disabled": true
+  },
+  "headset": {
+    "status": "stereo_rendering_and_basic_controller_play_confirmed",
+    "log": "work/vr/novalis-headset-20261022-205230.log",
+    "runtime_states": [
+      "IDLE",
+      "READY",
+      "SYNCHRONIZED",
+      "VISIBLE",
+      "FOCUSED",
+      "VISIBLE",
+      "SYNCHRONIZED"
+    ],
+    "latest_game_telemetry": "VR_GAME live level=1 ticks=9220 hero=Some([169.8232, 135.78406, 60.0]) hero_state=Some(0) mesh_entities=25861 ratchet_meshes=14 world_eyes=2 sky_eyes=2 render_frames=5878 min_world_draws=0 min_sky_draws=0 waiting_pipelines=0 controls_active=false head_views=2",
+    "controller_focus_observed": true,
+    "physical_play_confirmed": true,
+    "user_confirmation": "Ratchet and scenery visible in the headset; left-stick movement works",
+    "no_capture_requested": true,
+    "runtime": "SteamVR/OpenXR 2.18.4",
+    "eye_resolution": [
+      1920,
+      1920
+    ]
+  },
+  "level_content": {
+    "level": 1,
+    "tfrags": 1004,
+    "ties": 1508,
+    "shrubs": 1208,
+    "sky_shells": 5,
+    "static_moby_slots": 929
+  },
+  "scope": {
+    "gameplay": "original rc-game tick, hero, collisions, enemies, weapons, inventory, audio and level switching",
+    "view": "third person, with HMD pose relative to original follow camera",
+    "controller_aim": "original game targeting; no tracked-hand weapon aiming",
+    "monitor_world_refresh_every_headset_frames": 4,
+    "simulation_hz": 60
+  },
+  "pending": [
+    "Full controller/combat/menu/respawn coverage",
+    "GPU/compositor frame budget and camera comfort",
+    "Full campaign playthrough; inherits upstream unported behavior"
+  ]
+}

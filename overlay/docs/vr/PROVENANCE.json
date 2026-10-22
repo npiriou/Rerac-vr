@@ -1,5 +1,5 @@
 {
-  "status": "uncompiled_source_candidate",
+  "status": "native_windows_original_game_vr_play_confirmed",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -8,7 +8,7 @@
   "xr": {
     "repository": "https://github.com/awtterpip/bevy_oxr",
     "commit": "4e2998531bd4f7d9cdce156148f9a5b7dd5cd260",
-    "reason": "Bevy 0.19 manifest with internally matching 0.5.0 workspace/path dependency versions; no compilation performed"
+    "reason": "Pinned Bevy 0.19-compatible workspace; dependency resolution and native Windows debug build verified on 2026-10-22"
   },
   "inspected_reference_files": [
     "https://github.com/re-rac/rerac/blob/89c87e98f9d8296187df2a6310c67b32144090d3/crates/rc-engine/src/level_load.rs",
@@ -18,5 +18,8 @@
     "https://github.com/awtterpip/bevy_oxr/blob/4e2998531bd4f7d9cdce156148f9a5b7dd5cd260/crates/bevy_xr/src/session.rs",
     "https://docs.github.com/en/pull-requests/reference/forks"
   ],
-  "distribution": "Only newly authored overlay, patch manifest, automation, documentation and a Cargo-manifest test fixture. No game assets or compiled binary."
+  "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
+  "implementation": "Original ReRAC application with OpenXR stereo views and original-pad controller input; calibration is diagnostic only",
+  "latest_build_sha256": "FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0",
+  "validation_record": "STARTUP_READINESS.json"
 }

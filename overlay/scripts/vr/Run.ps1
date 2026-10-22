@@ -1,8 +1,10 @@
 [CmdletBinding()]
-param([ValidateSet('calibration','novalis')][string]$Scene='calibration',[string]$DataDir,
-    [ValidateRange(0.1,10.0)][double]$UnitsPerMetre=1.0,[string]$SpawnGame,[switch]$Release)
+param([ValidateSet('calibration','novalis')][string]$Scene='novalis',[string]$DataDir,
+    [ValidateRange(0.1,10.0)][double]$UnitsPerMetre=1.0,[string]$SpawnGame,[switch]$Release,
+    [switch]$DesktopPreview,[ValidateRange(0,600)][int]$SmokeTestSeconds=0)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
+if ($SmokeTestSeconds -gt 0 -and -not $DesktopPreview) {throw '-SmokeTestSeconds requires -DesktopPreview.'}
 $Root=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Profile=if ($Release) {'release'} else {'debug'}
 $Exe=Join-Path $Root "target/$Profile/rerac.exe"
@@ -17,18 +19,32 @@ if ($Scene -eq 'novalis' -and (-not $DataDir -or -not (Test-Path -LiteralPath $D
     throw 'Novalis requires -DataDir pointing to your locally extracted, supported RAC1 data. Calibration does not need game data.'
 }
 $Out=Join-Path $Root 'work/vr';[IO.Directory]::CreateDirectory($Out)|Out-Null
-$Log=Join-Path $Out ("$Scene-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'.log')
-$Names=@('RC_VR','RC_VR_SCENE','RC_VR_UNITS_PER_METRE','RC_VR_SPAWN_GAME','RC_LEVEL','RC_AUDIO')
+$Mode=if ($DesktopPreview) {'preview'} else {'headset'}
+$Log=Join-Path $Out ("$Scene-$Mode-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'.log')
+$Names=@('RC_VR','RC_VR_SCENE','RC_VR_UNITS_PER_METRE','RC_VR_SPAWN_GAME','RC_LEVEL','RC_AUDIO','RC_VR_DESKTOP_PREVIEW','RC_VR_PREVIEW_SECONDS','RC_FRONTEND','RC_SCENE','RC_PLAY','RC_FRAME_CAP','RC_OCCL','RC_MSAA','RC_SCREENSHOT','RC_SCREENSHOT_FRAME')
 $Old=@{};foreach ($Name in $Names) {$Old[$Name]=[Environment]::GetEnvironmentVariable($Name,'Process')}
 Push-Location $Root
 try {
-    $env:RC_VR='1';$env:RC_VR_SCENE=$Scene;$env:RC_LEVEL='1';$env:RC_AUDIO='0'
+    # Empty optional environment variables must be absent, not empty: upstream treats RC_SCREENSHOT presence as a capture-and-exit request.
+    foreach ($CaptureName in @('RC_SCREENSHOT','RC_SCREENSHOT_FRAME')) {
+        if ([string]::IsNullOrEmpty([Environment]::GetEnvironmentVariable($CaptureName,'Process'))) {
+            Remove-Item -LiteralPath ('Env:'+ $CaptureName) -ErrorAction SilentlyContinue
+        }
+    }
+    $env:RC_VR='1';$env:RC_VR_SCENE=$Scene;$env:RC_LEVEL='1'
+    $env:RC_VR_DESKTOP_PREVIEW=if ($DesktopPreview) {'1'} else {'0'}
+    $env:RC_VR_PREVIEW_SECONDS=if ($SmokeTestSeconds -gt 0) {$SmokeTestSeconds.ToString()} else {$null}
     $env:RC_VR_UNITS_PER_METRE=$UnitsPerMetre.ToString([Globalization.CultureInfo]::InvariantCulture)
-    [Environment]::SetEnvironmentVariable('RC_VR_SPAWN_GAME',$SpawnGame,'Process')
+    if ([string]::IsNullOrWhiteSpace($SpawnGame)) {
+        Remove-Item -LiteralPath Env:RC_VR_SPAWN_GAME -ErrorAction SilentlyContinue
+    } else {
+        [Environment]::SetEnvironmentVariable('RC_VR_SPAWN_GAME',$SpawnGame,'Process')
+    }
     $Arguments=@();if ($Scene -eq 'novalis') {$Arguments=@('--data-dir',(Resolve-Path -LiteralPath $DataDir).Path)}
-    Write-Host "Launch PICO Connect and SteamVR before continuing. Log: $Log"
-    Write-Host 'The desktop window may be blank; use SteamVR VR View to inspect the headset output.'
-    @('VR_POC launch record',('current_git_head='+(& git rev-parse HEAD)),('executable_sha256='+$BuildState.executable_sha256),('build_record='+$StatePath))|Set-Content -LiteralPath $Log -Encoding UTF8
+    Write-Host "Mode: $Mode. Log: $Log"
+    if ($DesktopPreview) {Write-Host 'Original ReRAC game with two offscreen stereo views; keyboard/gamepad playable. No headset simulation.'}
+    else {Write-Host 'Connect the headset and launch PICO Connect/SteamVR. Use SteamVR VR View for headset output.'}
+    @('VR_GAME launch record',('current_git_head='+(& git rev-parse HEAD)),('executable_sha256='+$BuildState.executable_sha256),('build_record='+$StatePath))|Set-Content -LiteralPath $Log -Encoding UTF8
     $PreviousPreference=$ErrorActionPreference
     try {
         $ErrorActionPreference='Continue'
@@ -37,6 +53,9 @@ try {
     } finally {$ErrorActionPreference=$PreviousPreference}
     if ($Code -ne 0) {throw "VR application exited with code $Code. See $Log"}
 } finally {
-    foreach ($Name in $Names) {[Environment]::SetEnvironmentVariable($Name,$Old[$Name],'Process')}
+    foreach ($Name in $Names) {
+        if ($null -eq $Old[$Name]) {Remove-Item -LiteralPath ('Env:'+ $Name) -ErrorAction SilentlyContinue}
+        else {[Environment]::SetEnvironmentVariable($Name,$Old[$Name],'Process')}
+    }
     Pop-Location
 }

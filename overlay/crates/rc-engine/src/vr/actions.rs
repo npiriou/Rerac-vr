@@ -69,7 +69,7 @@ fn request_sync(a:Option<Res<ControllerActions>>,mut messages:MessageWriter<OxrS
 }
 fn suggest_bindings(a:Option<Res<ControllerActions>>,mut out:MessageWriter<OxrSuggestActionBinding>) {
     let Some(a)=a else {return;};
-    let mut bind=|action,profile:&str,path:&str|{out.write(OxrSuggestActionBinding {
+    let mut bind=|action,profile:&'static str,path:&'static str|{out.write(OxrSuggestActionBinding {
         action,interaction_profile:profile.into(),bindings:vec![path.into()],
     });};
     for profile in ["/interaction_profiles/oculus/touch_controller","/interaction_profiles/valve/index_controller",

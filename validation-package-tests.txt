@@ -1,13 +1,15 @@
 test_all_declared_vr_modules_have_payload_files (test_package.PackageTests.test_all_declared_vr_modules_have_payload_files) ... ok
 test_bootstrap_does_not_stage_entire_worktree (test_package.PackageTests.test_bootstrap_does_not_stage_entire_worktree) ... ok
 test_duplicate_patch_anchor_rejected_by_reference (test_package.PackageTests.test_duplicate_patch_anchor_rejected_by_reference) ... ok
-test_entrypoint_branch_precedes_disc_startup_in_synthetic_fixture (test_package.PackageTests.test_entrypoint_branch_precedes_disc_startup_in_synthetic_fixture) ... ok
+test_game_entrypoint_preserves_original_application (test_package.PackageTests.test_game_entrypoint_preserves_original_application) ... ok
+test_game_input_uses_original_pad_and_default_launch_is_game (test_package.PackageTests.test_game_input_uses_original_pad_and_default_launch_is_game) ... ok
 test_head_tracking_root_not_scaled (test_package.PackageTests.test_head_tracking_root_not_scaled) ... ok
 test_local_launch_requires_successful_build_and_binary_hash (test_package.PackageTests.test_local_launch_requires_successful_build_and_binary_hash) ... ok
-test_manifest_patches_only_engine_manifest_and_entrypoint (test_package.PackageTests.test_manifest_patches_only_engine_manifest_and_entrypoint) ... ok
+test_manifest_patches_engine_and_windows_trace_transport (test_package.PackageTests.test_manifest_patches_engine_and_windows_trace_transport) ... ok
 test_manual_ci_has_no_asset_upload (test_package.PackageTests.test_manual_ci_has_no_asset_upload) ... ok
 test_missing_patch_anchor_rejected_by_reference (test_package.PackageTests.test_missing_patch_anchor_rejected_by_reference) ... ok
 test_no_device_test_success_in_build_report (test_package.PackageTests.test_no_device_test_success_in_build_report) ... ok
+test_original_game_scope_and_physical_validation_are_explicit (test_package.PackageTests.test_original_game_scope_and_physical_validation_are_explicit) ... ok
 test_patched_cargo_is_valid_toml_and_vr_is_optional (test_package.PackageTests.test_patched_cargo_is_valid_toml_and_vr_is_optional) ... ok
 test_payload_is_text_and_contains_no_game_assets_or_credentials (test_package.PackageTests.test_payload_is_text_and_contains_no_game_assets_or_credentials) ... ok
 test_pins_are_full_commit_ids (test_package.PackageTests.test_pins_are_full_commit_ids) ... ok
@@ -15,11 +17,10 @@ test_private_creation_and_verification_precede_push (test_package.PackageTests.t
 test_private_script_authenticates_exact_owner (test_package.PackageTests.test_private_script_authenticates_exact_owner) ... ok
 test_provenance_matches_manifest (test_package.PackageTests.test_provenance_matches_manifest) ... ok
 test_reapplying_patch_rejected_by_reference (test_package.PackageTests.test_reapplying_patch_rejected_by_reference) ... ok
-test_rust_tests_are_present_not_claimed_executed (test_package.PackageTests.test_rust_tests_are_present_not_claimed_executed) ... ok
-test_scope_limitations_are_explicit (test_package.PackageTests.test_scope_limitations_are_explicit) ... ok
+test_rust_tests_are_present_and_validation_scope_is_explicit (test_package.PackageTests.test_rust_tests_are_present_and_validation_scope_is_explicit) ... ok
 test_upstream_engine_fixture_matches_verified_git_blob (test_package.PackageTests.test_upstream_engine_fixture_matches_verified_git_blob) ... ok
 
 ----------------------------------------------------------------------
-Ran 20 tests in 0.004s
+Ran 21 tests in 0.138s
 
 OK

@@ -42,8 +42,7 @@ try {
         Write-Warning 'Publishing SOURCE ONLY: Rust compilation and all headset tests remain unverified.'
     }
     # Explicit paths only. Never "git add ." or a mirror push.
-    $Stage = @('crates/rc-engine/Cargo.toml','crates/rc-engine/src/main.rs','crates/rc-engine/src/vr',
-        'scripts/vr','docs/vr','.gitignore','.github/workflows')
+    $Stage = @($Manifest.patches | ForEach-Object { [string]$_.path }) + @('crates/rc-engine/src/vr','scripts/vr','docs/vr','.gitignore','.github/workflows')
     if (Test-Path '.github/upstream-workflows') { $Stage += '.github/upstream-workflows' }
     if (Test-Path 'Cargo.lock') { $Stage += 'Cargo.lock' }
     Invoke-Checked 'git' (@('add','-A','--') + $Stage)
@@ -55,7 +54,7 @@ try {
     $CommitArgs = @()
     if (-not $Identity) { $CommitArgs += @('-c','user.name=ReRAC VR PoC preparation') }
     if (-not $Email) { $CommitArgs += @('-c','user.email=rerac-vr-poc@localhost') }
-    Invoke-Checked 'git' ($CommitArgs + @('commit','-m','Add experimental first-person VR terrain PoC; headset validation pending'))
+    Invoke-Checked 'git' ($CommitArgs + @('commit','-m','Integrate OpenXR stereo and controller input into original ReRAC game'))
     if ($PrepareOnly) {
         Write-Host "Prepared local source at $Destination. Nothing was published."
     } else {

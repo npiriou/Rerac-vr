@@ -139,7 +139,7 @@ fn interact(
             if let Some(e)=hit {
                 if let Ok((_,_,material,mut target))=targets.get_mut(e) {
                     target.hits+=1;s.hits+=1;
-                    if let Some(m)=materials.get_mut(&material.0) {m.base_color=Color::srgb(0.1,1.0,0.3);}
+                    if let Some(mut m)=materials.get_mut(&material.0) {m.base_color=Color::srgb(0.1,1.0,0.3);}
                     println!("VR_POC diagnostic_target_hit entity={e:?} distance_metres={distance:.3} total_hits={}",s.hits);
                 }
             } else {println!("VR_POC diagnostic_shot_miss stop_metres={distance:.3}");}
