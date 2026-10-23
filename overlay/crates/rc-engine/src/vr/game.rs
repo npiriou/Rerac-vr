@@ -10,7 +10,8 @@ use bevy::{
         Camera3dDepthLoadOp, CameraOutputMode, ClearColorConfig, RenderTarget,
         visibility::RenderLayers,
     },
-    core_pipeline::core_3d::Transparent3d,
+    core_pipeline::{Core2d, Core3d, core_3d::Transparent3d},
+    ecs::schedule::SingleThreadedExecutor,
     core_pipeline::tonemapping::{DebandDither, Tonemapping},
     prelude::*,
     render::{
@@ -317,7 +318,19 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         .insert_resource(frames)
         .insert_resource(draw)
         .add_systems(Render, count.after(RenderSystems::Render));
-    app.add_plugins(super::early_submit::EarlySubmitPlugin)
+    // Each camera's pipeline (Core3d/Core2d) is a chain of passes: Bevy's multithreaded executor made
+    // the render thread wait for a worker per pass and camera (about 0.7 ms a frame). The passes still
+    // encode in parallel internally. RC_VR_CAMERA_EXECUTOR=multi restores Bevy's executor.
+    if !std::env::var("RC_VR_CAMERA_EXECUTOR").is_ok_and(|s| s.trim() == "multi") {
+        let render = app.sub_app_mut(RenderApp);
+        render.edit_schedule(Core3d, |s| {
+            s.set_executor(SingleThreadedExecutor::new());
+        });
+        render.edit_schedule(Core2d, |s| {
+            s.set_executor(SingleThreadedExecutor::new());
+        });
+    }
+    app.add_plugins(super::fullscreen_refresh::FullscreenRefreshPlugin)
         .add_plugins(super::timing::FrameTimingPlugin {
             xr: !settings.desktop_preview,
         });
@@ -326,7 +339,6 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     } else {
         app.insert_resource(OxrSessionConfig::default())
             .add_plugins(GameInputPlugin)
-            .add_plugins(super::deferred_end::DeferredEndPlugin)
             .add_systems(Startup, super::require_headset)
             .add_systems(XrPreDestroySession, reset_session)
             .add_systems(XrSessionCreated, configure_eyes.after(XrViewInit));

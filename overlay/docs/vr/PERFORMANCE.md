@@ -112,29 +112,45 @@ own process.
   order the three produced; pre-shadow `restore` inserts the few remaining items into
   the stashed ones instead of the reverse. Frame 600 captured with the previous and
   the new ordering (both without tracing) is identical pixel for pixel.
-* **Early submission** (`vr/early_submit.rs`): each camera's command buffers are
-  submitted when the next camera starts, so the GPU renders the first views while
-  the CPU records the others. Same commands, same order; it targets the GPU wait in
-  xrEndFrame and needs a headset session to measure (`RC_VR_EARLY_SUBMIT=ab`
-  alternates it per VR_PERF window; `=0` disables it).
-
 Per world eye: about 508 opaque draws (5,330 entities), 133 alpha-mask draws (4,012)
 and 218 transparent draws (4,105 items): instancing already merges most entities.
 Bevy's indirect drawing (`RC_INDIRECT=1`) was slower (about 40 fps) and the two sky
 eye views cost no measurable time, so neither was changed.
 
-**Deferred xrEndFrame** (`vr/deferred_end.rs`, off by default until measured in the
-headset): frame N's xrEndFrame, where SteamVR blocks until the GPU has finished,
-runs at the start of frame N+1's render schedule right before its xrBeginFrame,
-instead of at the end of frame N's. The GPU then finishes while the render world
-is handed back and the next frame is extracted, rather than with both threads
-stopped. xrBeginFrame stays at the start of each frame: with pipelined rendering,
-the next xrWaitFrame waits for it. `RC_VR_DEFERRED_END=1` enables it, `=ab`
-alternates it per VR_PERF window; `xr_pre` then includes the deferred xrEndFrame.
+**Cinematic crash fixed** (`vr/fullscreen_refresh.rs`). Bevy's FullscreenMaterial
+keeps each view's bind group until the view's texture changes, but the bind group
+also holds the material's uniform buffer, which is reallocated when more views
+carry the material. VR copies the window camera's scene fade and tints to both eyes;
+when a cinematic re-activated the window camera, an eye drew with the third view's
+offset on the old one-entry buffer (wgpu validation error, game closed). Those bind
+groups are now dropped whenever their buffer changes. A cinematic then played
+through in the headset.
 
-VR_PERF also reports `prep` (render schedule up to the graph), `graph` (camera
-encoding, submission, present), `xr_pre` (xrBeginFrame, image acquire and wait),
-`spec` (views, visible and re-specialized meshes) and `eye_draws`.
+## Headset results (Kerwan, debug-gold, 72 Hz, Release with everything above)
+
+| Situation | fps | main world | render thread (prep / graph / xr_pre / xr_end) |
+|---|---|---|---|
+| Near the spawn | 51-59 | 9-10 ms | 17 ms (4.2 / 5.9 / 2.1 / 4.7) |
+| Moving across the level | 36-47 | 12-16 ms | 20-24 ms (6-8 / 7-10 / 1.8 / 5.5) |
+| Sustained Blaster fire | 14-25 | 30-50 ms | 34-55 ms |
+
+Morning baseline: 25-30 fps. Prep and graph cost the same as in the desktop preview;
+SteamVR adds about 2 ms before rendering (xrBeginFrame, image acquire and wait) and
+about 5 ms in xrEndFrame every frame. Under sustained Blaster fire the game logic
+gets slower per tick and the 60 Hz catch-up then runs 3-4 ticks per frame, which
+slows the next frame further.
+
+Tried in the headset and removed:
+* submitting each camera's command buffers when the next camera starts (A/B per
+  5 s window): no measurable change;
+* calling frame N's xrEndFrame at the start of frame N+1, before its xrBeginFrame:
+  about 4 fps slower, the wait only moved to the start of the next frame.
+bevy_mod_openxr at the pinned revision has its D3D12 path disabled, so SteamVR's
+Vulkan interop cannot be avoided there.
+
+VR_PERF reports `prep` (render schedule up to the graph), `graph` (camera encoding,
+submission, present), `xr_pre` and `xr_end`; `RC_VR_PERF=detail` adds `spec`
+(views, visible and re-specialized meshes), `eye_draws` and the active cameras.
 
 ## Retired visibility experiment
 

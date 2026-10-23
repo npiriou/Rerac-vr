@@ -10,13 +10,15 @@
 //! * `render`: the render world's Render schedule (preparation, encoding, submit, xrEndFrame);
 //! * `prep`: inside it, the Render schedule's start to the render graph (phases, batches, buffers);
 //! * `graph`: inside it, the render graph (every camera's encoding, submission, window present);
-//! * `xr_pre`: inside it, xrBeginFrame, swapchain image acquire and xrWaitSwapchainImage (with
-//!   a deferred xrEndFrame, the previous frame's xrEndFrame too, see vr/deferred_end.rs);
+//! * `xr_pre`: inside it, xrBeginFrame, swapchain image acquire and xrWaitSwapchainImage;
 //! * `xr_end`: inside it, xrReleaseSwapchainImage + xrEndFrame (SteamVR waits for the GPU there);
+//!
+//! `RC_VR_PERF=detail` adds counters that walk the render phases every frame:
 //! * `spec`: per frame, the 3D views with meshes, their visible meshes, the meshes newly visible in a
 //!   view and the meshes Bevy marked changed: the last two are what pipeline specialization redoes;
 //! * `eye_draws`: per world eye, the draw calls of the opaque, alpha-mask and transparent phases
-//!   (entities batched into them in brackets).
+//!   (entities batched into them in brackets);
+//! * the active cameras, on a line of their own.
 use bevy::{
     core_pipeline::core_3d::{AlphaMask3d, Opaque3d, Transparent3d},
     prelude::*,
@@ -36,9 +38,8 @@ use bevy_mod_openxr::{
     resources::OxrFrameState,
 };
 use bevy_mod_xr::session::{XrFirst, XrRenderSystems};
-use super::deferred_end::DeferredSystems;
 use std::{
-    sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::Ordering},
+    sync::{Arc, Mutex, MutexGuard, PoisonError},
     time::{Duration, Instant},
 };
 
@@ -52,11 +53,13 @@ pub struct FrameTimingPlugin {
 impl Plugin for FrameTimingPlugin {
     fn build(&self, app: &mut App) {
         let shared = Shared::default();
+        let detail = std::env::var("RC_VR_PERF").is_ok_and(|s| s.trim() == "detail");
         let pipelined = app.is_plugin_added::<PipelinedRenderingPlugin>();
         println!("VR_PERF pipelined_rendering={pipelined} (RC_VR_PIPELINED=0 disables it)");
         app.insert_resource(shared.clone())
             .insert_resource(Clock {
                 pipelined,
+                detail,
                 report: Instant::now(),
                 frame: None,
                 awake: None,
@@ -75,8 +78,6 @@ impl Plugin for FrameTimingPlugin {
             .insert_resource(shared)
             .init_resource::<RenderClock>()
             .add_systems(Render, render_start.in_set(RenderSystems::ExtractCommands))
-            .add_systems(Render, specialization_load.in_set(RenderSystems::PrepareMeshes))
-            .add_systems(Render, draw_load.in_set(RenderSystems::PrepareBindGroups))
             .add_systems(
                 Render,
                 (
@@ -86,24 +87,25 @@ impl Plugin for FrameTimingPlugin {
                     .in_set(RenderSystems::Render),
             )
             .add_systems(Render, render_end.in_set(RenderSystems::PostCleanup));
+        if detail {
+            render
+                .add_systems(Render, specialization_load.in_set(RenderSystems::PrepareMeshes))
+                .add_systems(Render, draw_load.in_set(RenderSystems::PrepareBindGroups));
+        }
         if self.xr {
             render.add_systems(
                 Render,
                 (
                     xr_end_start
                         .after(RenderSystems::Render)
-                        .before(DeferredSystems::Post)
                         .before(XrRenderSystems::PostRender),
                     xr_end_done
-                        .after(DeferredSystems::Post)
                         .after(XrRenderSystems::PostRender)
                         .before(RenderSystems::Cleanup),
                     xr_pre_start
                         .after(XrRenderSystems::HandleEvents)
-                        .before(DeferredSystems::Pre)
                         .before(XrRenderSystems::PreRender),
                     xr_pre_done
-                        .after(DeferredSystems::Pre)
                         .after(XrRenderSystems::PreRender)
                         .before(RenderSystems::PrepareViews)
                         .before(RenderSystems::PrepareAssets),
@@ -145,6 +147,7 @@ impl Shared {
 #[derive(Resource)]
 struct Clock {
     pipelined: bool,
+    detail: bool,
     report: Instant,
     frame: Option<Instant>,
     awake: Option<Instant>,
@@ -187,8 +190,6 @@ fn main_end(
     shared: Res<Shared>,
     frame: Option<Res<OxrFrameState>>,
     cameras: Query<(&Camera, Option<&Name>, Has<Camera3d>)>,
-    early: Option<Res<super::early_submit::EarlySubmit>>,
-    deferred: Option<Res<super::deferred_end::DeferredEnd>>,
 ) {
     let now = Instant::now();
     if let Some(awake) = clock.awake.take() {
@@ -213,15 +214,6 @@ fn main_end(
         }
     }
     let per = |n: u64| n as f32 / s.spec_frames.max(1) as f32;
-    // This window's early submission state; an A/B run flips it for the next window.
-    let early_on = early.as_ref().is_some_and(|e| e.on.load(Ordering::Relaxed));
-    if let Some(e) = early.as_ref().filter(|e| e.alternate) {
-        e.on.store(!early_on, Ordering::Relaxed);
-    }
-    let deferred_on = deferred.as_ref().is_some_and(|d| d.on.load(Ordering::Relaxed));
-    if let Some(d) = deferred.as_ref().filter(|d| d.alternate) {
-        d.on.store(!deferred_on, Ordering::Relaxed);
-    }
     let spec = format!(
         "views={:.1} visible={:.0} added={:.0} changed={:.0}",
         per(s.views),
@@ -239,8 +231,13 @@ fn main_end(
         eye(s.eye_draws[2]),
         eye(s.eye_entities[2])
     );
+    let detail = if clock.detail {
+        format!(" | spec {spec} | eye_draws {draws}")
+    } else {
+        String::new()
+    };
     println!(
-        "VR_PERF pipelined={} early_submit={early_on} deferred_end={deferred_on} frames={frames} fps={:.1} period_ms={} vsyncs_1/2/3/4+={}/{}/{}/{} ticks_per_frame={:.2} | interval {} | wait {} | main {} | handoff {} | render {} | prep {} | graph {} | xr_pre {} | xr_end {} | spec {spec} | eye_draws {draws}",
+        "VR_PERF pipelined={} frames={frames} fps={:.1} period_ms={} vsyncs_1/2/3/4+={}/{}/{}/{} ticks_per_frame={:.2} | interval {} | wait {} | main {} | handoff {} | render {} | prep {} | graph {} | xr_pre {} | xr_end {}{detail}",
         clock.pipelined,
         frames as f32 / elapsed.as_secs_f32(),
         period.map_or("-".into(), |p| format!("{p:.2}")),
@@ -259,6 +256,9 @@ fn main_end(
         stats(&mut s.xr_pre),
         stats(&mut s.xr_end),
     );
+    if !clock.detail {
+        return;
+    }
     let active: Vec<String> = cameras
         .iter()
         .filter(|(c, _, _)| c.is_active)
