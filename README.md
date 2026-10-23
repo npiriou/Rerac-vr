@@ -45,7 +45,7 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | --- | --- |
 | Left stick | Move Ratchet relative to headset heading / navigate menus |
 | Right stick | 30-degree snap turn; return to centre before turning again |
-| Vendor open | Left stick walks, A jumps, right stick browses / adjusts quantity, fresh right-trigger presses buy / confirm, Y cancels / closes. Displays stay on the vendor's monitors |
+| Vendor open | Left stick walks, A jumps, right stick browses / adjusts quantity, fresh right-trigger presses buy / confirm, right-stick click cancels / closes. Displays stay on the vendor's monitors |
 | Right A | Immediate jump / double jump. Hold the left index trigger + press A for pack jumps or a native side/back flip with a timed directional flick. Confirm in menus |
 | Left index trigger | Native R1 modifier: packs and flips; right trigger remains weapon use |
 | Right grip held | Hold the wrench; swing the hand to hit |
@@ -57,21 +57,21 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Right trigger with an empty hand or wrench | Re-equip the last gun/glove/gadget, ignoring the wrench; release and press again to use it |
 | Release right trigger during a throwing motion | Throw the bomb with the hand's direction and speed; consume one original ammunition unit |
 | Release right trigger slowly | Cancel the prepared bomb without using ammunition |
-| Left Y | Triangle — contextual interactions; hold for quick select, move the left hand toward an icon, release to confirm |
+| Right stick click | Triangle — contextual interactions; hold for quick select, move the right hand toward an icon, release to confirm |
 | Walloper selected: punch with the right hand | Original lunge and horizontal dash, with native windup, speed and broad damage window; no vertical punch propulsion |
 | Left grip near a heavy weapon's barrel | Hold the foregrip and guide the weapon with both hands; release to return to one hand |
 | Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove both arms down at least 12 cm at 1.15 m/s to climb/jump as A (left-stick movement disabled while hanging); release both grips to drop |
 | Submerged palm strokes | Push water opposite the motion of the hands; turn palms edge-on for recovery. Push up to dive |
-| Y held + right stick left/right | Previous / next quick-select page (return the stick to centre between changes) |
+| Right stick click held + right stick left/right | Previous / next quick-select page (return the stick to centre between changes) |
 | B / X | Original menu controls; B also exits the Hologuise |
 | Left stick click | Select — map |
-| Right stick click | Pause during play; skip the current scene/movie during a cinematic (one click queues through its opening fade) |
+| Left Y | Pause during play; skip the current scene/movie during a cinematic (one click queues through its opening fade) |
 | Either joystick in menus | Directional navigation; return to centre between steps. A confirms, Y goes back |
 | Keyboard F8 | Recenter headset |
 
 A jumps immediately on press, with no long-press delay. The left index trigger sends native R1: use it with A for pack jumps, or a side/back directional flick + A for the native flip chooser. Flip priority precedes the special pack jump; the right trigger remains independent for weapons. R1 retains the original movement-state rules, with a blended crouch eye height; headset rotation never follows a flip animation. Teleportation has no XR gameplay binding. A regular gamepad and the original keyboard bindings remain usable. Initial recenter waits until the headset is focused. F8 recalibrates the physical headset pose without moving Ratchet. Camera pitch/roll track physical head motion relative to the current floor, including magnetic tracks. The original pause menus are placed directly in the world; the ordinary HUD retains its headset layer.
 
-In `debug` and `debug-gold`, all original weapons and gadgets (native inventory IDs 1..35) are available at startup. Normal mode grants nothing beyond native progression. Hold Y and move the left hand toward an icon, then release Y. Change pages with the right stick while holding Y. Wearable/back gadgets are equipped through the original pause inventory. Native models, cadence, ammunition, collisions, damage, effects and interactions are retained. The Visibomb shows its native remote camera on the articulated screen built into the weapon: steer with the left stick, A boosts and a new trigger press detonates after its native delay. The Drone Device activates when selected, as in the original game.
+In `debug` and `debug-gold`, all original weapons and gadgets (native inventory IDs 1..35) are available at startup. Normal mode grants nothing beyond native progression. Hold the right-stick click and move the right hand toward an icon, then release the click. Change pages with the right stick while holding its click. Wearable/back gadgets are equipped through the original pause inventory. Native models, cadence, ammunition, collisions, damage, effects and interactions are retained. The Visibomb shows its native remote camera on the articulated screen built into the weapon: steer with the left stick, A boosts and a new trigger press detonates after its native delay. The Drone Device activates when selected, as in the original game.
 
 In the debug modes, every owned weapon with an ammunition reserve starts at its native capacity once per application launch; use then decreases it normally. The Suck Cannon still captures creatures as its ammunition. Complete original brown gloves include their forearm cuffs. Held weapons retain Ratchet's native layered gripping-hand pose; throwing weapons use their matching original glove. The Swingshot is rolled 90 degrees onto the top of the wrist while preserving the palm anchor and forward direction. Calibrated weapons put their rear grip at the right controller; their animated muzzle is derived separately. Throwing ammunition rests on the palm side of the glove. All native two-hand holds (Suck Cannon, Devastator, Visibomb, Pyrocitor, Hydrodisplacer and R.Y.N.O.) accept the optional left grip at their authored support-hand position.
 
@@ -127,3 +127,29 @@ Gold Devastator support is anchored at the centre of the actual class-157 side h
 Hyper Strike's airborne animation gates and native height/cable rules are shared by button and VR paths. In particular, the native flip gates are strictly after frame 18, or 20 for flip kind 3, rather than the former VR-only 25/26 gates. A 5 cm downward wrench-hand stroke at 1.2 m/s uses a separate interpolated 28 ms velocity window; normal melee/throw smoothing and hit thresholds remain unchanged. The gesture can stay prepared within the same native input-buffer windows while a flip becomes eligible. An accepted VR gesture enters native state 0x14 at its falling animation phase, cancels upward velocity, and skips the additional upward/windup delay. Native descent acceleration, terminal velocity, shockwave/contact damage and landing haptics remain. Desktop/button windup is retained.
 
 No tests or gameplay interaction scripts were run. The game is not launched or restarted at the user's request. Compilation evidence is separate from pending headset feedback on comfort, grabbing/pull-up, the gold handle and immediate Hyper Strike.
+
+
+## Native ledge hands, grip priority, Start/Triangle swap and High defaults
+
+Each hand bound to a ledge uses Ratchet's original reach/hang animation palette without weapon-holding arm layers. The glove follows the native body/wall orientation, wrist depth and height at the lip, translated along the ledge to that hand's accepted anchor. Controller rotation no longer turns an attached glove into a free-hand pose. One held hand is sufficient to enter/maintain the hang and move laterally; releasing the other does not drop Ratchet. The existing two-hand downward stroke remains the pull-up gesture.
+
+A fresh right-grip squeeze does not request the wrench while the left grip is held, a ledge candidate is available, or the right hand is attached/hanging. A new wrench request waits one native collision/probe tick so a right-hand-only catch has priority. A suppressed squeeze requires release and a fresh press before it can equip a wrench later; releasing from a ledge cannot become a wrench throw. The frame in which a right-hand anchor is accepted also hides held weapon/glove geometry. Ordinary wrench throwing remains available outside ledge use.
+
+Touch/PICO Y (Index left B / Microsoft left menu) now sends native Start: pause, frontend start and queued cinematic skip. Right thumbstick click sends native Triangle: contextual interaction, vendor cancel, and held quick select with right-hand sector selection. Hold the right-stick click and move the right stick horizontally for quick-select pages. Left thumbstick click remains Select/map. Existing Start skip suppression through release and Triangle contextual priority are retained.
+
+Port Options now offers a High preset: requested 8x MSAA (clamped to GPU support), anisotropic Sharp textures, Maximum model detail and Sharp-pixel HUD. VR adopts those settings and enabled shadows once, including existing saved settings, then preserves subsequent menu choices. Fresh VR settings default to High; explicit environment overrides remain available. The former forced RC_MSAA=0 is removed, and the headset's world/sky eye cameras follow Port Options MSAA as well. Desktop original defaults and display/window geometry remain independent.
+
+Compilation evidence is separate from physical headset feedback. No tests or gameplay interaction scripts are run. The game is not launched or restarted.
+
+
+## Physical cranks and first-person cinematics
+
+The right hand now chooses quick-select sectors while holding the right-stick click (Triangle). Y remains Start/pause/skip.
+
+Bring the held wrench head within 50 cm of a bolt crank socket, keep the right grip held and turn the hand or move it around the bolt. The wrench head seats on the bolt; tracking-only angular travel feeds the original progress, driven doors/platforms, completion, mission and save code. Releasing or withdrawing the hand disengages without throwing the wrench. Native desktop cranking remains available outside VR.
+
+Short gameplay cutaways retain their event timelines but no longer draw letterbox bars in VR or impose their cinematic holds, forced poses/teleports or blocking entry fades. Ratchet keeps native movement, jumping and weapon input. Dialogue/engine scenes retain their authored actor progression: the VR eye follows the animated Ratchet head with free headset rotation and the duplicate scene body hidden. Ship takeoff/landing uses the animated ship origin and each ship's native Ratchet seat, with a seated eye offset and gradual yaw follow, rather than the hero left on the ground. Full-motion video remains video.
+
+Kerwan cable-slide eye height leaves 55 cm below the cable (target 0.55–1.15 game units above the capsule origin), blended through the existing posture transition. Thrown wrenches spin in a horizontal plane through outbound and returning flight, independent of release wrist pitch/roll; the native travel and collision paths remain.
+
+These changes require physical headset confirmation, especially crank socket alignment, scene head position and cockpit placement on all three ships. No automated tests were run, per AGENTS.md.

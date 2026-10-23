@@ -83,7 +83,7 @@ impl HandSelect {
             self.anchor = None;
             self.selecting = false;
         }
-        // Fixed tracking-space origin and view plane at Y press: head/rig motion cannot move the choice.
+        // Fixed tracking-space origin and view plane at Triangle press: head/rig motion cannot move the choice.
         let (origin, orientation) = *self.anchor.get_or_insert((hand, head.rotation));
         let delta = orientation.inverse() * (hand - origin);
         let direction = Vec2::new(delta.x, delta.y);
@@ -343,7 +343,7 @@ fn bindings(a: Option<Res<Actions>>, mut out: MessageWriter<OxrSuggestActionBind
 }
 
 // Touch/PICO: A/B on the right, X/Y on the left. Index uses left A/B for X/Y.
-// Stick clicks are Select/Start; right click requests native skip during scenes/movies.
+// Y is Start/pause/skip; the right stick click is Triangle (interaction/quick select).
 fn button_path(bit: u32, profile: &str) -> Option<&'static str> {
     let index = profile.ends_with("index_controller");
     let microsoft = profile.ends_with("motion_controller");
@@ -355,11 +355,11 @@ fn button_path(bit: u32, profile: &str) -> Option<&'static str> {
         button::CIRCLE if microsoft => "/user/hand/left/input/trackpad/click",
         button::CIRCLE if index => "/user/hand/left/input/a/click",
         button::CIRCLE => "/user/hand/left/input/x/click",
-        button::TRIANGLE if microsoft => "/user/hand/left/input/menu/click",
-        button::TRIANGLE if index => "/user/hand/left/input/b/click",
-        button::TRIANGLE => "/user/hand/left/input/y/click",
+        button::TRIANGLE => "/user/hand/right/input/thumbstick/click",
         button::SELECT => "/user/hand/left/input/thumbstick/click",
-        button::START => "/user/hand/right/input/thumbstick/click",
+        button::START if microsoft => "/user/hand/left/input/menu/click",
+        button::START if index => "/user/hand/left/input/b/click",
+        button::START => "/user/hand/left/input/y/click",
         _ => return None,
     })
 }
@@ -635,12 +635,12 @@ pub(super) fn sample(
                 hand.quick_page = if camera.x > 0.0 { 1 } else { -1 };
                 selection.page_held = true;
             }
-            let left = tracked.iter().find_map(|(hand, pose, flags)| {
-                (hand.0 == 0 && flags.pos_valid() && flags.pos_tracked())
+            let right = tracked.iter().find_map(|(hand, pose, flags)| {
+                (hand.0 == 1 && flags.pos_valid() && flags.pos_tracked())
                     .then_some(pose.translation)
             });
             out.quick_select =
-                Some(selection.direction(left, super::game::pose(views.as_deref()), rig.revision));
+                Some(selection.direction(right, super::game::pose(views.as_deref()), rig.revision));
             movement = Vec2::ZERO;
         } else if selection.held {
             // Release confirms the last hand-selected sector without leaking the locomotion stick.
@@ -770,9 +770,9 @@ mod tests {
             ("/user/hand/right/input/a/click", button::CROSS),
             ("/user/hand/right/input/b/click", button::SQUARE),
             ("/user/hand/left/input/x/click", button::CIRCLE),
-            ("/user/hand/left/input/y/click", button::TRIANGLE),
+            ("/user/hand/left/input/y/click", button::START),
             ("/user/hand/left/input/thumbstick/click", button::SELECT),
-            ("/user/hand/right/input/thumbstick/click", button::START),
+            ("/user/hand/right/input/thumbstick/click", button::TRIANGLE),
         ];
         let bits = [
             button::CROSS,

@@ -10,9 +10,9 @@ use bevy::{
         Camera3dDepthLoadOp, CameraOutputMode, ClearColorConfig, RenderTarget,
         visibility::RenderLayers,
     },
+    core_pipeline::tonemapping::{DebandDither, Tonemapping},
     core_pipeline::{Core2d, Core3d, core_3d::Transparent3d},
     ecs::schedule::SingleThreadedExecutor,
-    core_pipeline::tonemapping::{DebandDither, Tonemapping},
     prelude::*,
     render::{
         Render, RenderApp, RenderSystems,
@@ -59,6 +59,8 @@ pub(super) struct Rig {
     eye_height: Option<f32>,
     gravity_frame: Quat,
     front_root: Option<Transform>,
+    cinematic_root: Option<Transform>,
+    pilot_heading: Option<f32>,
     rail_heading: Option<f32>,
     rail_center: Option<Vec3>,
     rail_pitch: f32,
@@ -78,6 +80,9 @@ pub(super) fn native_panel(play: &crate::gameplay::Play) -> bool {
         && !gold_bolt
 }
 impl Rig {
+    pub(super) fn cinematic_active(&self) -> bool {
+        self.cinematic_root.is_some()
+    }
     pub(super) fn surface_up(&self) -> Vec3 {
         self.gravity_frame * Vec3::Y
     }
@@ -94,6 +99,9 @@ impl Rig {
     pub(super) fn root_for(&self, game: &rc_game::tick::Game, scale: f32) -> Option<Transform> {
         if crate::saves::front_end_active() {
             return self.front_root;
+        }
+        if let Some(root) = self.cinematic_root {
+            return Some(root);
         }
         let mut center = self.center?;
         if let Some(head) = self.rail_center.or(self.head) {
@@ -164,7 +172,7 @@ pub fn prepare_game() -> anyhow::Result<()> {
         }
         std::env::set_var("RC_PLAY", "1");
         std::env::set_var("RC_PLAY_FLY", "0");
-        std::env::set_var("RC_MSAA", "0");
+        // Port Options owns AA quality, including its High default and persisted user changes.
         std::env::set_var("RC_FRONTEND", if s.mode.debug() { "0" } else { "1" });
         if s.mode.debug() {
             std::env::set_var("RC_LEVEL", if s.scene == "kerwan" { "3" } else { "1" });
@@ -204,7 +212,7 @@ pub fn prepare_game() -> anyhow::Result<()> {
         s.scene, s.desktop_preview
     );
     println!(
-        "VR_GAME first person: left stick move; right stick snap turn 30 degrees; A jump/double jump; right grip hold wrench, swing to hit, release a moving hand to throw; Y interact or hold and move left hand for quick select; right trigger fires the selected Blaster/Pyrocitor or prepares a bomb for gesture release; Ratchet brown gloves; F8 recenter"
+        "VR_GAME first person: left stick move; right stick snap turn 30 degrees; A jump/double jump; right grip hold wrench, swing to hit, release a moving hand to throw; right stick click interacts or hold and move right hand for quick select; Y pause/skip; right trigger fires the selected Blaster/Pyrocitor or prepares a bomb for gesture release; Ratchet brown gloves; F8 recenter"
     );
     Ok(())
 }
@@ -283,7 +291,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         )
         .add_systems(
             PostUpdate,
-            pace_monitor_cameras.before(bevy::camera::CameraUpdateSystems),
+            (pace_monitor_cameras, eye_msaa).before(bevy::camera::CameraUpdateSystems),
         )
         .add_plugins((
             ExtractComponentPlugin::<GameEye>::default(),
@@ -700,6 +708,8 @@ fn follow_game_camera(
     mut main: Query<&mut Transform, (With<crate::fly_cam::FlyCam>, Without<XrTrackingRoot>)>,
     time: Res<Time<Real>>,
     travel: Res<crate::travel_render::Travel>,
+    scene: Res<crate::scene_render::ActiveScene>,
+    scene_runtime: Res<crate::scene_render::SceneRuntime>,
 ) {
     let Some(play) = play else { return };
     // Startup poses while the headset is on the desk are not the player's neutral pose.
@@ -749,13 +759,42 @@ fn follow_game_camera(
         return;
     }
     rig.front_root = None;
-    let boots = &play.game.hero.boots;
-    let on_rail = play.game.hero.group == 0xf && boots.rail.is_some() && boots.off_rail == 0;
     let now = time.elapsed_secs_f64();
     let dt = rig
         .rail_time
         .replace(now)
         .map_or(0.0, |old| (now - old).clamp(0.0, 0.05) as f32);
+    let pilot = travel.pilot_view(&play);
+    let actor_eye = scene
+        .running
+        .then(|| crate::scene_render::ratchet_eye(&scene_runtime))
+        .flatten()
+        .map(crate::tfrag_render::game_to_bevy);
+    let cinematic_eye = pilot.map(|(eye, _)| eye).or(actor_eye);
+    if let Some(eye) = cinematic_eye {
+        let yaw = if let Some((_, target)) = pilot {
+            let previous = rig.pilot_heading.unwrap_or(target);
+            let error = (target - previous).sin().atan2((target - previous).cos());
+            let next = previous + (error * (1.0 - (-dt / 0.35).exp())).clamp(-dt * 1.05, dt * 1.05);
+            rig.pilot_heading = Some(next);
+            next
+        } else {
+            rig.pilot_heading = None;
+            rig.world_yaw + rig.turn
+        };
+        let rotation = Quat::from_rotation_y(yaw - rig.yaw);
+        rig.cinematic_root = Some(Transform {
+            translation: eye
+                - rotation * (rig.center.unwrap_or(head.translation) * settings.units_per_metre),
+            rotation,
+            scale: Vec3::splat(settings.units_per_metre),
+        });
+    } else if !scene.running {
+        rig.cinematic_root = None;
+        rig.pilot_heading = None;
+    }
+    let boots = &play.game.hero.boots;
+    let on_rail = play.game.hero.group == 0xf && boots.rail.is_some() && boots.off_rail == 0;
     let direction = on_rail.then(|| rail_direction(&play.game)).flatten();
     let target_pitch = direction.map_or(0.0, |v| v.y.atan2(Vec2::new(v.x, v.z).length()));
     if on_rail {
@@ -815,6 +854,9 @@ fn follow_game_camera(
     let target_height = if matches!(play.game.hero.state, 0x18..=0x1b) {
         // Hanging with extended arms puts the eyes below the ledge, not alongside the palms.
         (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(0.45, 1.35)
+    } else if play.game.hero.state == 0x74 {
+        // Leave at least 55 cm above the eyes for the cable and the overhead wrench.
+        (play.game.hero.boots.cable_pt[2] - play.game.hero.position()[2] - 0.55).clamp(0.55, 1.15)
     } else if matches!(play.game.hero.group, 0x11 | 0x12) {
         0.45
     } else if play.game.hero.state == 4
@@ -830,7 +872,9 @@ fn follow_game_camera(
     );
     // The flight is drawn on a separate world layer, about its authored camera, not about the
     // hero left on the departure planet. Keep head-driven pitch/roll and show the actual voyage.
-    let root = if travel.blanked() {
+    let root = if rig.cinematic_root.is_some() {
+        rig.cinematic_root
+    } else if travel.blanked() {
         main.iter().next().map(|native| {
             rig_transform(
                 *native,
@@ -859,6 +903,20 @@ fn follow_game_camera(
         }
     }
 }
+fn eye_msaa(
+    render: Option<Res<crate::render_settings::RenderSettings>>,
+    supported: Option<Res<crate::render_settings::SupportedMsaa>>,
+    mut eyes: Query<&mut Msaa, Or<(With<GameEye>, With<EyeSky>)>>,
+) {
+    let Some(render) = render else { return };
+    let samples = supported.map_or(render.msaa, |s| s.clamp(render.msaa));
+    for mut msaa in &mut eyes {
+        if *msaa != samples {
+            *msaa = samples;
+        }
+    }
+}
+
 fn sky_policy(
     play: Option<Res<crate::gameplay::Play>>,
     mut cams: Query<

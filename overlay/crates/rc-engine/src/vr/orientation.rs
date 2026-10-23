@@ -42,8 +42,7 @@ fn sync(
     p.game.hero.tracked.navigation = None;
     if settings.desktop_preview
         || !focus.0
-        || !mode.free_movement()
-        || !p.game.hero.tracked.enabled
+        || (!(mode.free_movement() && p.game.hero.tracked.enabled) && !rig.cinematic_active())
         || p.death_pending
         || p.game.hero.health <= 0
         || crate::saves::front_end_active()
@@ -56,6 +55,13 @@ fn sync(
         return;
     };
     let head = root.mul_transform(head);
+    let native = p.game.camera.out;
+    p.game.hero.tracked.view = Some(view(native, head));
+    p.game.hero.tracked.view_origin = p.game.hero.position();
+    if rig.cinematic_active() {
+        // The listener rides with the pilot/scene actor; the authored actor keeps its own body pose.
+        return;
+    }
     let up = rig.surface_up();
     let forward = *head.forward();
     // Looking at the floor/ceiling must not erase or reverse the walking basis.
@@ -69,10 +75,7 @@ fn sync(
     }
     let mut navigation = Transform::from_translation(head.translation);
     navigation.look_to(forward.normalize(), up);
-    let native = p.game.camera.out;
-    p.game.hero.tracked.view = Some(view(native, head));
     p.game.hero.tracked.navigation = Some(view(native, navigation));
-    p.game.hero.tracked.view_origin = p.game.hero.position();
     // Apply before collision/ground probes too, including a stationary physical turn.
     p.game.hero.tracked_face();
 }

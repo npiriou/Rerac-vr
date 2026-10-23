@@ -405,3 +405,31 @@ Measured original model side-handle anchor (0.125,-0.415,-0.270) shared by gold 
 Shared native eligibility/input-window/height/cable code; native flip gates after frames 18/20 retained. Physical preparation 5 cm down at 1.2 m/s with separate interpolated 28 ms velocity history. Buffer uses native timing until eligible. VR dives immediately in native falling phase, retaining native acceleration, terminal speed, shockwave, damage and landing haptics. Normal/button windup and ordinary swing thresholds unchanged.
 
 VR/non-VR cargo checks and Windows executable build passed. SHA-256 `79C3B1173214D4A15247ECC08A02CE59EE4EB691337D0CC5E6358FF3F41EE5D3`; build `work/vr/rail-ledge-hyper-comfort-build.log`. NOT RUN: user explicitly requested no game launch/restart. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on rail stability/comfort, lower hanging camera, easier grip/pull-up, gold Devastator handle and immediate physical Hyper Strike.
+
+## Native ledge hands, grip priority, swapped Start/Triangle and High defaults
+
+Accepted hands use Ratchet's native reach/hang palette without weapon layers and retain original wall-facing wrist/finger pose, depth and height at their individual edge anchors. Other hands retain ordinary controller presentation. One hand suffices for hang/sideways traversal; two-hand pull-up gesture retained.
+
+Left grip, available ledge candidate and attached/hanging right hand block a new wrench request. Fresh request waits one native collision/probe tick. Suppressed squeezes require release/new press; a ledge release cannot throw. Accepted right anchors hide held models in the same presentation frame. Ordinary throws outside ledge use retained.
+
+Y (Index left B/Microsoft left menu) is native Start/pause/frontend/queued cinematic skip. Right-stick click is native Triangle/context/vendor cancel/held quick select; left-hand displacement chooses the sector. Held right-stick click plus horizontal stick changes page. Left-stick click remains Select/map.
+
+Port Options High preset requests 8x MSAA (GPU capability clamp), Sharp anisotropic textures, Maximum model detail and SharpPixels HUD. First VR startup adopts High plus enabled shadows, including existing settings, with a one-time marker; later user changes persist. Forced VR RC_MSAA=0 removed; world/sky headset cameras follow native RenderSettings MSAA. Original desktop defaults and display geometry retained.
+
+VR/non-VR cargo checks and Windows executable build passed. SHA-256 `2DC908457014F7A405CC68C3F412DD8C65FA85C164B8B2AF7A818AFB2BBA1260`; build `work/vr/ledge-hands-controls-high-build.log`. NOT RUN: prior user request not to launch/restart the game retained. NOT RUN per AGENTS.md. Existing binding expectations updated; no tests or gameplay interaction scripts run. Pending headset feedback on original hooked ledge fingers, single-hand retention and wrench suppression, new Start/Triangle mapping, and High/MSAA rendering and performance.
+
+## Physical cranks and first-person cinematics
+
+Held wrench head seats within 0.50 units of class-280 socket; right-grip hold and optical quaternion twist/tangential hand travel advance the original angle/progress and native consumers/save/mission completion. Withdrawal and release disengage without throwing. Tracking discontinuities do not turn the crank. Native desktop crank path retained.
+
+Right-hand tracking displacement chooses sectors while right-stick click (Triangle) is held. Release confirms; right-stick horizontal edges change pages. Y remains Start/pause/skip.
+
+Native event timelines and progression retained; VR suppresses letterbox primitives, gameplay director holds/poses/teleports/animation overrides and blocking cutaway entry fades. Collision, movement, jumping and weapon input continue. Mode-2 actor scenes, mode-6 travel and puzzle controls retain their native state machines.
+
+Engine/dialogue scene eye follows the rendered class-0 Ratchet head, using the already-evaluated native palette. Head rotation remains tracked; duplicate Ratchet scene mesh hidden. Listener follows the VR eye. Ship takeoff/landing uses the animated ship origin plus native per-ship Ratchet seat and 0.85-unit seated-eye offset, with bounded/smoothed heading. Real video remains video.
+
+Cable-slide state 0x74 targets eye height 0.55 units below the cable, capped to 0.55..1.15 units above feet, through native VR posture blending.
+
+Outbound and returning wrench models stay level and spin around world up, independent of release wrist pitch/roll. Native trajectories, hit tests, bounce and catch retained.
+
+Non-VR cargo check, VR cargo check and Windows executable build passed. Guarded patch regeneration and git diff --check passed. SHA-256 `E092B0F431794EB2987087DCCB53F1324A8BB7916D8E16B20DA6185D77CBBBA6`; build `work/vr/cranks-cinematics-complete-build.log`. NOT RUN per AGENTS.md; no smoke tests, headset launch or gameplay scripts run for this change. Existing debug executable was closed gracefully to allow rebuilding; game not restarted. Pending headset confirmation of crank socket geometry/turning, short-cutaway movement during all trigger variants, head/seat positions on all three ships, cable clearance and horizontal wrench spin.

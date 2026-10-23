@@ -5,6 +5,11 @@ use crate::ps2v::Pf;
 #[derive(Clone, Debug, Default)]
 pub struct Tracked {
     pub enabled: bool,
+    /// Physical wrench socket, with this simulation tick's tracking-only angular travel.
+    pub crank_target: Option<usize>,
+    pub crank_turn: f32,
+    /// The last gameplay tick belonged to a short camera cutaway, not a dialogue/ship scene.
+    pub cutaway_free: bool,
     pub pack_jump: bool,
     /// Physical tool insertion; separate from the hero's actual ground collision.
     pub utility_target: Option<usize>,
