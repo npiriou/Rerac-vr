@@ -208,7 +208,14 @@ pub fn game_plugins(plugins: PluginGroupBuilder) -> PluginGroupBuilder {
     if !super::game_requested() {
         return plugins;
     }
-    let plugins = plugins.disable::<PipelinedRenderingPlugin>();
+    // Pipelined rendering (Bevy's default, kept by the desktop game) overlaps the next frame's
+    // simulation with this frame's render and its xrEndFrame GPU wait; bevy_mod_openxr then
+    // predicts poses one display period further. RC_VR_PIPELINED=0 restores the serial loop.
+    let plugins = if std::env::var("RC_VR_PIPELINED").is_ok_and(|s| s.trim() == "0") {
+        plugins.disable::<PipelinedRenderingPlugin>()
+    } else {
+        plugins
+    };
     if std::env::var("RC_VR_DESKTOP_PREVIEW").is_ok_and(|s| s == "1") {
         plugins.set(bevy::render::RenderPlugin {
             render_creation: bevy::render::settings::RenderCreation::Automatic(Box::new(
@@ -310,6 +317,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     } else {
         app.insert_resource(OxrSessionConfig::default())
             .add_plugins(GameInputPlugin)
+            .add_plugins(super::timing::FrameTimingPlugin)
             .add_systems(Startup, super::require_headset)
             .add_systems(XrPreDestroySession, reset_session)
             .add_systems(XrSessionCreated, configure_eyes.after(XrViewInit));

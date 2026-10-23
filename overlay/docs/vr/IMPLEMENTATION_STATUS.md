@@ -119,3 +119,8 @@ Spatial sound allocation (hero/mobys/items, contextual interactions and UI) and 
 Grind rails anchor VR yaw to the native rail tangent and follow its changing direction, without copying Ratchet's sideways riding stance. The rail grade is blended into camera pitch at up to 1.8 rad/s, then blended back to level on exit; head look-around remains independent. Entry records the current tracking-space head position, room-scale lean does not move the capsule off the rail, and exit consumes the remaining physical offset through ordinary collision-constrained room-scale movement. Pause retains the rail reference. Each rendered frame advances the pitch blend only once.
 
 Compilation/startup evidence is recorded separately. Physical turning, stereo left/right, magnetic-track direction and rail comfort still require headset feedback. No tests or gameplay interaction scripts were run.
+
+
+## PC performance configuration
+
+The visibility rewrite was rejected and archived outside the active source trees. Original engine entrypoints remain unchanged. The current PC configuration uses a native CPU Release build, a dedicated NVIDIA maximum-performance application profile, default task pools and production Vulkan debug/validation flags. Earlier configurations have free-play headset timing records; the active Release build has either its own capture or an explicit pending status in validation.json. No controlled FPS gain or full visual certification is claimed. No tests, scripted gameplay or commit. See [PERFORMANCE.md](PERFORMANCE.md) and the pc_performance_configuration record.

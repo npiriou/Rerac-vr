@@ -366,3 +366,30 @@ Headset position and full forward/left/up basis feed sound allocation and per-ti
 Grind yaw follows the native rail tangent instead of Ratchet's sideways stance; grade follows with pitch blending capped at 1.8 rad/s, including level recovery after exit. Physical head look-around/lean retained; entry uses current tracking head position. Rail lean cannot displace native capsule; exit offset goes through ordinary collision-constrained room-scale movement. Pause retains rail reference and pitch blend uses elapsed time once per rendered frame.
 
 VR/non-VR checks and executable build passed. SHA-256 `B4250C4ED75823CD4509327FC4149F479CD5CCC4BFB1713B3D58E9B7AF7C871B`. Build `work/vr/head-facing-rails-build.log`; debug-gold launch `work/vr/debug-gold-kerwan-headset-20261023-162116.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on stationary body turns, stereo channel direction, forward/strafe/back movement on magnetic walls/ceilings, and grind rail entry/curves/grades/exit comfort.
+
+
+## First CPU visibility optimisation
+
+The live captures motivated a single parallel entity traversal for every active view, replacing only Bevy's CPU culler in original-game VR. Hidden entities are rejected once; transformed bounds and retained per-thread queues are reused. Per-eye frustum/layer/range predicates, sorted outputs, visibility state tracking and the original game's LOD/culling remain. Minimum parallel batch: 2,048. Range/gizmo ordering preserved. The VR dev build now also optimises the game crates at level 3 while retaining debug symbols. Graphics settings remain unchanged. Details and rollback: [PERFORMANCE.md](overlay/docs/vr/PERFORMANCE.md).
+
+Non-VR check, VR check and opt-level-3 executable build passed. SHA-256 `AB8B1445DEE514FE7890CB995E9A7CF1FBD1B19018DBCAA8D3DDCB594410B042`. Successful build: `work/vr/build-20261023-165443.log`. New module formatting, PowerShell syntax and source/script payload equality also checked.
+
+The first build generated the new executable but Cargo could not replace the running image. The original executable (B4250C4E) was preserved as `target/debug/rerac-running-B4250C4E.exe`, leaving PID 258700 running. Rebuilding then completed successfully and installed the new binary at `target/debug/rerac.exe`. No session was closed or restarted.
+
+NOT RUN per AGENTS.md: unit tests, smoke tests, scripted gameplay and new headset benchmark. The binary is built but has not been launched. Performance benefit and visual equivalence still require matched headset feedback; no FPS gain is claimed. No commit created.
+
+## Optimized startup recovery
+
+User-requested launch exposed two independent startup issues. The main thread first waited in SteamVR vrclient_x64.dll / WaitNamedPipeW; gracefully closing SteamVR and reopening it restored the namespace connection. Startup then exposed a Bevy resource_scope assertion in the new visibility installer: PostUpdate system initialization recreated the temporarily extracted Schedules resource. The installer now temporarily extracts only PostUpdate and keeps Schedules available.
+
+Non-VR/VR cargo checks and optimized executable build passed. SHA-256 `D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED`; build `work/vr/build-20261023-170529.log`. Ordinary debug-gold Kerwan headset startup observed in `work/vr/debug-gold-kerwan-headset-20261023-170736.log`. No unit tests, smoke tests, scripted play, performance benchmark or commit. Physical visual feedback and matched-scene FPS comparison remain pending.
+
+## Performance experiment rollback after headset feedback
+
+The user confirmed headset access after PICO reconnection but reported worse lag than before the changes. The new visibility wall time alone does not establish the cause. Both changes were rolled back together: original game.rs/mod.rs and Build.ps1 restored byte-for-byte from package HEAD; the previous B4250C4E executable restored after closing the experimental game cleanly. Experimental source is retained but unregistered/uncompiled, and the rejected D3914197 executable/build record are preserved locally. Graphics settings were unchanged; SteamVR was not restarted during rollback. The previous executable was relaunched in debug-gold Kerwan. No new compilation, tests, scripted interactions, benchmark or commit were performed for this rollback. Post-rollback headset feedback remains pending.
+
+## Native Release PC configuration
+
+Built original VR engine sources in Release with RUSTFLAGS=-C target-cpu=native and four concurrent build jobs. Non-VR and VR compilation checks and native executable build passed. SHA-256 `9796AF47120BBF3043AE33D56087E12ED6368BB10D6EFBFF530C81925B91F8E3`. Source game.rs/mod.rs and Build.ps1 match package HEAD; rejected visibility.rs removed from both active trees after matching its preserved archive. No engine source rewrite or graphics preset changes.
+
+Dedicated NVIDIA rerac.exe maximum-performance profile activated after relaunch: GPU P0 at about 1,785 MHz rather than earlier 255-630 MHz samples. Default thread pools retained after no clear gain from RC_THREADS=8. The local performance launcher selects Release and production Vulkan WGPU debug/validation flags. Runtime `work/vr/debug-gold-kerwan-headset-20261023-180424.log`. pc_performance_configuration records the active Release capture or explicit pending status; earlier scenes varied, no controlled benchmark or guaranteed FPS improvement. No unit tests, smoke tests, scripted gameplay or commit.

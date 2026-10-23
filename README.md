@@ -10,10 +10,10 @@ Physical headset movement parallel to the current floor moves the original Ratch
 
 ## Local use
 
-Apply to a fresh checkout of the pinned upstream commit with `Apply-Overlay.ps1 -Repository <path>`, then build with `scripts/vr/Build.ps1`.
+Apply to a fresh checkout of the pinned upstream commit with `Apply-Overlay.ps1 -Repository <path>`, then build for play with `scripts/vr/Build.ps1 -Release`.
 
 ```powershell
-.\scripts\vr\Run.ps1 -DataDir 'X:\dev\rerac\extracted'
+.\scripts\vr\Run.ps1 -Release -DataDir 'X:\dev\rerac\extracted'
 ```
 
 The standard launch is `normal`: the native boot flow, logos, Press Start and main menu (New Game, Load Game, Options), with original progression and starting equipment/ammunition. New Game uses the native initial save template. VR grants and planet unlocks are disabled in this mode.
@@ -25,8 +25,8 @@ The standard launch is `normal`: the native boot flow, logos, Press Start and ma
 | `debug-gold` | Same as debug, with all ten native gold upgrades enabled |
 
 ```powershell
-.\scripts\vr\Run.ps1 -Mode debug -DataDir 'X:\dev\rerac\extracted'
-.\scripts\vr\Run.ps1 -Mode debug-gold -DataDir 'X:\dev\rerac\extracted'
+.\scripts\vr\Run.ps1 -Release -Mode debug -DataDir 'X:\dev\rerac\extracted'
+.\scripts\vr\Run.ps1 -Release -Mode debug-gold -DataDir 'X:\dev\rerac\extracted'
 ```
 
 Debug modes accept `-Scene novalis` for the previous level-1 start. Each mode uses a separate native memory card under `work/vr/saves/<mode>`. Debug saves cannot unlock normal-mode progression. All native level transitions use the same VR integration; full VR playthroughs of every destination remain unverified. Use your supported RAC1 extraction; no disc data or binaries are shipped here. Audio stays enabled unless you explicitly set `RC_AUDIO=0`.
@@ -34,7 +34,7 @@ Debug modes accept `-Scene novalis` for the previous level-1 start. Each mode us
 For an automated desktop check of the original game and both stereo rendering paths:
 
 ```powershell
-.\scripts\vr\Run.ps1 -Mode debug -Scene novalis -DataDir 'X:\dev\rerac\extracted' -DesktopPreview -SmokeTestSeconds 12
+.\scripts\vr\Run.ps1 -Release -Mode debug -Scene novalis -DataDir 'X:\dev\rerac\extracted' -DesktopPreview -SmokeTestSeconds 12
 ```
 
 The window remains playable with the original keyboard/gamepad controls. Preview renders two offscreen eye views; it does not simulate a headset. The old calibration room remains available only with explicit `-Scene calibration`.
@@ -80,6 +80,8 @@ Grip release requires a valid tracked throw gesture; slow releases and tracking/
 The Bomb Glove requires ownership and available ammunition from the existing inventory. With its glove selected, the bomb follows the hand while the right trigger is held. After a valid release gesture, the original bomb simulation handles gravity, collisions, fuse, explosion, damage and effects. A slow release, lost tracking/focus, pause, death or a blocked hand cancels preparation without consuming ammunition. A fresh trigger press is required for each new bomb.
 
 ## Implementation and validation
+
+The visibility rewrite was rolled back and archived outside the active source trees. For play, use the Release build; the measured PC also uses a native CPU build, a dedicated NVIDIA maximum-performance application profile and production Vulkan GPU diagnostics settings. No engine source or graphics quality settings were changed for this configuration. Live timing and rollback details: [PERFORMANCE.md](overlay/docs/vr/PERFORMANCE.md).
 
 Guarded source edits are in `patch-manifest.json`; new modules and scripts are in `overlay/`. `resolved-Cargo.lock` pins the verified dependency graph. The default desktop path remains available without `RC_VR=1` and without the optional `vr` feature.
 

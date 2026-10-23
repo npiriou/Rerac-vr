@@ -21,6 +21,7 @@ mod diagnostics;
 mod interaction;
 mod preview;
 mod scene;
+mod timing;
 
 use self::core::V3;
 use anyhow::{Context, Result, ensure};
