@@ -124,3 +124,16 @@ Compilation/startup evidence is recorded separately. Physical turning, stereo le
 ## PC performance configuration
 
 The visibility rewrite was rejected and archived outside the active source trees. Original engine entrypoints remain unchanged. The current PC configuration uses a native CPU Release build, a dedicated NVIDIA maximum-performance application profile, default task pools and production Vulkan debug/validation flags. Earlier configurations have free-play headset timing records; the active Release build has either its own capture or an explicit pending status in validation.json. No controlled FPS gain or full visual certification is claimed. No tests, scripted gameplay or commit. See [PERFORMANCE.md](PERFORMANCE.md) and the pc_performance_configuration record.
+
+
+## Rail comfort, ledge reach, gold Devastator support and physical Hyper Strike
+
+Rail camera direction is sampled across 1.5 units behind and 2.5–5 units ahead of the native spline cursor, rather than copying a single segment tangent. Yaw uses a 350 ms exponential response, a 0.006-radian dead zone and a 1.05 rad/s turn limit. Pitch uses a 500 ms response, a 0.008-radian dead zone and a 0.35 rad/s limit. Translation has an 80 ms filter while riding, recovering on exit; large teleports rebase. Rail entry preserves the current gaze instead of forcing a turn. Physical headset rotation stays direct.
+
+Ledge hanging places the neutral eye about 38 cm below the ledge/palms, with the existing posture blend. Valid native ledges accept a hand within 80 cm horizontally and 50 cm vertically (48 cm into/across the wall for initial reach). Retention and native top/clearance checks remain. Pull-up needs a 12 cm downward stroke at 1.15 m/s from both gripped hands within 180 ms. Lateral anchor correction and its drift/validation limits are unchanged.
+
+Gold Devastator support is anchored at the centre of the actual class-157 side handle, model coordinates (0.125, -0.415, -0.270). The support-grip capture/aim target and rendered left palm use the same point. The original layered finger/wrist pose is retained; the ordinary Devastator is unchanged.
+
+Hyper Strike's airborne animation gates and native height/cable rules are shared by button and VR paths. In particular, the native flip gates are strictly after frame 18, or 20 for flip kind 3, rather than the former VR-only 25/26 gates. A 5 cm downward wrench-hand stroke at 1.2 m/s uses a separate interpolated 28 ms velocity window; normal melee/throw smoothing and hit thresholds remain unchanged. The gesture can stay prepared within the same native input-buffer windows while a flip becomes eligible. An accepted VR gesture enters native state 0x14 at its falling animation phase, cancels upward velocity, and skips the additional upward/windup delay. Native descent acceleration, terminal velocity, shockwave/contact damage and landing haptics remain. Desktop/button windup is retained.
+
+No tests or gameplay interaction scripts were run. The game is not launched or restarted at the user's request. Compilation evidence is separate from pending headset feedback on comfort, grabbing/pull-up, the gold handle and immediate Hyper Strike.

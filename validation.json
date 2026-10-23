@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-23T11:07:02.172135+00:00",
-  "delivery_status": "native_release_pc_configuration_headset_timing_pending",
+  "updated_utc": "2026-10-23T13:03:29.229979+00:00",
+  "delivery_status": "rail_ledge_hyper_comfort_built_not_launched_at_user_request",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -23,9 +23,9 @@
     "scope": "Historical result; not rerun for arsenal/traversal expansion"
   },
   "native_windows_build": {
-    "profile": "release",
-    "executable_sha256": "9796AF47120BBF3043AE33D56087E12ED6368BB10D6EFBFF530C81925B91F8E3",
-    "completed_utc": "2026-10-23T11:03:08.4590813Z",
+    "profile": "debug",
+    "executable_sha256": "79C3B1173214D4A15247ECC08A02CE59EE4EB691337D0CC5E6358FF3F41EE5D3",
+    "completed_utc": "2026-10-23T13:03:25.5295812Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -35,41 +35,7 @@
     "gpu_budget_measured": false,
     "git_worktree_dirty": true,
     "rustc": "rustc 1.97.1 (8bab26f4f 2026-07-14)",
-    "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
-    "rust_optimization_level": 3,
-    "rustflags": "-C target-cpu=native",
-    "native_cpu_features": [
-      "target_feature=\"adx\"",
-      "target_feature=\"aes\"",
-      "target_feature=\"avx\"",
-      "target_feature=\"avx2\"",
-      "target_feature=\"bmi1\"",
-      "target_feature=\"bmi2\"",
-      "target_feature=\"cmpxchg16b\"",
-      "target_feature=\"f16c\"",
-      "target_feature=\"fma\"",
-      "target_feature=\"fxsr\"",
-      "target_feature=\"lzcnt\"",
-      "target_feature=\"movbe\"",
-      "target_feature=\"pclmulqdq\"",
-      "target_feature=\"popcnt\"",
-      "target_feature=\"rdrand\"",
-      "target_feature=\"rdseed\"",
-      "target_feature=\"sha\"",
-      "target_feature=\"sse\"",
-      "target_feature=\"sse2\"",
-      "target_feature=\"sse3\"",
-      "target_feature=\"sse4.1\"",
-      "target_feature=\"sse4.2\"",
-      "target_feature=\"sse4a\"",
-      "target_feature=\"ssse3\"",
-      "target_feature=\"vaes\"",
-      "target_feature=\"vpclmulqdq\"",
-      "target_feature=\"xsave\"",
-      "target_feature=\"xsavec\"",
-      "target_feature=\"xsaveopt\"",
-      "target_feature=\"xsaves\""
-    ]
+    "commit": "89c87e98f9d8296187df2a6310c67b32144090d3"
   },
   "all_targets_check": {
     "status": "PASS",
@@ -970,5 +936,17 @@
     "physical_validation": "User free play observed through live logs; subjective smoothness and full visual/gameplay equivalence are not certified",
     "launch_script": "X:/dev/Rerac-vr/.local-build/Launch-Performance-ReRAC-VR.ps1",
     "rollback": "Original B4250C4E and unchanged-source dev opt3 A3E2431D builds preserved in target/debug; remove the dedicated NVIDIA application profile to restore previous power policy"
+  },
+  "rail_ledge_hyper_comfort": {
+    "binary_sha256": "79C3B1173214D4A15247ECC08A02CE59EE4EB691337D0CC5E6358FF3F41EE5D3",
+    "build_log": "work/vr/rail-ledge-hyper-comfort-build.log",
+    "rail": "Direction sampled over 1.5 units behind and 2.5-5 ahead; yaw response 350 ms/dead zone 0.006 rad/max 1.05 rad/s; pitch 500 ms/dead zone 0.008 rad/max 0.35 rad/s; translation 80 ms; entry gaze retained, headset look tracking direct.",
+    "ledge": "Neutral eye about 38 cm below palms; capture 80 cm horizontal, 50 cm vertical, 48 cm initial wall-normal reach. Two gripped hands push down 12 cm at 1.15 m/s within 180 ms. Lateral traversal logic unchanged.",
+    "gold_devastator": "Measured original model side-handle anchor (0.125,-0.415,-0.270) shared by gold support capture/aim and rendered palm. Native finger pose retained; ordinary Devastator untouched.",
+    "hyper_strike": "Shared native eligibility/input-window/height/cable code; native flip gates after frames 18/20 retained. Physical preparation 5 cm down at 1.2 m/s with separate interpolated 28 ms velocity history. Buffer uses native timing until eligible. VR dives immediately in native falling phase, retaining native acceleration, terminal speed, shockwave, damage and landing haptics. Normal/button windup and ordinary swing thresholds unchanged.",
+    "validation": "VR/non-VR cargo checks and Windows executable build passed.",
+    "launch": "NOT RUN: user explicitly requested no game launch/restart.",
+    "tests": "NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences.",
+    "physical_validation": "Pending headset feedback on rail stability/comfort, lower hanging camera, easier grip/pull-up, gold Devastator handle and immediate physical Hyper Strike."
   }
 }

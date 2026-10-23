@@ -127,10 +127,10 @@ fn drive(
                         - crate::tfrag_render::game_to_bevy(actual);
                     grips += 1;
                 }
-                if start.y - hand.translation.y > 0.22 && gestures.velocity[side].y < -2.2 {
+                if start.y - hand.translation.y > 0.12 && gestures.velocity[side].y < -1.15 {
                     gestures.shove_at[side] = Some(now);
                 }
-                if start.y - hand.translation.y < 0.08 {
+                if start.y - hand.translation.y < 0.04 {
                     gestures.shove_at[side] = None;
                 }
             }
@@ -162,7 +162,7 @@ fn drive(
         .zip(gestures.shove_at[1])
         .is_some_and(|(a, b)| {
             // A small simultaneity window accommodates the two independently sampled hands.
-            (a - b).abs() <= 0.10 && now - a < 0.10 && now - b < 0.10
+            (a - b).abs() <= 0.18 && now - a < 0.18 && now - b < 0.18
         });
     if t.ledge_jump {
         gestures.shove_at = [None; 2];

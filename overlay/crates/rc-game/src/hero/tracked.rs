@@ -16,6 +16,7 @@ pub struct Tracked {
     pub hands: [Option<[f32; 3]>; 2],
     pub grips: [bool; 2],
     pub hyper_strike: bool,
+    pub hyper_buffer: i32,
     pub ledge_jump: bool,
     pub ledge_delta: [f32; 3],
     pub anchors: [Option<[f32; 3]>; 2],
@@ -96,8 +97,8 @@ impl Hero {
                     });
                 if self.tracked.grips[side]
                     && self.tracked.hands[side].is_some_and(|h| {
-                        (h[0] - anchor[0]).hypot(h[1] - anchor[1]) < 0.65
-                            && (h[2] - anchor[2]).abs() < 0.35
+                        (h[0] - anchor[0]).hypot(h[1] - anchor[1]) < 0.80
+                            && (h[2] - anchor[2]).abs() < 0.50
                     })
                 {
                     self.tracked.grabbed[side] = true;
@@ -144,7 +145,7 @@ impl Hero {
                             // Reach along the edge is wider than reach into/across it.
                             let normal =
                                 d[0] * self.ledge_blk.yaw.cos() + d[1] * self.ledge_blk.yaw.sin();
-                            d[0].hypot(d[1]) < 0.65 && normal.abs() < 0.38 && d[2].abs() < 0.35
+                            d[0].hypot(d[1]) < 0.80 && normal.abs() < 0.48 && d[2].abs() < 0.50
                         });
                 }
                 if !self.tracked.grabbed.iter().any(|&g| g) {
@@ -155,24 +156,17 @@ impl Hero {
         if super::walloper::tracked_fire(self, c) {
             return true;
         }
-        let slam = std::mem::take(&mut self.tracked.hyper_strike);
-        let frame = c.anim.view().frame;
-        let air = matches!(self.state, 6 | 7 | 8 | 9 | 0x2d | 0x11)
-            || (self.state == 0xe && frame > 32.0)
-            || (self.state == 0xb && frame > if self.jump.kind7a0 != 3 { 25.0 } else { 26.0 });
-        let clearance = if self.jump.descending == 0 { 0.1 } else { 0.57 };
-        if slam
-            && self.items.slot.id == 8
-            && self.items.slot.state == 2
-            && air
-            && self.air_ticks != 0
-            && self.timer > ticks(10)
-            && self.height > crate::ps2v::Pf::f(clearance)
-            && self.gravity_mode == 0
-            && !super::boots::cable_contact(self)
-        {
-            self.set_state(c, 0x14, true);
+        if std::mem::take(&mut self.tracked.hyper_strike) {
+            self.tracked.hyper_buffer = ticks(0x12);
+        }
+        let age = ticks(0x12) - self.tracked.hyper_buffer;
+        if self.tracked.hyper_buffer > 0 && self.try_tracked_jump_attack(c, age) {
+            self.tracked.hyper_buffer = 0;
             return true;
+        }
+        self.tracked.hyper_buffer = (self.tracked.hyper_buffer - 1).max(0);
+        if self.grounded() || self.state == 0x14 {
+            self.tracked.hyper_buffer = 0;
         }
         let charge = std::mem::take(&mut self.tracked.pack_jump);
         if charge && matches!(self.state, 0 | 2 | 3 | 4 | 0x73) && self.grounded() {

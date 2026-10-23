@@ -64,6 +64,7 @@ pub(super) struct Motion {
     release: Option<(Transform, Vec3, f64)>,
     samples: VecDeque<(f64, Vec3)>,
     velocity: Vec3,
+    slam_velocity: Vec3,
     revision: u64,
     level: u32,
     serial: u64,
@@ -195,6 +196,7 @@ pub(super) fn capture(
         motion.release = None;
         motion.samples.clear();
         motion.velocity = Vec3::ZERO;
+        motion.slam_velocity = Vec3::ZERO;
         motion.bomb = BombGesture::default();
         return;
     };
@@ -220,6 +222,24 @@ pub(super) fn capture(
         let dt = (now - t) as f32;
         if dt > 0.008 {
             (hand.translation - *p) / dt
+        } else {
+            Vec3::ZERO
+        }
+    });
+    // Hyper Strike needs a short preparation window; retain the longer combat/throw history.
+    let start = now - 0.028;
+    let mut origin = motion.samples.front().copied();
+    for i in 1..motion.samples.len() {
+        let (a, p) = motion.samples[i - 1];
+        let (b, q) = motion.samples[i];
+        if a <= start && start <= b && b > a {
+            origin = Some((start, p.lerp(q, ((start - a) / (b - a)) as f32)));
+            break;
+        }
+    }
+    motion.slam_velocity = origin.map_or(Vec3::ZERO, |(t, p)| {
+        if now - t >= 0.008 {
+            (hand.translation - p) / (now - t) as f32
         } else {
             Vec3::ZERO
         }
@@ -765,15 +785,15 @@ fn interact(
         melee.down_from = None;
         return;
     }
-    if motion.velocity.y > -0.4 {
+    if motion.slam_velocity.y > -0.25 {
         melee.down_from = Some(hand.translation);
     }
     if !p.game.hero.grounded()
         && now >= melee.slam_until
-        && motion.velocity.y < -1.5
+        && motion.slam_velocity.y < -1.2
         && melee
             .down_from
-            .is_some_and(|v| v.y - hand.translation.y >= 0.10)
+            .is_some_and(|v| v.y - hand.translation.y >= 0.05)
     {
         p.game.hero.tracked.hyper_strike = true;
         melee.slam_until = now + 0.5;

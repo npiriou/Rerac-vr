@@ -393,3 +393,15 @@ The user confirmed headset access after PICO reconnection but reported worse lag
 Built original VR engine sources in Release with RUSTFLAGS=-C target-cpu=native and four concurrent build jobs. Non-VR and VR compilation checks and native executable build passed. SHA-256 `9796AF47120BBF3043AE33D56087E12ED6368BB10D6EFBFF530C81925B91F8E3`. Source game.rs/mod.rs and Build.ps1 match package HEAD; rejected visibility.rs removed from both active trees after matching its preserved archive. No engine source rewrite or graphics preset changes.
 
 Dedicated NVIDIA rerac.exe maximum-performance profile activated after relaunch: GPU P0 at about 1,785 MHz rather than earlier 255-630 MHz samples. Default thread pools retained after no clear gain from RC_THREADS=8. The local performance launcher selects Release and production Vulkan WGPU debug/validation flags. Runtime `work/vr/debug-gold-kerwan-headset-20261023-180424.log`. pc_performance_configuration records the active Release capture or explicit pending status; earlier scenes varied, no controlled benchmark or guaranteed FPS improvement. No unit tests, smoke tests, scripted gameplay or commit.
+
+## Rail/ledge comfort, gold support grip and immediate VR Hyper Strike
+
+Direction sampled over 1.5 units behind and 2.5-5 ahead; yaw response 350 ms/dead zone 0.006 rad/max 1.05 rad/s; pitch 500 ms/dead zone 0.008 rad/max 0.35 rad/s; translation 80 ms; entry gaze retained, headset look tracking direct.
+
+Neutral eye about 38 cm below palms; capture 80 cm horizontal, 50 cm vertical, 48 cm initial wall-normal reach. Two gripped hands push down 12 cm at 1.15 m/s within 180 ms. Lateral traversal logic unchanged.
+
+Measured original model side-handle anchor (0.125,-0.415,-0.270) shared by gold support capture/aim and rendered palm. Native finger pose retained; ordinary Devastator untouched.
+
+Shared native eligibility/input-window/height/cable code; native flip gates after frames 18/20 retained. Physical preparation 5 cm down at 1.2 m/s with separate interpolated 28 ms velocity history. Buffer uses native timing until eligible. VR dives immediately in native falling phase, retaining native acceleration, terminal speed, shockwave, damage and landing haptics. Normal/button windup and ordinary swing thresholds unchanged.
+
+VR/non-VR cargo checks and Windows executable build passed. SHA-256 `79C3B1173214D4A15247ECC08A02CE59EE4EB691337D0CC5E6358FF3F41EE5D3`; build `work/vr/rail-ledge-hyper-comfort-build.log`. NOT RUN: user explicitly requested no game launch/restart. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on rail stability/comfort, lower hanging camera, easier grip/pull-up, gold Devastator handle and immediate physical Hyper Strike.

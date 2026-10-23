@@ -63,6 +63,7 @@ pub(super) struct Rig {
     rail_center: Option<Vec3>,
     rail_pitch: f32,
     rail_time: Option<f64>,
+    rail_position: Option<Vec3>,
 }
 pub(super) fn native_panel(play: &crate::gameplay::Play) -> bool {
     let gold_bolt = play
@@ -102,7 +103,9 @@ impl Rig {
         let rotation = self.gravity_frame
             * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw)
             * Quat::from_rotation_x(self.rail_pitch);
-        let eye = crate::tfrag_render::game_to_bevy(game.hero.position())
+        let eye = self
+            .rail_position
+            .unwrap_or_else(|| crate::tfrag_render::game_to_bevy(game.hero.position()))
             + self.gravity_frame * Vec3::Y * self.eye_height.unwrap_or(1.6);
         // Room-scale displacement has already been consumed by the native capsule.
         Some(Transform {
@@ -669,6 +672,22 @@ fn align_body(
     play.roomscale_move(coll, super::embodied::game_point(delta));
 }
 
+fn rail_direction(game: &rc_game::tick::Game) -> Option<Vec3> {
+    let b = &game.hero.boots;
+    let path = game.grind_paths.get(b.rail?)?;
+    if path.points.len() < 2 {
+        return None;
+    }
+    // Look across several joints instead of copying the current polyline segment's tangent.
+    let reach = (b.speed.abs() / rc_game::hero::physics::DT.to_f32() * 0.18).clamp(2.5, 5.0);
+    let mut behind = b.cur;
+    let mut ahead = b.cur;
+    let a = rc_game::spline::advance(&path.points, b.closed, -1.5, &mut behind).0;
+    let z = rc_game::spline::advance(&path.points, b.closed, reach, &mut ahead).0;
+    let direction = crate::tfrag_render::game_to_bevy(z) - crate::tfrag_render::game_to_bevy(a);
+    (direction.length_squared() > 0.01).then(|| direction.normalize())
+}
+
 fn follow_game_camera(
     settings: Res<Settings>,
     views: Option<Res<OxrViews>>,
@@ -702,6 +721,7 @@ fn follow_game_camera(
         rig.rail_heading = None;
         rig.rail_center = None;
         rig.rail_pitch = 0.0;
+        rig.rail_position = None;
         rig.head = Some(head.translation);
         rig.previous_head = Some(head.translation);
         rig.revision = rig.revision.wrapping_add(1);
@@ -731,28 +751,53 @@ fn follow_game_camera(
     rig.front_root = None;
     let boots = &play.game.hero.boots;
     let on_rail = play.game.hero.group == 0xf && boots.rail.is_some() && boots.off_rail == 0;
-    if on_rail {
-        let rail = boots.yaw - std::f32::consts::FRAC_PI_2;
-        if let Some(previous) = rig.rail_heading {
-            let change = (rail - previous).sin().atan2((rail - previous).cos());
-            rig.world_yaw += change;
-        } else {
-            // Begin facing along travel, then retain all subsequent physical look-around.
-            rig.world_yaw = rail - heading(head.rotation) + rig.yaw - rig.turn;
-            rig.rail_center = Some(head.translation);
-        }
-        rig.rail_heading = Some(rail);
-    } else {
-        rig.rail_heading = None;
-        rig.rail_center = None;
-    }
-    let target_pitch = if on_rail { boots.pitch } else { 0.0 };
     let now = time.elapsed_secs_f64();
     let dt = rig
         .rail_time
         .replace(now)
         .map_or(0.0, |old| (now - old).clamp(0.0, 0.05) as f32);
-    rig.rail_pitch += (target_pitch - rig.rail_pitch).clamp(-dt * 1.8, dt * 1.8);
+    let direction = on_rail.then(|| rail_direction(&play.game)).flatten();
+    let target_pitch = direction.map_or(0.0, |v| v.y.atan2(Vec2::new(v.x, v.z).length()));
+    if on_rail {
+        let rail = direction.map_or(boots.yaw - std::f32::consts::FRAC_PI_2, |v| {
+            (-v.x).atan2(-v.z)
+        });
+        if let Some(previous) = rig.rail_heading {
+            let error = (rail - previous).sin().atan2((rail - previous).cos());
+            // Average a span of the path, then reject tiny tangent noise and bound virtual turning.
+            let change = if error.abs() < 0.006 {
+                0.0
+            } else {
+                (error * (1.0 - (-dt / 0.35).exp())).clamp(-dt * 1.05, dt * 1.05)
+            };
+            rig.world_yaw += change;
+            rig.rail_heading = Some(previous + change);
+        } else {
+            // Preserve entry gaze: only subsequent gradual path changes rotate the VR origin.
+            rig.rail_heading = Some(rail);
+            rig.rail_center = Some(head.translation);
+        }
+    } else {
+        rig.rail_heading = None;
+        rig.rail_center = None;
+    }
+    let pitch_error = target_pitch - rig.rail_pitch;
+    if pitch_error.abs() > 0.008 || !on_rail {
+        rig.rail_pitch += (pitch_error * (1.0 - (-dt / 0.50).exp())).clamp(-dt * 0.35, dt * 0.35);
+    }
+    let position = crate::tfrag_render::game_to_bevy(play.game.hero.position());
+    if on_rail || rig.rail_position.is_some() {
+        let old = rig.rail_position.unwrap_or(position);
+        let next = old.lerp(position, 1.0 - (-dt / 0.08).exp());
+        // Large teleports/reloads rebase immediately rather than dragging a camera across the level.
+        rig.rail_position = if old.distance(position) > 20.0 {
+            Some(position)
+        } else if !on_rail && next.distance(position) < 0.005 {
+            None
+        } else {
+            Some(next)
+        };
+    }
     let up = if play.game.hero.gravity_mode != 0 {
         crate::tfrag_render::game_to_bevy(
             [0, 1, 2].map(|i| play.game.hero.moby_rows[2][i].to_f32()),
@@ -767,7 +812,10 @@ fn follow_game_camera(
     }
     // Surface swimming uses the native horizontal swimmer's eye height. Blend the posture change;
     // head rotation always remains physically tracked.
-    let target_height = if matches!(play.game.hero.group, 0x11 | 0x12) {
+    let target_height = if matches!(play.game.hero.state, 0x18..=0x1b) {
+        // Hanging with extended arms puts the eyes below the ledge, not alongside the palms.
+        (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(0.45, 1.35)
+    } else if matches!(play.game.hero.group, 0x11 | 0x12) {
         0.45
     } else if play.game.hero.state == 4
         || (play.game.hero.state == 0x73 && play.game.pad.held & rc_game::pad::button::CROUCH != 0)

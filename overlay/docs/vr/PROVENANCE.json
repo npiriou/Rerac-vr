@@ -1,5 +1,5 @@
 {
-  "status": "native_release_original_engine_pc_configuration_headset_timing_pending",
+  "status": "native_windows_rail_ledge_hyper_comfort_built_not_launched",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "9796AF47120BBF3043AE33D56087E12ED6368BB10D6EFBFF530C81925B91F8E3",
+  "latest_build_sha256": "79C3B1173214D4A15247ECC08A02CE59EE4EB691337D0CC5E6358FF3F41EE5D3",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Native Release launched; headset currently inactive, final live timing and physical feedback pending",
+  "latest_build_physical_validation": "Pending headset feedback on rail stability/comfort, lower hanging camera, easier grip/pull-up, gold Devastator handle and immediate physical Hyper Strike.",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",

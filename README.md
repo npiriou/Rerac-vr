@@ -60,7 +60,7 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Left Y | Triangle — contextual interactions; hold for quick select, move the left hand toward an icon, release to confirm |
 | Walloper selected: punch with the right hand | Original lunge and horizontal dash, with native windup, speed and broad damage window; no vertical punch propulsion |
 | Left grip near a heavy weapon's barrel | Hold the foregrip and guide the weapon with both hands; release to return to one hand |
-| Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove both arms down at least 22 cm at 2.2 m/s to climb/jump as A (left-stick movement disabled while hanging); release both grips to drop |
+| Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove both arms down at least 12 cm at 1.15 m/s to climb/jump as A (left-stick movement disabled while hanging); release both grips to drop |
 | Submerged palm strokes | Push water opposite the motion of the hands; turn palms edge-on for recovery. Push up to dive |
 | Y held + right stick left/right | Previous / next quick-select page (return the stick to centre between changes) |
 | B / X | Original menu controls; B also exits the Hologuise |
@@ -114,3 +114,16 @@ Spatial sound allocation (hero/mobys/items, contextual interactions and UI) and 
 Grind rails anchor VR yaw to the native rail tangent and follow its changing direction, without copying Ratchet's sideways riding stance. The rail grade is blended into camera pitch at up to 1.8 rad/s, then blended back to level on exit; head look-around remains independent. Entry records the current tracking-space head position, room-scale lean does not move the capsule off the rail, and exit consumes the remaining physical offset through ordinary collision-constrained room-scale movement. Pause retains the rail reference. Each rendered frame advances the pitch blend only once.
 
 Compilation/startup evidence is recorded separately. Physical turning, stereo left/right, magnetic-track direction and rail comfort still require headset feedback. No tests or gameplay interaction scripts were run.
+
+
+## Rail comfort, ledge reach, gold Devastator support and physical Hyper Strike
+
+Rail camera direction is sampled across 1.5 units behind and 2.5–5 units ahead of the native spline cursor, rather than copying a single segment tangent. Yaw uses a 350 ms exponential response, a 0.006-radian dead zone and a 1.05 rad/s turn limit. Pitch uses a 500 ms response, a 0.008-radian dead zone and a 0.35 rad/s limit. Translation has an 80 ms filter while riding, recovering on exit; large teleports rebase. Rail entry preserves the current gaze instead of forcing a turn. Physical headset rotation stays direct.
+
+Ledge hanging places the neutral eye about 38 cm below the ledge/palms, with the existing posture blend. Valid native ledges accept a hand within 80 cm horizontally and 50 cm vertically (48 cm into/across the wall for initial reach). Retention and native top/clearance checks remain. Pull-up needs a 12 cm downward stroke at 1.15 m/s from both gripped hands within 180 ms. Lateral anchor correction and its drift/validation limits are unchanged.
+
+Gold Devastator support is anchored at the centre of the actual class-157 side handle, model coordinates (0.125, -0.415, -0.270). The support-grip capture/aim target and rendered left palm use the same point. The original layered finger/wrist pose is retained; the ordinary Devastator is unchanged.
+
+Hyper Strike's airborne animation gates and native height/cable rules are shared by button and VR paths. In particular, the native flip gates are strictly after frame 18, or 20 for flip kind 3, rather than the former VR-only 25/26 gates. A 5 cm downward wrench-hand stroke at 1.2 m/s uses a separate interpolated 28 ms velocity window; normal melee/throw smoothing and hit thresholds remain unchanged. The gesture can stay prepared within the same native input-buffer windows while a flip becomes eligible. An accepted VR gesture enters native state 0x14 at its falling animation phase, cancels upward velocity, and skips the additional upward/windup delay. Native descent acceleration, terminal velocity, shockwave/contact damage and landing haptics remain. Desktop/button windup is retained.
+
+No tests or gameplay interaction scripts were run. The game is not launched or restarted at the user's request. Compilation evidence is separate from pending headset feedback on comfort, grabbing/pull-up, the gold handle and immediate Hyper Strike.
