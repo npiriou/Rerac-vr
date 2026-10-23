@@ -57,6 +57,11 @@ pub(super) struct Rig {
     reset_held: bool,
     eye_height: Option<f32>,
     gravity_frame: Quat,
+    front_root: Option<Transform>,
+    rail_heading: Option<f32>,
+    rail_center: Option<Vec3>,
+    rail_pitch: f32,
+    rail_time: Option<f64>,
 }
 pub(super) fn native_panel(play: &crate::gameplay::Play) -> bool {
     let gold_bolt = play
@@ -71,32 +76,8 @@ pub(super) fn native_panel(play: &crate::gameplay::Play) -> bool {
         && !gold_bolt
 }
 impl Rig {
-    pub(super) fn movement_for_camera(
-        &self,
-        movement: Vec2,
-        head: Quat,
-        game: &rc_game::tick::Game,
-    ) -> Vec2 {
-        if self.center.is_none() {
-            return movement;
-        }
-        let camera = crate::play_camera::view_transform(&game.camera.out);
-        if game.hero.gravity_mode != 0 {
-            let up = self.gravity_frame * Vec3::Y;
-            let flatten = |v: Vec3| (v - up * v.dot(up)).normalize_or_zero();
-            let view = self.gravity_frame
-                * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw)
-                * head;
-            let forward = flatten(view * Vec3::NEG_Z);
-            let right = forward.cross(up).normalize_or_zero();
-            let desired = right * movement.x - forward * movement.y;
-            let cam_forward = flatten(camera.rotation * Vec3::NEG_Z);
-            let cam_right = cam_forward.cross(up).normalize_or_zero();
-            return Vec2::new(desired.dot(cam_right), -desired.dot(cam_forward));
-        }
-        let relative =
-            self.world_yaw + self.turn - self.yaw + heading(head) - heading(camera.rotation);
-        Vec2::from_angle(relative).rotate(movement)
+    pub(super) fn surface_up(&self) -> Vec3 {
+        self.gravity_frame * Vec3::Y
     }
     pub(super) fn snap(&mut self, x: f32) {
         if x.abs() < 0.25 {
@@ -109,13 +90,17 @@ impl Rig {
         }
     }
     pub(super) fn root_for(&self, game: &rc_game::tick::Game, scale: f32) -> Option<Transform> {
+        if crate::saves::front_end_active() {
+            return self.front_root;
+        }
         let mut center = self.center?;
-        if let Some(head) = self.head {
+        if let Some(head) = self.rail_center.or(self.head) {
             center.x = head.x;
             center.z = head.z;
         }
-        let rotation =
-            self.gravity_frame * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw);
+        let rotation = self.gravity_frame
+            * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw)
+            * Quat::from_rotation_x(self.rail_pitch);
         let eye = crate::tfrag_render::game_to_bevy(game.hero.position())
             + self.gravity_frame * Vec3::Y * self.eye_height.unwrap_or(1.6);
         // Room-scale displacement has already been consumed by the native capsule.
@@ -156,25 +141,60 @@ pub fn prepare_game() -> anyhow::Result<()> {
         // PS2 visibility masks were authored for one narrow view. Use original frustum/LOD culling with
         // an HMD envelope instead, so leaning/looking around doesn't reveal missing objects.
         std::env::set_var("RC_OCCL", "0");
-        for (key, value) in [
-            ("RC_LEVEL", if s.scene == "kerwan" { "3" } else { "1" }),
-            ("RC_FRONTEND", "0"),
-            ("RC_SCENE", "0"),
-            ("RC_PLAY", "1"),
-            ("RC_MSAA", "0"),
+        // A launch preset is authoritative: a previous debug shell cannot grant items to Normal.
+        for key in [
+            "RC_GIVE_ITEMS",
+            "RC_GIVE_ITEMS_EQUIP",
+            "RC_GIVE_HYDROPACK",
+            "RC_GIVE_BOLTS",
+            "RC_GIVE_GOLD_BOLTS",
+            "RC_GIVE_GOLD_WEAPONS",
+            "RC_UNLOCK_PLANETS",
+            "RC_GAME_BEATEN",
+            "RC_SKIP_LOGOS",
+            "RC_VR_SPAWN_GAME",
         ] {
-            if std::env::var_os(key).is_none() {
-                std::env::set_var(key, value);
+            if !s.mode.debug() || key != "RC_VR_SPAWN_GAME" {
+                std::env::remove_var(key);
             }
         }
-        if std::env::var_os("RC_UNLOCK_PLANETS").is_none() {
+        std::env::set_var("RC_PLAY", "1");
+        std::env::set_var("RC_PLAY_FLY", "0");
+        std::env::set_var("RC_MSAA", "0");
+        std::env::set_var("RC_FRONTEND", if s.mode.debug() { "0" } else { "1" });
+        if s.mode.debug() {
+            std::env::set_var("RC_LEVEL", if s.scene == "kerwan" { "3" } else { "1" });
+            std::env::set_var("RC_SCENE", "0");
             let planets = (0..rc_game::travel::LEVEL_COUNT)
                 .map(|i| i.to_string())
                 .collect::<Vec<_>>()
                 .join(",");
             std::env::set_var("RC_UNLOCK_PLANETS", planets);
+            if s.mode == super::LaunchMode::DebugGold {
+                let gold = rc_game::moby_update::classes::item_offer::GOLD_ITEMS
+                    .map(|id| id.to_string())
+                    .join(",");
+                std::env::set_var("RC_GIVE_GOLD_WEAPONS", gold);
+            }
+        } else {
+            std::env::remove_var("RC_LEVEL");
+            std::env::remove_var("RC_SCENE");
+        }
+        if std::env::var_os("RC_SAVE_DIR").is_none() {
+            std::env::set_var(
+                "RC_SAVE_DIR",
+                std::path::Path::new("work/vr/saves").join(s.mode.name()),
+            );
         }
     }
+    println!(
+        "VR_GAME launch_mode={} frontend={} save_dir={} gold_items={}",
+        s.mode.name(),
+        !s.mode.debug(),
+        std::env::var("RC_SAVE_DIR").unwrap_or_default(),
+        std::env::var("RC_GIVE_GOLD_WEAPONS").unwrap_or_default()
+    );
+
     println!(
         "VR_GAME original ReRAC application; scene={} preview={} simulation=60Hz first-person",
         s.scene, s.desktop_preview
@@ -301,6 +321,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         sky_policy
             .after(crate::sky_render::follow_main_camera)
             .after(crate::flight_render::FlightSkySet)
+            .after(crate::title_world::TitleWorldViewSet)
             .after(update_views)
             .before(TransformSystems::Propagate),
     );
@@ -575,7 +596,15 @@ fn align_body(
         rig.previous_head = None;
         return;
     }
-    let previous = rig.previous_head.replace(head.translation);
+    if play.as_ref().is_some_and(|p| p.game.hero.group == 0xf) {
+        // Lean around the rail attachment; room-scale walking cannot push the capsule off its spline.
+        rig.previous_head = None;
+        return;
+    }
+    let previous = rig
+        .previous_head
+        .replace(head.translation)
+        .or(rig.rail_center);
     let Some(previous) = previous else {
         // Rebase after focus/menu changes instead of moving the avatar from an old desk/room pose.
         if let Some(center) = rig.center.as_mut() {
@@ -634,6 +663,9 @@ fn follow_game_camera(
         rig.yaw = heading(head.rotation);
         rig.world_yaw = play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2;
         rig.turn = 0.0;
+        rig.rail_heading = None;
+        rig.rail_center = None;
+        rig.rail_pitch = 0.0;
         rig.head = Some(head.translation);
         rig.previous_head = Some(head.translation);
         rig.revision = rig.revision.wrapping_add(1);
@@ -643,6 +675,48 @@ fn follow_game_camera(
         );
     }
     rig.reset_held = reset;
+    if crate::saves::front_end_active() {
+        // The title is its own native scene, far from the parked gameplay hero.
+        // Its authored camera supplies the VR origin, while head tracking owns view rotation.
+        if let Some(base) = main.iter().next().copied() {
+            let root = rig_transform(
+                base,
+                rig.center.unwrap_or(head.translation),
+                rig.yaw,
+                settings.units_per_metre,
+            );
+            rig.front_root = Some(root);
+            for mut r in &mut roots {
+                *r = root;
+            }
+        }
+        return;
+    }
+    rig.front_root = None;
+    let boots = &play.game.hero.boots;
+    let on_rail = play.game.hero.group == 0xf && boots.rail.is_some() && boots.off_rail == 0;
+    if on_rail {
+        let rail = boots.yaw - std::f32::consts::FRAC_PI_2;
+        if let Some(previous) = rig.rail_heading {
+            let change = (rail - previous).sin().atan2((rail - previous).cos());
+            rig.world_yaw += change;
+        } else {
+            // Begin facing along travel, then retain all subsequent physical look-around.
+            rig.world_yaw = rail - heading(head.rotation) + rig.yaw - rig.turn;
+            rig.rail_center = Some(head.translation);
+        }
+        rig.rail_heading = Some(rail);
+    } else {
+        rig.rail_heading = None;
+        rig.rail_center = None;
+    }
+    let target_pitch = if on_rail { boots.pitch } else { 0.0 };
+    let now = time.elapsed_secs_f64();
+    let dt = rig
+        .rail_time
+        .replace(now)
+        .map_or(0.0, |old| (now - old).clamp(0.0, 0.05) as f32);
+    rig.rail_pitch += (target_pitch - rig.rail_pitch).clamp(-dt * 1.8, dt * 1.8);
     let up = if play.game.hero.gravity_mode != 0 {
         crate::tfrag_render::game_to_bevy(
             [0, 1, 2].map(|i| play.game.hero.moby_rows[2][i].to_f32()),

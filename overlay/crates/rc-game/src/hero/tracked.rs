@@ -1,10 +1,18 @@
 //! Optional tracked inputs enter the original state machine and collision pipeline.
 use super::{Hero, physics::*, states::Ctx};
+use crate::ps2v::Pf;
 
 #[derive(Clone, Debug, Default)]
 pub struct Tracked {
     pub enabled: bool,
     pub pack_jump: bool,
+    /// Physical tool insertion; separate from the hero's actual ground collision.
+    pub utility_target: Option<usize>,
+    pub utility_use: bool,
+    /// Headset listener and levelled locomotion frames; neither overwrites the native camera.
+    pub view: Option<crate::follow_camera::CameraView>,
+    pub navigation: Option<crate::follow_camera::CameraView>,
+    pub view_origin: [f32; 3],
     pub hands: [Option<[f32; 3]>; 2],
     pub grips: [bool; 2],
     pub hyper_strike: bool,
@@ -21,6 +29,56 @@ pub struct Tracked {
 }
 
 impl Hero {
+    pub(super) fn tracked_free_facing(&self) -> bool {
+        self.tracked.enabled
+            && self.tracked.navigation.is_some()
+            && self.mode == 0
+            && self.health > 0
+            && self.frozen == 0
+            && matches!(self.state, 0..=4 | 6..=0x12 | 0x2d | 0x3f | 0x70 | 0x71 | 0x73)
+    }
+
+    /// Keep physical heading on the native body, retaining its current surface normal.
+    /// Rail, ledge, scripted interaction and attack poses retain their authored orientation.
+    pub fn tracked_face(&mut self) {
+        if !self.tracked_free_facing() {
+            return;
+        }
+        let Some(view) = self.tracked.navigation else {
+            return;
+        };
+        let up = to_f32x3(euler_rows(self.rot)[2]);
+        let forward = to_f32x3(view.rows[0]);
+        let dot = forward.iter().zip(up).map(|(a, b)| a * b).sum::<f32>();
+        let mut forward: [f32; 3] = std::array::from_fn(|i| forward[i] - up[i] * dot);
+        let len = forward.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if len < 0.01 {
+            return;
+        }
+        forward = forward.map(|v| v / len);
+        let left = [
+            up[1] * forward[2] - up[2] * forward[1],
+            up[2] * forward[0] - up[0] * forward[2],
+            up[0] * forward[1] - up[1] * forward[0],
+        ];
+        let rows = [forward, left, up].map(|r| [Pf::f(r[0]), Pf::f(r[1]), Pf::f(r[2]), Pf::ZERO]);
+        self.rot = crate::moby_update::services::rows_euler(&[
+            rows[0],
+            rows[1],
+            rows[2],
+            [Pf::ZERO, Pf::ZERO, Pf::ZERO, Pf::ONE],
+        ]);
+        self.rows = [
+            rows[0],
+            rows[1],
+            rows[2],
+            [Pf::ZERO, Pf::ZERO, Pf::ZERO, Pf::ONE],
+        ];
+        self.target_yaw = self.rot[2];
+        self.yaw_vel = Pf::ZERO;
+        self.yaw_residual = Pf::ZERO;
+    }
+
     /// Run after damage/water checks, before ordinary button transitions.
     pub(super) fn tracked_transitions(&mut self, c: &mut Ctx) -> bool {
         if !self.tracked.enabled || self.mode != 0 || self.health <= 0 || self.frozen != 0 {

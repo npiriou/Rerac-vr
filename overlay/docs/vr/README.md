@@ -1,6 +1,7 @@
 # Original-game VR integration
 
-Kerwan / Metropolis (native level 3) is the default start, through `main.rs`, `level_switch::load_bundle`, and the original ReRAC plugin chain. All 19 native level IDs 0..18 are unlocked using `GameState::unlock_planet`, including the native galaxy-map order. The same loader and VR integration remain active across native ship transitions. All 19 extracted level cores are present; availability does not establish a complete VR playthrough of every destination. `-Scene novalis` keeps the previous level-1 start. Calibration is an explicit diagnostic mode.
+The default launch is now `normal`: native boot/logos, Press Start and the main menu, followed by ordinary New Game/Load Game progression. Inventory, initial ammunition, planets and story scenes use their original state; VR debug grants are disabled. `-Mode debug` names the former direct-Kerwan launch with every inventory item, full initial reserves and all planets unlocked. `-Mode debug-gold` adds the native ten gold upgrades to that same debug setup. `-Scene novalis` selects the previous level only in debug modes; calibration remains explicit. Each launch mode has a separate native memory card under `work/vr/saves/<mode>`.
+
 
 `vr/game.rs` installs OpenXR cameras on the original Bevy world. Each eye has the original world materials and a sky view with the same runtime pose/projection. Both use the existing render passes, including shadows and display effects. The original mono game frame remains available for the window, menu snapshots and menus shown inside the headset.
 
@@ -177,3 +178,30 @@ Wrench enemy hits now require 5.5 m/s physical tip speed, 2.4 m/s translating ha
 Intact crates now participate in held-wrench constraints using their original mesh and primitive colliders. A crate-only scene query prevents damageable enemies from masking that geometry, while the independent world query preserves wall blocking. The head sweep/overlap stops the native wrench and its gripping hand at a live crate; deliberate contact reuses the existing short recoil and contact haptic. Crate damage requires a real contact with that crate as well as the stronger stroke thresholds. Break/damage behavior remains native, and disabled collision volumes cease blocking the model after destruction. The first impact remains the reported contact if a second corner correction is needed.
 
 No tests or gameplay interaction scripts were run. Native compilation and ordinary startup are recorded separately from pending headset feedback on grip/climb rhythm, harder strike thresholds and crate blocking/breakage.
+
+
+## Normal, debug and debug-gold launch presets
+
+`RC_VR_MODE` / `Run.ps1 -Mode` selects `normal` (default), `debug` or `debug-gold`. Normal forces the native front end, clears inherited level/scene-skip/grant/unlock/beat-game/skip-logo overrides, and never enters the VR inventory grant/refill path. Native New Game initializes the original save template and travels to level 0; Load Game retains normal progression. The previous direct-Kerwan launch, all inventory and planets, first-launch full reserves and skipped story scenes are now explicitly debug-only. Save roots are isolated by launch mode, without deleting existing saves.
+
+Gold mode uses the original `item_offer::GOLD_ITEMS` table `[19,10,11,16,17,15,21,20,25,9]`. Flags are installed during native boot state creation and enforced by the debug grant. The existing gold look/effects paths remain native. Gold and ordinary weapons keep identical item IDs, classes, animation skeletons and attachment frames: they use the same VR transforms, grip/muzzle settings, native palm/foregrip poses, glove projectile placement, two-hand aiming and per-item deployment/use haptic profiles. No duplicate gold calibration table can drift away from the ordinary weapon's settings.
+
+The native title scene supplies the frontend VR origin. Boot/title/main-menu primitives remain fixed in tracking space while the authored title camera moves, with original full-frame frontend fades retained. Native title camera layer changes complete before eye-layer mirroring. Gameplay pause keeps its existing world anchor and original 3D previews. Start remains the right-stick click; native A/menu pointer confirmation works on the main-menu page. Logos/movie presentation retains the native video surface.
+
+Validation records cover compilation and ordinary debug-gold startup, with ten gold flags and full debug inventory/reserves. No tests or interaction scripts are run. Native normal-mode New Game/Load Game flow and physical frontend/gold-weapon use still need headset feedback.
+
+
+The Walloper hides the native right-hand glove mesh while held, preventing fingers from clipping through its housing; the secondary hand stays visible. In the ship, controller pointing updates both the native list cursor and the actual travel destination before confirmation. Known planet dots on the galaxy map can also be pointed at and confirmed.
+
+The Hydrodisplacer and Trespasser accept physical insertion into their native pad/lock collision geometry. Approach with the tool tip aligned into the target, then push the right controller at least 3.5 cm with the tip passing approximately 1.2 cm into the contact surface. Only tracked controller translation counts; body locomotion, wrist rotation and tool animation do not supply that stroke. An accepted insertion enters the original water-transfer or lock-puzzle logic, retains its existing event haptics and suppresses the original automatic pull of Ratchet toward the pad. Withdraw before another activation. Native trigger activation remains available. Physical alignment, reach and insertion feel still require headset feedback.
+
+## Headset heading, spatial sound and grind-rail camera
+
+
+Headset orientation now supplies a separate native locomotion frame and audio listener. Ratchet's ordinary free-movement heading follows physical turns and snap turns, including while stationary. Ground movement can strafe/back up without turning the avatar away from the headset. Magnetic-track planar velocity follows the requested direction projected onto the local surface instead of the stale body heading. Native authored camera state remains independent for scripts and menus; rail, ledge, attack and scripted interaction poses keep their native body orientation.
+
+Spatial sound allocation (hero/mobys/items, contextual interactions and UI) and per-tick mixing use the physical headset's position and full forward/left/up basis, with post-move body translation applied to the sampled eye. Desktop listeners keep the original camera fallback. Normal VR stick input is consumed directly in the levelled headset frame, avoiding an additional rotation through the desktop camera; rail lean/switch axes remain native.
+
+Grind rails anchor VR yaw to the native rail tangent and follow its changing direction, without copying Ratchet's sideways riding stance. The rail grade is blended into camera pitch at up to 1.8 rad/s, then blended back to level on exit; head look-around remains independent. Entry records the current tracking-space head position, room-scale lean does not move the capsule off the rail, and exit consumes the remaining physical offset through ordinary collision-constrained room-scale movement. Pause retains the rail reference. Each rendered frame advances the pitch blend only once.
+
+Compilation/startup evidence is recorded separately. Physical turning, stereo left/right, magnetic-track direction and rail comfort still require headset feedback. No tests or gameplay interaction scripts were run.

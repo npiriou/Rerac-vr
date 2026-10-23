@@ -8,6 +8,8 @@ use super::{
 use bevy::prelude::*;
 
 pub(super) struct TraversalPlugin;
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct TraversalUpdate;
 #[derive(Resource, Default)]
 struct Gestures {
     previous: [Option<(f64, Vec3)>; 2],
@@ -21,7 +23,12 @@ impl Plugin for TraversalPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Gestures>()
             .add_systems(PreUpdate, sample.after(super::embodied::capture))
-            .add_systems(FixedUpdate, drive.before(super::bomb_glove::BombUpdate));
+            .add_systems(
+                FixedUpdate,
+                drive
+                    .in_set(TraversalUpdate)
+                    .before(super::bomb_glove::BombUpdate),
+            );
     }
 }
 fn sample(

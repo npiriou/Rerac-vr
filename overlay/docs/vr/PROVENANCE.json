@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_ledge_haptics_crate_contact_built_and_launched",
+  "status": "native_windows_headset_heading_rail_camera_built_debug_gold_launched",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,7 +20,7 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "FE8172DCAF34B0184D4A8ABDD294722A03C5588A06F2E49108DE97E07FE310DA",
+  "latest_build_sha256": "B4250C4ED75823CD4509327FC4149F479CD5CCC4BFB1713B3D58E9B7AF7C871B",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Pending headset feedback on ledge grip/climb haptics, stronger wrench strikes, intact crate blocking and destruction contact."
+  "latest_build_physical_validation": "Pending headset feedback on stationary body turns, stereo channel direction, forward/strafe/back movement on magnetic walls/ceilings, and grind rail entry/curves/grades/exit comfort."
 }

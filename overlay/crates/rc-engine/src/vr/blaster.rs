@@ -112,16 +112,26 @@ impl Plugin for BlasterPlugin {
 }
 
 fn grant(
+    settings: Res<Settings>,
     saved: Option<ResMut<crate::gameplay::Persistent>>,
     session: Option<ResMut<crate::gameplay::Session>>,
     mut failed: Local<bool>,
     mut filled: Local<bool>,
 ) {
+    if !settings.mode.debug() {
+        return;
+    }
     let (Some(mut saved), Some(mut session)) = (saved, session) else {
         return;
     };
+    let gold = rc_game::moby_update::classes::item_offer::GOLD_ITEMS;
+    let gold_ready = gold.iter().all(|&id| {
+        saved.0.global.gold_weapons[id as usize]
+            == (settings.mode == super::LaunchMode::DebugGold) as u8
+    });
     let weapons: Vec<usize> = (1..=35).collect();
-    if *failed || (*filled && weapons.iter().all(|&id| saved.0.global.owned[id] != 0)) {
+    if *failed || (*filled && gold_ready && weapons.iter().all(|&id| saved.0.global.owned[id] != 0))
+    {
         return;
     }
     let root = crate::level_load::extracted_root();
@@ -133,6 +143,10 @@ fn grant(
     };
     match load() {
         Ok(tables) => {
+            for id in gold {
+                saved.0.global.gold_weapons[id as usize] =
+                    (settings.mode == super::LaunchMode::DebugGold) as u8;
+            }
             for id in weapons {
                 if saved.0.global.owned[id] == 0 {
                     saved.0.give_item(id, false, &tables, &mut session.0);
@@ -158,7 +172,13 @@ fn grant(
                 }
                 *filled = true;
                 println!(
-                    "VR_GAME starting_max_ammo reserves={reserves:?} quick_select={:?}",
+                    "VR_GAME debug_inventory mode={} gold_items={:?} starting_max_ammo={reserves:?} quick_select={:?}",
+                    settings.mode.name(),
+                    if settings.mode == super::LaunchMode::DebugGold {
+                        gold.to_vec()
+                    } else {
+                        Vec::new()
+                    },
                     saved.0.global.quick_select
                 );
             }

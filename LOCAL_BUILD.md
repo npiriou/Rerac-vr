@@ -332,3 +332,37 @@ Enemies require tip 5.5m/s, hand 2.4m/s and 14cm stroke. Crates require tip 6.5m
 Separate crate-only native scene query includes meshes and primitive colliders, preserving independent world blocking. Intact crates stop the held model/native gripping hand with existing contact recoil/haptics. Crate damage requires actual collision contact and the stronger stroke; native destruction disables the original collider normally.
 
 VR/non-VR checks and executable build passed. SHA-256 `FE8172DCAF34B0184D4A8ABDD294722A03C5588A06F2E49108DE97E07FE310DA`. Build `work/vr/ledge-haptics-crate-contact-build.log`; normal launch `work/vr/kerwan-headset-20261023-143632.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on ledge grip/climb haptics, stronger wrench strikes, intact crate blocking and destruction contact.
+
+## Normal/debug/debug-gold launch modes and shared gold VR settings
+
+Default native boot/logos/Press Start/main menu, New Game/Load Game with native progression. Forced debug level, story skip, grants, full-ammo refill, planet unlock, beat-game and skip-logo overrides disabled. Separate native memory card per launch preset.
+
+Debug names the previous direct-Kerwan/all-items/all-planets/full-initial-ammo launch. Debug-gold uses the same setup plus native gold IDs [19,10,11,16,17,15,21,20,25,9], installed in boot state and debug inventory.
+
+Gold flags preserve the ordinary weapon item IDs/model classes. Existing placement, grip/muzzle orientation, native primary/support-hand poses, glove palm placement, two-hand aim and deployment/use haptic profiles are shared automatically; native gold appearance and upgraded effects remain.
+
+Native title camera anchors the XR origin, frontend UI follows a fixed tracking-space pose through authored scene camera changes, full-frame boot fades retained and title layers mirrored in order. Existing spatial gameplay pause remains.
+
+VR/non-VR checks and executable build passed. SHA-256 `B6281BD655CD058040C1909078FD76382EC90DF5FFC92B8968B963D9B19F2278`. Build `work/vr/launch-modes-build.log`; debug-gold launch `work/vr/debug-gold-kerwan-headset-20261023-144710.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending normal-mode boot/New Game/Load Game interaction and physical frontend/gold-weapon headset feedback.
+
+## Walloper hand, ship pointer destination and physical tool insertion
+
+Hide only native primary-hand mesh while holding the Walloper; preserve the weapon housing and secondary hand.
+
+Pointer hover updates actual PageMenu.dest as well as native planet-list cursor and mission state before confirmation. Galaxy dots for known planets are also pointer targets. Native directional repeats are suppressed while pointing.
+
+Hydrodisplacer/Trespasser tips engage their original target colliders: inward alignment, 3.5 cm tracked controller translation, 1.2 cm penetration, native readiness, grounded nearby hero and unobstructed approach. No locomotion/animation/wrist-only stroke. Latched activation requires withdrawal before reuse; preserve target during native cutaways/puzzle. No ground-moby spoof. Original water/lock logic and use haptics remain; suppress native body pull for physical insertion. Native trigger fallback retained.
+
+VR/non-VR checks and executable build passed. SHA-256 `4B8EAB6DEBB659DD38238A55CB6CA0EC5EDDF8343168BC3EC2C7692F1A1607D8`. Build `work/vr/gadget-insertion-build.log`; debug-gold launch `work/vr/debug-gold-kerwan-headset-20261023-152359.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on hidden Walloper fingers, pointed travel destination and tool insertion alignment/feel on native Hydrodisplacer pads and Trespasser locks.
+
+## Headset heading, spatial audio, magnetic tracks and grind camera
+
+Native free-movement body heading follows levelled headset orientation, including stationary turns and snap turns. Local surface normal retained; movement direction independent of facing for back/strafe. Rail/ledge/attack/scripted poses retain authored body orientation.
+
+Native hero input receives the headset locomotion frame, raw VR stick axes are no longer transformed through the desktop camera, and magnetic planar velocity follows the surface-projected requested stick direction.
+
+Headset position and full forward/left/up basis feed sound allocation and per-tick mixing; post-move body translation applied to sampled eye. Native authored camera and desktop listener fallback remain independent.
+
+Grind yaw follows the native rail tangent instead of Ratchet's sideways stance; grade follows with pitch blending capped at 1.8 rad/s, including level recovery after exit. Physical head look-around/lean retained; entry uses current tracking head position. Rail lean cannot displace native capsule; exit offset goes through ordinary collision-constrained room-scale movement. Pause retains rail reference and pitch blend uses elapsed time once per rendered frame.
+
+VR/non-VR checks and executable build passed. SHA-256 `B4250C4ED75823CD4509327FC4149F479CD5CCC4BFB1713B3D58E9B7AF7C871B`. Build `work/vr/head-facing-rails-build.log`; debug-gold launch `work/vr/debug-gold-kerwan-headset-20261023-162116.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on stationary body turns, stereo channel direction, forward/strafe/back movement on magnetic walls/ceilings, and grind rail entry/curves/grades/exit comfort.

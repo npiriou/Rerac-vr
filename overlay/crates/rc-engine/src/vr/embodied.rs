@@ -28,7 +28,9 @@ impl Plugin for EmbodiedPlugin {
             .add_plugins((
                 super::bomb_glove::BombGlovePlugin,
                 super::blaster::BlasterPlugin,
+                super::gadget_socket::GadgetSocketPlugin,
                 super::traversal::TraversalPlugin,
+                super::orientation::OrientationPlugin,
                 super::walloper::WalloperPlugin,
             ))
             .add_systems(
@@ -1124,7 +1126,13 @@ fn present(
             });
         attach.tracked_hands(
             [0, 1].map(|side| {
-                if !active || (side == 1 && bomb_glove.is_some()) {
+                if !active
+                    || (side == 1
+                        && (bomb_glove.is_some()
+                            || (holding_weapon
+                                && play.game.hero.items.slot.id
+                                    == rc_game::hero::walloper::WALLOPER)))
+                {
                     return None;
                 }
                 let pose = if side == 0 {

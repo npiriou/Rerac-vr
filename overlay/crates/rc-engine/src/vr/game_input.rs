@@ -649,13 +649,8 @@ pub(super) fn sample(
             rig.snap(if shopping { 0.0 } else { camera.x });
         } else {
             rig.snap(if shopping { 0.0 } else { camera.x });
-            if let (Some(head), Some(play)) = (super::game::pose(views.as_deref()), play.as_ref()) {
-                if !super::game::native_panel(play)
-                    && !crate::visibomb_view::missile_view(Some(play))
-                {
-                    movement = rig.movement_for_camera(movement, head.rotation, &play.game);
-                }
-            }
+            // Native hero input now reads the levelled headset frame directly.
+            // Keep rail lean/switch and R1 flip controls in their original stick axes.
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.

@@ -13,6 +13,7 @@ pub(super) struct SpatialMenuPlugin;
 #[derive(Resource, Default)]
 pub(crate) struct SpatialMenu {
     pub anchor: Option<Transform>,
+    front_pose: Option<Transform>,
 }
 #[derive(Resource, Default)]
 struct Surfaces {
@@ -60,7 +61,28 @@ fn anchor(
     ) && !settings.desktop_preview;
     if !active {
         menu.anchor = None;
+        menu.front_pose = None;
         return;
+    }
+    if crate::saves::front_end_active() {
+        // Keep boot/title UI fixed in physical tracking space even when the authored title
+        // scene moves its camera or replaces the level parked behind the boot pictures.
+        let tracked = *menu.front_pose.get_or_insert_with(|| {
+            super::game::pose(views.as_deref())
+                .unwrap_or_else(|| Transform::from_xyz(0.0, 1.6, 0.0))
+        });
+        menu.anchor = play
+            .as_ref()
+            .and_then(|p| rig.root_for(&p.game, settings.units_per_metre))
+            .map(|root| {
+                let mut world = root.mul_transform(tracked);
+                world.scale = Vec3::ONE;
+                world
+            });
+        return;
+    }
+    if menu.front_pose.take().is_some() {
+        menu.anchor = None;
     }
     if menu.anchor.is_none() {
         if let Some(root) = play
@@ -184,7 +206,11 @@ fn present(
     for (order, (prim, additive)) in prims.iter().enumerate() {
         let rect = prim.rect();
         // Full-frame fades/snapshot darkening have no physical surface in the world.
-        if rect[2] >= 510 && rect[3] >= 414 && prim.tex == Tex::None {
+        if !crate::saves::front_end_active()
+            && rect[2] >= 510
+            && rect[3] >= 414
+            && prim.tex == Tex::None
+        {
             continue;
         }
         let mut polygon = Vec::new();

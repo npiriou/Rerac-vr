@@ -5,6 +5,7 @@ use crate::{game_state::GameState, hud::text as wtext, pad::button};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
     Row(i32),
+    Planet(i32),
     Key(u32),
     Scroll(i32),
     Volume(i32),
@@ -74,6 +75,20 @@ impl PageMenu {
             };
             let row_rect = |cy: f32, h: f32| [4.0, cy - h * 0.5, (width - 8) as f32, h];
             match &w.data {
+                Data::Galaxy => {
+                    for level in 1..=19 {
+                        let Some(&[px, py, _, _]) = self.planet_points.get(level - 1) else {
+                            continue;
+                        };
+                        if px != 0 && super::planet_select::planet_state(gs, level) >= 2 {
+                            push(
+                                [(px - 12) as f32, (py - 12) as f32, 24.0, 24.0],
+                                Action::Planet(level as i32),
+                                true,
+                            );
+                        }
+                    }
+                }
                 Data::List(list) => {
                     let (font, size) = list_font(list.flags);
                     let step = if list.flags & lf::STEP_FROM_FONT != 0 {
@@ -322,6 +337,18 @@ impl PageMenu {
         let Some(widget) = self.widgets.get_mut(&target.widget) else {
             return;
         };
+        let destination = if target.enabled {
+            match (&widget.data, target.action) {
+                (Data::List(l), Action::Row(row)) if l.flags & lf::PLANET_CURSOR != 0 => {
+                    gs.global.map_order.get(row.max(0) as usize).copied()
+                }
+                (Data::Galaxy, Action::Planet(level)) => Some(level),
+                _ => None,
+            }
+            .filter(|&level| (1..=19).contains(&level))
+        } else {
+            None
+        };
         let row = match target.action {
             Action::Row(i) | Action::Volume(i) => Some(i),
             _ => None,
@@ -345,8 +372,10 @@ impl PageMenu {
             out.sounds.push(MenuSound::Cursor);
         }
         // A resting stick must not shift the option under a pointing controller.
-        let directions = button::UP | button::DOWN | button::LEFT | button::RIGHT;
+        let directions =
+            button::UP | button::DOWN | button::LEFT | button::RIGHT | button::L1 | button::R1;
         inp.pressed &= !directions;
+        inp.raw_pressed &= !directions;
         inp.pressed_u &= !directions;
         inp.held &= !directions;
         inp.held_u &= !directions;
@@ -380,7 +409,7 @@ impl PageMenu {
                     out.sound_settings = true;
                 }
             }
-            Action::Row(_) | Action::Key(_) if pointer.pressed => {
+            Action::Row(_) | Action::Planet(_) | Action::Key(_) if pointer.pressed => {
                 let key = if let Action::Key(key) = target.action {
                     key
                 } else {
@@ -393,6 +422,29 @@ impl PageMenu {
                 inp.held_u |= key;
             }
             _ => {}
+        }
+        if let Some(destination) = destination {
+            // Native list_update sees an already-updated cursor, so its keyboard-only
+            // cursor-change branch cannot set the ship's actual destination for us.
+            let changed = self.dest != destination;
+            self.dest = destination;
+            if let Some(row) = gs
+                .global
+                .map_order
+                .iter()
+                .position(|&level| level == destination)
+            {
+                for widget in self.widgets.values_mut() {
+                    if let Data::List(l) = &mut widget.data {
+                        if l.flags & lf::PLANET_CURSOR != 0 {
+                            l.cursor = row as i32;
+                        }
+                    }
+                }
+            }
+            if changed {
+                super::map_page::dest_changed(self, gs);
+            }
         }
     }
 }
