@@ -6,17 +6,105 @@ use super::{
 };
 use bevy::prelude::*;
 use rc_game::hero::{
-    blaster::{BLASTER, CLASS},
+    blaster::BLASTER,
     items::{HandItem, ItemData},
 };
 
 pub(super) struct BlasterPlugin;
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct WeaponAim;
+pub(super) const SELECTABLE: [i32; 22] = [
+    8, 10, 15, 16, 11, 13, 9, 18, 19, 20, 17, 21, 23, 14, 24, 25, 12, 22, 26, 27, 31, 32,
+];
+pub(super) fn supported(id: i32) -> bool {
+    matches!(id, 9..=27 | 31 | 32)
+}
+#[derive(Resource, Default)]
+pub(super) struct SupportGrip {
+    pub held: bool,
+    weapon: i32,
+    pub primary: Option<Vec3>,
+    offset: Option<Vec3>,
+}
+/// Authored model coordinates in game units, measured on the original held meshes.
+/// Local X is top, -Y is forward, Z is lateral for gun-shaped items.
+/// Handheld panels have their own orientation below. Grip placement never follows animated output joints.
+fn grip(class: i16) -> Option<Vec3> {
+    Some(match class {
+        157 => Vec3::new(0.0, -0.04, 0.0), // Devastator: rear trigger hold, side handle stays available.
+        163 => Vec3::new(0.0, -0.18, 0.0),
+        168 => Vec3::new(-0.065, -0.13, 0.0),
+        175 => Vec3::new(-0.035, -0.22, 0.0), // Taunter handle, behind the speaker.
+        176 => Vec3::new(-0.045, -0.14, 0.0),
+        177 => Vec3::new(-0.115, -0.17, 0.0),
+        180 => Vec3::new(0.0, -0.16, 0.0),
+        185 => Vec3::new(-0.07, -0.22, -0.04), // Morph-o-Ray (177 is the Tesla Claw).
+        188 => Vec3::new(-0.015, -0.145, 0.0), // Trespasser rear D-handle, not the prongs.
+        208 => Vec3::new(0.0, -0.075, 0.0),    // Swingshot fist, not the offset hook launcher.
+        454 => Vec3::new(-0.08, -0.15, 0.0),
+        483 => Vec3::new(-0.06, -0.22, -0.05), // Hologuise / Drone Device remote handle.
+        585 => Vec3::new(0.0, -0.14, -0.03), // Metal Detector upper handle; disc stays ahead/below.
+        619 => Vec3::new(0.02, -0.17, -0.045), // PDA lower body, screen facing the player.
+        849 => Vec3::new(0.0, -0.14, 0.0),
+        1251 => Vec3::new(0.0, -0.15, 0.0), // Hydrodisplacer rear handle.
+        _ => return None,
+    })
+}
+fn foregrip(id: i32) -> Vec3 {
+    // In controller coordinates, relative to the rear grip (right/up/back).
+    match id {
+        11 => Vec3::new(-0.27, 0.09, -0.36),
+        13 => Vec3::new(-0.27, 0.05, -0.22),
+        16 => Vec3::new(0.0, -0.10, -0.49),
+        23 => Vec3::new(0.0, -0.06, -0.35),
+        9 => Vec3::new(0.0, -0.01, -0.40),
+        _ => Vec3::new(0.0, 0.0, -0.32),
+    }
+}
+fn support_point(right: Transform, support: &SupportGrip) -> Vec3 {
+    right.transform_point(support.offset.unwrap_or_else(|| foregrip(support.weapon)))
+}
+pub(super) fn weapon_hand(
+    mut right: Transform,
+    left: Option<Transform>,
+    support: &SupportGrip,
+) -> Transform {
+    if support.held {
+        if let Some(left) = left {
+            let direction = left.translation - right.translation;
+            if direction.length() > 0.12 {
+                let current = right.rotation
+                    * support
+                        .offset
+                        .unwrap_or_else(|| foregrip(support.weapon))
+                        .normalize();
+                right.rotation =
+                    Quat::from_rotation_arc(current, direction.normalize()) * right.rotation;
+            }
+        }
+    }
+    right
+}
+pub(super) fn support_hand(
+    right: Transform,
+    left: Option<Transform>,
+    support: &SupportGrip,
+) -> Option<Transform> {
+    let mut left = left?;
+    if !support.held {
+        return Some(left);
+    }
+    let right = weapon_hand(right, Some(left), support);
+    left.translation = support_point(right, support);
+    Some(left)
+}
 impl Plugin for BlasterPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
+        app.init_resource::<SupportGrip>().add_systems(
             FixedUpdate,
             (grant, aim)
                 .chain()
+                .in_set(WeaponAim)
                 .after(super::embodied::WrenchUpdate)
                 .before(crate::gameplay::GameTick),
         );
@@ -32,10 +120,7 @@ fn grant(
     let (Some(mut saved), Some(mut session)) = (saved, session) else {
         return;
     };
-    let weapons = [
-        BLASTER as usize,
-        rc_game::hero::pyrocitor::PYROCITOR as usize,
-    ];
+    let weapons: Vec<usize> = (1..=35).collect();
     if *failed || (*filled && weapons.iter().all(|&id| saved.0.global.owned[id] != 0)) {
         return;
     }
@@ -54,6 +139,12 @@ fn grant(
                 }
             }
             if !*filled {
+                // Match page zero of the VR wheel, preserving immediate access to the original loadout.
+                saved
+                    .0
+                    .global
+                    .quick_select
+                    .copy_from_slice(&SELECTABLE[..8]);
                 let mut reserves = Vec::new();
                 for (id, record) in tables.records.iter().enumerate() {
                     if saved.0.global.owned[id] == 0 || !record.has_ammo() {
@@ -79,18 +170,77 @@ fn grant(
     }
 }
 
-/// Place the original mesh using its authored muzzle frame (list 0, local barrel axis -Y).
-/// Its muzzle sits 40 cm forward of the palm and 3 cm above it, along controller forward.
-pub(super) fn place(item: &mut HandItem, hand: Transform, data: &ItemData) -> Option<Vec3> {
+/// Mount weapons and gadgets by their grip, then derive their animated output independently.
+/// Unknown classes retain the original fallback.
+pub(super) fn place(
+    item: &mut HandItem,
+    hand: Transform,
+    data: &ItemData,
+    primary: Option<Vec3>,
+) -> Option<Vec3> {
     let class = data.class(item.o_class)?;
-    let chain = class.chains.first().filter(|c| !c.is_empty())?;
-    let muzzle = *rc_formats::moby_anim::evaluate_chains(
-        &class.anim,
-        &item.anim,
-        item.snapshot.as_ref(),
-        &[chain.as_slice()],
-    )
-    .first()?;
+    // The Swingshot housing belongs on the dorsal wrist. Rotate right-side housing up,
+    // about controller forward, so the grip and forward aim remain fixed.
+    let hand = if item.o_class == 208 {
+        Transform {
+            rotation: hand.rotation * Quat::from_rotation_z(std::f32::consts::FRAC_PI_2),
+            ..hand
+        }
+    } else {
+        hand
+    };
+    if let Some(grip) = primary.or_else(|| grip(item.o_class)) {
+        let frame = crate::game_camera::game_rows(&hand);
+        let axes = if matches!(item.o_class, 483 | 619) {
+            // These upright remotes are wide along Y; their -Z face looks back toward the holder.
+            Mat3::from_cols(frame[2], -frame[1], frame[0])
+        } else {
+            Mat3::from_cols(frame[2], -frame[0], -frame[1])
+        };
+        let at = crate::game_camera::game_eye(&hand);
+        item.position = (at - axes * grip).to_array();
+        item.rows = [0, 1, 2].map(|i| {
+            let r = axes.col(i);
+            [r.x.to_bits(), r.y.to_bits(), r.z.to_bits(), 0]
+        });
+        let muzzle = match item.o_class {
+            // Visibomb list 0 is on the sight, not the barrel opening.
+            163 => Vec3::new(0.04, -0.82, 0.0),
+            // Trespasser has no output joint list; use its prong tip rather than the model origin.
+            188 => Vec3::new(0.04, -1.0, -0.025),
+            // Remotes have no projectile: their use point stays at the held body, including listless PDA.
+            483 | 619 => grip,
+            _ => {
+                let chain = class.chains.first().filter(|c| !c.is_empty())?;
+                let m = rc_formats::moby_anim::evaluate_chains(
+                    &class.anim,
+                    &item.anim,
+                    item.snapshot.as_ref(),
+                    &[chain.as_slice()],
+                );
+                Vec3::new(m[0][3][0], m[0][3][1], m[0][3][2]) * (item.scale / 1024.0)
+            }
+        };
+        return Some(crate::tfrag_render::game_to_bevy(
+            (Vec3::from(item.position) + axes * muzzle).to_array(),
+        ));
+    }
+    let muzzle = if let Some(chain) = class.chains.first().filter(|c| !c.is_empty()) {
+        *rc_formats::moby_anim::evaluate_chains(
+            &class.anim,
+            &item.anim,
+            item.snapshot.as_ref(),
+            &[chain.as_slice()],
+        )
+        .first()?
+    } else {
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0, 0.0],
+            [0.0, 0.0, 1.0, 0.0],
+            [0.0, 0.0, 0.0, 1.0],
+        ]
+    };
     let basis = Mat3::from_cols_array_2d(&[
         muzzle[0][..3].try_into().ok()?,
         muzzle[1][..3].try_into().ok()?,
@@ -105,6 +255,8 @@ pub(super) fn place(item: &mut HandItem, hand: Transform, data: &ItemData) -> Op
     let axes = Mat3::from_cols(rows[2], -rows[0], -rows[1]) * basis.inverse();
     let reach = if item.o_class == rc_game::hero::pyrocitor::CLASS {
         0.65
+    } else if matches!(item.o_class, 157 | 163 | 454 | 849) {
+        0.70
     } else {
         0.40
     };
@@ -127,9 +279,14 @@ fn aim(
     motion: Res<Motion>,
     mode: Res<crate::menu_render::MenuMode>,
     input: Option<Res<super::game_input::GamePad>>,
+    hand_input: Option<Res<super::game_input::HandInput>>,
+    mut support: ResMut<SupportGrip>,
+    attach: Option<Res<crate::moby_attach::MobyAttach>>,
 ) {
     let Some(mut play) = play else { return };
     let p = &mut *play;
+    p.game.hero.items.tracked = !settings.desktop_preview;
+    p.game.hero.items.tracked_aim = None;
     p.game.hero.weapons.blaster.tracked = !settings.desktop_preview;
     p.game.hero.weapons.blaster.tracked_aim = None;
     p.game.hero.weapons.pyro.tracked = !settings.desktop_preview;
@@ -137,10 +294,9 @@ fn aim(
     if settings.desktop_preview {
         return;
     }
-    if !matches!(
-        p.game.hero.items.slot.id,
-        BLASTER | rc_game::hero::pyrocitor::PYROCITOR
-    ) {
+    let id = p.game.hero.items.slot.id;
+    if !supported(id) || rc_game::hero::items::is_glove(id) {
+        support.held = false;
         return;
     }
     p.game.hero.items.tracked_hand = None;
@@ -151,6 +307,7 @@ fn aim(
         || p.death_pending
         || p.game.hero.hand_hidden()
     {
+        support.held = false;
         return;
     }
     let Some((hand, root, coll)) = motion.hands[1]
@@ -158,38 +315,63 @@ fn aim(
         .zip(level.0.collision.as_ref())
         .map(|((h, r), c)| (h, r, c))
     else {
+        support.held = false;
         return;
     };
-    let hand = root.mul_transform(hand);
-    let Some(mut item) = p
+    let authored = attach.as_ref().and_then(|a| a.tracked_grips(p));
+    // The native item definition selects one or two holding arm layers. Hydrodisplacer included.
+    support.primary = authored.map(|g| g[0]);
+    support.offset = authored.map(|g| {
+        let d = g[1] - g[0];
+        // Gun axes relative to controller: X up, Y back, Z right.
+        Vec3::new(d.z, d.x, d.y) / settings.units_per_metre
+    });
+    let two_handed = p
         .game
-        .hero
-        .items
-        .slot
-        .item
+        .item_data
         .as_ref()
-        .filter(|i| matches!(i.o_class, CLASS | rc_game::hero::pyrocitor::CLASS))
-        .cloned()
-    else {
+        .is_some_and(|d| d.def(id).b18 == 2);
+    let left = motion.hands[0];
+    let grip = hand_input.as_ref().and_then(|i| i.left_grip).unwrap_or(0.0);
+    if !two_handed || support.weapon != id || grip < 0.35 || left.is_none() {
+        support.held = false;
+    }
+    support.weapon = id;
+    if two_handed
+        && grip > 0.6
+        && left.is_some_and(|l| l.translation.distance(support_point(hand, &support)) < 0.25)
+    {
+        support.held = true;
+    }
+    let hand = root.mul_transform(weapon_hand(hand, left, &support));
+    let Some(mut item) = p.game.hero.items.slot.item.as_ref().cloned() else {
         return;
     };
     let Some(data) = p.game.item_data.as_ref() else {
         return;
     };
-    let Some(muzzle) = place(&mut item, hand, data) else {
+    let Some(muzzle) = place(&mut item, hand, data, support.primary) else {
         return;
     };
     let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + Vec3::Y * 1.6;
     if !unobstructed(p, coll, eye, hand.translation)
-        || !unobstructed(p, coll, hand.translation, muzzle)
+        || (id != rc_game::hero::walloper::WALLOPER
+            && !unobstructed(p, coll, hand.translation, muzzle))
     {
         return;
     }
     p.game.hero.items.tracked_hand = Some((item.position, item.rows));
+    p.game.hero.items.tracked_class = item.o_class;
+    p.game.hero.items.tracked_aim = Some(rc_game::hero::items::TrackedAim {
+        class: item.o_class,
+        muzzle: game_point(muzzle),
+        forward: game_point(*hand.forward()),
+        up: game_point(*hand.up()),
+    });
     let aim = Some((game_point(muzzle), game_point(*hand.forward())));
     if p.game.hero.items.slot.id == BLASTER {
         p.game.hero.weapons.blaster.tracked_aim = aim;
-    } else {
+    } else if p.game.hero.items.slot.id == rc_game::hero::pyrocitor::PYROCITOR {
         p.game.hero.weapons.pyro.tracked_aim = aim;
     }
 }

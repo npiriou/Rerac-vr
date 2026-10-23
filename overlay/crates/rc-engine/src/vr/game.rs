@@ -37,7 +37,7 @@ use std::sync::{
     atomic::{AtomicU64, Ordering},
 };
 
-const PANEL_LAYER: usize = 62;
+pub(super) const PANEL_LAYER: usize = 62;
 #[derive(Component, Clone, ExtractComponent)]
 pub struct GameEye;
 #[derive(Component, Clone, ExtractComponent)]
@@ -55,6 +55,20 @@ pub(super) struct Rig {
     snap_held: bool,
     pub(super) revision: u64,
     reset_held: bool,
+    eye_height: Option<f32>,
+    gravity_frame: Quat,
+}
+pub(super) fn native_panel(play: &crate::gameplay::Play) -> bool {
+    let gold_bolt = play
+        .game
+        .mobys
+        .mobys
+        .iter()
+        .any(|m| m.o_class == 1134 && m.state == 2);
+    play.game.camera.out.class == 5
+        && play.game.hero.items.slot.id == 26
+        && play.game.hero.state == 0x72
+        && !gold_bolt
 }
 impl Rig {
     pub(super) fn movement_for_camera(
@@ -67,6 +81,19 @@ impl Rig {
             return movement;
         }
         let camera = crate::play_camera::view_transform(&game.camera.out);
+        if game.hero.gravity_mode != 0 {
+            let up = self.gravity_frame * Vec3::Y;
+            let flatten = |v: Vec3| (v - up * v.dot(up)).normalize_or_zero();
+            let view = self.gravity_frame
+                * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw)
+                * head;
+            let forward = flatten(view * Vec3::NEG_Z);
+            let right = forward.cross(up).normalize_or_zero();
+            let desired = right * movement.x - forward * movement.y;
+            let cam_forward = flatten(camera.rotation * Vec3::NEG_Z);
+            let cam_right = cam_forward.cross(up).normalize_or_zero();
+            return Vec2::new(desired.dot(cam_right), -desired.dot(cam_forward));
+        }
         let relative =
             self.world_yaw + self.turn - self.yaw + heading(head) - heading(camera.rotation);
         Vec2::from_angle(relative).rotate(movement)
@@ -87,12 +114,16 @@ impl Rig {
             center.x = head.x;
             center.z = head.z;
         }
-        let base = Transform::from_translation(
-            crate::tfrag_render::game_to_bevy(game.hero.position()) + Vec3::Y * 1.6,
-        )
-        .with_rotation(Quat::from_rotation_y(self.world_yaw + self.turn));
-        // The horizontal HMD position has been consumed by the native capsule; never add it twice.
-        Some(rig_transform(base, center, self.yaw, scale))
+        let rotation =
+            self.gravity_frame * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw);
+        let eye = crate::tfrag_render::game_to_bevy(game.hero.position())
+            + self.gravity_frame * Vec3::Y * self.eye_height.unwrap_or(1.6);
+        // Room-scale displacement has already been consumed by the native capsule.
+        Some(Transform {
+            translation: eye - rotation * (center * scale),
+            rotation,
+            scale: Vec3::splat(scale),
+        })
     }
 }
 #[derive(Resource, Clone, Default)]
@@ -126,7 +157,7 @@ pub fn prepare_game() -> anyhow::Result<()> {
         // an HMD envelope instead, so leaning/looking around doesn't reveal missing objects.
         std::env::set_var("RC_OCCL", "0");
         for (key, value) in [
-            ("RC_LEVEL", "1"),
+            ("RC_LEVEL", if s.scene == "kerwan" { "3" } else { "1" }),
             ("RC_FRONTEND", "0"),
             ("RC_SCENE", "0"),
             ("RC_PLAY", "1"),
@@ -135,6 +166,13 @@ pub fn prepare_game() -> anyhow::Result<()> {
             if std::env::var_os(key).is_none() {
                 std::env::set_var(key, value);
             }
+        }
+        if std::env::var_os("RC_UNLOCK_PLANETS").is_none() {
+            let planets = (0..rc_game::travel::LEVEL_COUNT)
+                .map(|i| i.to_string())
+                .collect::<Vec<_>>()
+                .join(",");
+            std::env::set_var("RC_UNLOCK_PLANETS", planets);
         }
     }
     println!(
@@ -184,6 +222,10 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     app.insert_resource(settings.clone())
         .init_resource::<Rig>()
         .add_plugins(super::embodied::EmbodiedPlugin)
+        .add_plugins(super::vendor::VendorPlugin)
+        .add_plugins(super::spatial_menu::SpatialMenuPlugin)
+        .add_plugins(super::menu_pointer::MenuPointerPlugin)
+        .add_plugins(super::weapon_screen::WeaponScreenPlugin)
         .insert_resource(frames.clone())
         .insert_resource(draw.clone())
         .insert_resource(MonitorCadence {
@@ -237,7 +279,6 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
                 mirror_pass::<crate::scene_render::SceneFade>,
                 mirror_pass::<crate::fog_state::UnderwaterTint>,
                 mirror_pass::<crate::screen_tint::ScreenTint>,
-                mirror_pass::<crate::visibomb_view::MissileViewOverlay>,
             ),
         );
     app.sub_app_mut(RenderApp)
@@ -259,6 +300,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         PostUpdate,
         sky_policy
             .after(crate::sky_render::follow_main_camera)
+            .after(crate::flight_render::FlightSkySet)
             .after(update_views)
             .before(TransformSystems::Propagate),
     );
@@ -277,6 +319,7 @@ fn restore_monitor_cameras(mut cadence: ResMut<MonitorCadence>, mut cams: Query<
 fn pace_monitor_cameras(
     mut cadence: ResMut<MonitorCadence>,
     mode: Res<crate::menu_render::MenuMode>,
+    play: Option<Res<crate::gameplay::Play>>,
     mut cams: Query<
         (Entity, &mut Camera),
         Or<(
@@ -286,7 +329,11 @@ fn pace_monitor_cameras(
     >,
 ) {
     cadence.frame = cadence.frame.wrapping_add(1);
-    if mode.state.mode != rc_game::menus::mode::Mode::Gameplay || cadence.frame % cadence.every == 0
+    if mode.state.mode != rc_game::menus::mode::Mode::Gameplay
+        || play
+            .as_deref()
+            .is_some_and(|p| native_panel(p) || crate::visibomb_view::missile_view(Some(p)))
+        || cadence.frame % cadence.every == 0
     {
         return;
     }
@@ -524,7 +571,7 @@ fn align_body(
         return;
     };
     rig.head = Some(head.translation);
-    if rig.center.is_none() || mode.state.mode != rc_game::menus::mode::Mode::Gameplay {
+    if rig.center.is_none() || !mode.free_movement() {
         rig.previous_head = None;
         return;
     }
@@ -552,9 +599,9 @@ fn align_body(
     if play.death_pending || play.game.hero.health <= 0 {
         return;
     }
-    let rotation = Quat::from_rotation_y(rig.world_yaw + rig.turn - rig.yaw);
+    let rotation = rig.gravity_frame * Quat::from_rotation_y(rig.world_yaw + rig.turn - rig.yaw);
     let delta = rotation * delta * settings.units_per_metre;
-    play.roomscale_move(coll, [delta.x, -delta.z, 0.0]);
+    play.roomscale_move(coll, super::embodied::game_point(delta));
 }
 
 fn follow_game_camera(
@@ -567,6 +614,8 @@ fn follow_game_camera(
     mut rig: ResMut<Rig>,
     mut roots: Query<&mut Transform, (With<XrTrackingRoot>, Without<crate::fly_cam::FlyCam>)>,
     mut main: Query<&mut Transform, (With<crate::fly_cam::FlyCam>, Without<XrTrackingRoot>)>,
+    time: Res<Time<Real>>,
+    travel: Res<crate::travel_render::Travel>,
 ) {
     let Some(play) = play else { return };
     // Startup poses while the headset is on the desk are not the player's neutral pose.
@@ -594,14 +643,58 @@ fn follow_game_camera(
         );
     }
     rig.reset_held = reset;
-    let Some(root) = rig.root_for(&play.game, settings.units_per_metre) else {
+    let up = if play.game.hero.gravity_mode != 0 {
+        crate::tfrag_render::game_to_bevy(
+            [0, 1, 2].map(|i| play.game.hero.moby_rows[2][i].to_f32()),
+        )
+        .normalize_or_zero()
+    } else {
+        Vec3::Y
+    };
+    if up.length_squared() > 0.9 {
+        let old_up = rig.gravity_frame * Vec3::Y;
+        rig.gravity_frame = (Quat::from_rotation_arc(old_up, up) * rig.gravity_frame).normalize();
+    }
+    // Surface swimming uses the native horizontal swimmer's eye height. Blend the posture change;
+    // head rotation always remains physically tracked.
+    let target_height = if matches!(play.game.hero.group, 0x11 | 0x12) {
+        0.45
+    } else if play.game.hero.state == 4
+        || (play.game.hero.state == 0x73 && play.game.pad.held & rc_game::pad::button::CROUCH != 0)
+    {
+        0.85
+    } else {
+        1.6
+    };
+    let height = rig.eye_height.unwrap_or(target_height);
+    rig.eye_height = Some(
+        height + (target_height - height).clamp(-time.delta_secs() * 2.0, time.delta_secs() * 2.0),
+    );
+    // The flight is drawn on a separate world layer, about its authored camera, not about the
+    // hero left on the departure planet. Keep head-driven pitch/roll and show the actual voyage.
+    let root = if travel.blanked() {
+        main.iter().next().map(|native| {
+            rig_transform(
+                *native,
+                rig.center.unwrap_or(head.translation),
+                rig.yaw,
+                settings.units_per_metre,
+            )
+        })
+    } else {
+        rig.root_for(&play.game, settings.units_per_metre)
+    };
+    let Some(root) = root else {
         return;
     };
     for mut r in &mut roots {
         *r = root;
     }
     let center = root.mul_transform(head);
-    if mode.state.mode == rc_game::menus::mode::Mode::Gameplay {
+    if mode.free_movement()
+        && !native_panel(&play)
+        && !crate::visibomb_view::missile_view(Some(&play))
+    {
         for mut t in &mut main {
             // Keep authored camera shots in the original menu/cinematic panel.
             *t = center;
@@ -609,32 +702,62 @@ fn follow_game_camera(
     }
 }
 fn sky_policy(
-    mut cams: Query<(&mut Camera, &mut Camera3d, Has<EyeSky>, Has<GameEye>)>,
-    level: Res<crate::Level>,
+    play: Option<Res<crate::gameplay::Play>>,
+    mut cams: Query<
+        (&mut Camera, &mut Camera3d, &mut RenderLayers, Has<EyeSky>),
+        Or<(With<EyeSky>, With<GameEye>)>,
+    >,
+    main: Query<
+        (&Camera, Option<&RenderLayers>),
+        (
+            With<crate::fly_cam::FlyCam>,
+            Without<EyeSky>,
+            Without<GameEye>,
+        ),
+    >,
+    native_sky: Query<
+        &RenderLayers,
+        (
+            With<crate::sky_render::SkyCamera>,
+            Without<EyeSky>,
+            Without<GameEye>,
+        ),
+    >,
 ) {
-    let has_sky = level.0.sky.is_some();
-    for (mut c, mut d, sky, world) in &mut cams {
+    let sky_layers = native_sky
+        .iter()
+        .next()
+        .cloned()
+        .unwrap_or_else(RenderLayers::none);
+    let (world_clear, world_layers) = main
+        .iter()
+        .next()
+        .map(|(c, layers)| (c.clear_color.clone(), layers.cloned().unwrap_or_default()))
+        .unwrap_or((ClearColorConfig::Default, RenderLayers::default()));
+    for (mut c, mut d, mut layers, sky) in &mut cams {
         if sky {
+            *layers = if play
+                .as_deref()
+                .is_some_and(|p| crate::visibomb_view::missile_view(Some(p)))
+            {
+                RenderLayers::layer(1)
+            } else {
+                sky_layers.clone()
+            };
             c.order = 10;
             c.clear_color = ClearColorConfig::Default;
             c.output_mode = CameraOutputMode::Skip;
             d.depth_load_op = Camera3dDepthLoadOp::Clear(0.0);
-        } else if world {
+        } else {
+            *layers = world_layers.clone().with(PANEL_LAYER);
             c.order = 11;
-            c.clear_color = if has_sky {
-                ClearColorConfig::None
-            } else {
-                ClearColorConfig::Default
-            };
+            c.clear_color = world_clear.clone();
             c.output_mode = CameraOutputMode::Write {
                 blend_state: Some(BlendState::REPLACE),
                 clear_color: ClearColorConfig::None,
             };
-            d.depth_load_op = if has_sky {
-                Camera3dDepthLoadOp::Load
-            } else {
-                Camera3dDepthLoadOp::Clear(0.0)
-            };
+            // The kept XR sky eye always initializes the shared depth, even for a blank sky layer.
+            d.depth_load_op = Camera3dDepthLoadOp::Load;
         }
     }
 }
@@ -657,14 +780,26 @@ fn update_panels(
         &MeshMaterial3d<StandardMaterial>,
     )>,
     mut mats: ResMut<Assets<StandardMaterial>>,
+    play: Option<Res<crate::gameplay::Play>>,
 ) {
     use rc_game::menus::mode::Mode;
-    let menu = matches!(
-        mode.state.mode,
-        Mode::Menu | Mode::Freeze | Mode::Vendor | Mode::Movie | Mode::Slideshow | Mode::Ship
-    );
+    // Ship/engine movies already exist in the stereo world. Only actual menus, flat video and
+    // gameplay gadget views need the composed frame; a cinematic camera class must not enable it.
+    let menu = match mode.state.mode {
+        Mode::Gameplay => play.as_deref().is_some_and(native_panel),
+        Mode::Menu | Mode::Freeze | Mode::Vendor | Mode::Movie | Mode::Slideshow => true,
+        _ => false,
+    };
     let head = pose(views.as_deref()).unwrap_or_else(|| Transform::from_xyz(0.0, 1.6, 0.0));
+    let spatial_pause = matches!(mode.state.mode, Mode::Menu | Mode::Freeze);
+    let missile = play
+        .as_deref()
+        .is_some_and(|p| crate::visibomb_view::missile_view(Some(p)));
     for (panel, mut t, mut visibility, material) in &mut panels {
+        if spatial_pause || missile || (mode.spatial_vendor && mode.state.mode == Mode::Vendor) {
+            *visibility = Visibility::Hidden;
+            continue;
+        }
         let image = match panel.0 {
             0 if menu => Some(frame.image.clone()),
             1 if !menu => hud
@@ -689,7 +824,8 @@ fn update_panels(
                 m.base_color_texture = Some(image);
             }
         }
-        *t = head.mul_transform(Transform::from_xyz(0.0, 0.0, -2.0 - panel.0 as f32 * 0.002));
+        // Composite order toward the viewer: frame, HUD, static.
+        *t = head.mul_transform(Transform::from_xyz(0.0, 0.0, -2.0 + panel.0 as f32 * 0.002));
     }
 }
 fn audit(

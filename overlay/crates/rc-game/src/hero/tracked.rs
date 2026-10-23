@@ -1,0 +1,246 @@
+//! Optional tracked inputs enter the original state machine and collision pipeline.
+use super::{Hero, physics::*, states::Ctx};
+
+#[derive(Clone, Debug, Default)]
+pub struct Tracked {
+    pub enabled: bool,
+    pub pack_jump: bool,
+    pub hands: [Option<[f32; 3]>; 2],
+    pub grips: [bool; 2],
+    pub hyper_strike: bool,
+    pub ledge_jump: bool,
+    pub ledge_delta: [f32; 3],
+    pub anchors: [Option<[f32; 3]>; 2],
+    /// World velocity requested by submerged hand strokes, units / second.
+    pub stroke: [f32; 3],
+    pub swim_velocity: [f32; 3],
+    pub grabbed: [bool; 2],
+    /// Accepted grip anchors and native climb launches, consumed as presentation events.
+    pub ledge_grabs: [u64; 2],
+    pub ledge_climbs: u64,
+}
+
+impl Hero {
+    /// Run after damage/water checks, before ordinary button transitions.
+    pub(super) fn tracked_transitions(&mut self, c: &mut Ctx) -> bool {
+        if !self.tracked.enabled || self.mode != 0 || self.health <= 0 || self.frozen != 0 {
+            return false;
+        }
+        if matches!(self.state, 0x18..=0x1b) {
+            let anchor = self.tracked_ledge_anchor();
+            for side in 0..2 {
+                self.tracked.grabbed[side] &= self.tracked.grips[side]
+                    && self.tracked.hands[side].is_some_and(|hand| {
+                        self.tracked.anchors[side].is_none_or(|at| {
+                            (hand[0] - at[0]).hypot(hand[1] - at[1]) < 0.9
+                                && (hand[2] - at[2]).abs() < 0.75
+                        })
+                    });
+                if self.tracked.grips[side]
+                    && self.tracked.hands[side].is_some_and(|h| {
+                        (h[0] - anchor[0]).hypot(h[1] - anchor[1]) < 0.65
+                            && (h[2] - anchor[2]).abs() < 0.35
+                    })
+                {
+                    self.tracked.grabbed[side] = true;
+                    if self.tracked.anchors[side].is_none() {
+                        let hand = self.tracked.hands[side].unwrap();
+                        let tangent = [-self.ledge_blk.yaw.sin(), self.ledge_blk.yaw.cos()];
+                        let along = ((hand[0] - anchor[0]) * tangent[0]
+                            + (hand[1] - anchor[1]) * tangent[1])
+                            .clamp(-0.65, 0.65);
+                        self.tracked.ledge_grabs[side] =
+                            self.tracked.ledge_grabs[side].wrapping_add(1);
+                        self.tracked.anchors[side] = Some([
+                            anchor[0] + tangent[0] * along,
+                            anchor[1] + tangent[1] * along,
+                            anchor[2],
+                        ]);
+                    }
+                }
+                if !self.tracked.grabbed[side] {
+                    self.tracked.anchors[side] = None;
+                }
+            }
+            if !self.tracked.grabbed.iter().any(|&g| g) {
+                self.set_state(c, 6, true);
+                self.f500 = ticks(20) as i16;
+                return true;
+            }
+            if std::mem::take(&mut self.tracked.ledge_jump) && self.ledge_blk.f844 & 1 == 0 {
+                self.tracked.grabbed = [false; 2];
+                self.set_state(c, 0x1c, true);
+                return true;
+            }
+        } else {
+            self.tracked.grabbed = [false; 2];
+            self.tracked.anchors = [None; 2];
+            self.tracked.ledge_delta = [0.0; 3];
+            self.tracked.ledge_jump = false;
+            if self.f838 != 0 {
+                let anchor = self.tracked_ledge_anchor();
+                for side in 0..2 {
+                    self.tracked.grabbed[side] = self.tracked.grips[side]
+                        && self.tracked.hands[side].is_some_and(|hand| {
+                            let d: [f32; 3] = std::array::from_fn(|k| hand[k] - anchor[k]);
+                            // Reach along the edge is wider than reach into/across it.
+                            let normal =
+                                d[0] * self.ledge_blk.yaw.cos() + d[1] * self.ledge_blk.yaw.sin();
+                            d[0].hypot(d[1]) < 0.65 && normal.abs() < 0.38 && d[2].abs() < 0.35
+                        });
+                }
+                if !self.tracked.grabbed.iter().any(|&g| g) {
+                    self.f838 = 0;
+                }
+            }
+        }
+        if super::walloper::tracked_fire(self, c) {
+            return true;
+        }
+        let slam = std::mem::take(&mut self.tracked.hyper_strike);
+        let frame = c.anim.view().frame;
+        let air = matches!(self.state, 6 | 7 | 8 | 9 | 0x2d | 0x11)
+            || (self.state == 0xe && frame > 32.0)
+            || (self.state == 0xb && frame > if self.jump.kind7a0 != 3 { 25.0 } else { 26.0 });
+        let clearance = if self.jump.descending == 0 { 0.1 } else { 0.57 };
+        if slam
+            && self.items.slot.id == 8
+            && self.items.slot.state == 2
+            && air
+            && self.air_ticks != 0
+            && self.timer > ticks(10)
+            && self.height > crate::ps2v::Pf::f(clearance)
+            && self.gravity_mode == 0
+            && !super::boots::cable_contact(self)
+        {
+            self.set_state(c, 0x14, true);
+            return true;
+        }
+        let charge = std::mem::take(&mut self.tracked.pack_jump);
+        if charge && matches!(self.state, 0 | 2 | 3 | 4 | 0x73) && self.grounded() {
+            // The VR left trigger is native R1. Preserve the original side/back flip chooser before the pack jump.
+            if self.try_jump(c, ticks(7), true) {
+                return true;
+            }
+            return super::packs::crouch_jump(self, c);
+        }
+        // Pushing water up with both hands requests a dive; native water states own oxygen and surfacing.
+        if self.group == 0x12 && self.tracked.stroke[2] < -0.8 && self.swim.dive_lock == 0 {
+            self.set_state(c, super::swim::id::UNDERWATER, true);
+            return true;
+        }
+        false
+    }
+
+    pub fn tracked_ledge_anchor(&self) -> [f32; 3] {
+        let l = &self.ledge_blk;
+        [
+            l.point[0] - l.yaw.cos() * 0.435,
+            l.point[1] - l.yaw.sin() * 0.435,
+            l.top_z,
+        ]
+    }
+
+    /// Close the hand-anchor error along a validated ledge, without inertia or velocity prediction.
+    pub(super) fn tracked_ledge_motion(&mut self, env: &super::Env, anim: &super::anim::AnimView) {
+        let delta = std::mem::take(&mut self.tracked.ledge_delta);
+        let tangent = [-self.ledge_blk.yaw.sin(), self.ledge_blk.yaw.cos()];
+        let error = delta[0] * tangent[0] + delta[1] * tangent[1];
+        if !error.is_finite() || error.abs() < 0.008 {
+            return;
+        }
+        let along = (error - error.signum() * 0.008).clamp(-0.045, 0.045);
+        let pos = self.pos;
+        let old = self.ledge_blk;
+        let old_found = self.f838;
+        self.pos[0] = self.pos[0] + crate::ps2v::Pf::f(tangent[0] * along);
+        self.pos[1] = self.pos[1] + crate::ps2v::Pf::f(tangent[1] * along);
+        let there = to_f32x3(self.pos);
+        let mut valid = false;
+        if super::ledge::probe_c(self, env, there, self.rot[2].to_f32()) {
+            super::ledge::tracked_ledge_probe(self, env, anim);
+            let next = self.ledge_blk;
+            let yaw_change = (next.yaw - old.yaw)
+                .sin()
+                .atan2((next.yaw - old.yaw).cos())
+                .abs();
+            valid = self.f838 != 0
+                && next.moby == old.moby
+                && (next.top_z - old.top_z).abs() < 0.15
+                && yaw_change < 0.35;
+            if valid {
+                // A valid probe establishes wall/top/clearance. Its incidental tangential hit location
+                // is replaced by the exact requested body position, so it cannot add another step.
+                let drift = (there[0] - next.point[0]) * tangent[0]
+                    + (there[1] - next.point[1]) * tangent[1];
+                self.ledge_blk.point[0] += tangent[0] * drift;
+                self.ledge_blk.point[1] += tangent[1] * drift;
+                self.carry.flags &= !1; // Reattach moving platforms at the newly requested location.
+            }
+        }
+        if !valid {
+            self.ledge_blk = old;
+            self.f838 = old_found;
+        }
+        self.pos = pos;
+    }
+
+    pub(super) fn tracked_swim(&mut self, surface: bool) {
+        if !self.tracked.enabled {
+            return;
+        }
+        // Bounded drag gives strokes momentum, without bypassing move_collide.
+        let limit = if surface { 3.0 } else { 4.5 };
+        let t = &mut self.tracked;
+        for k in 0..3 {
+            t.swim_velocity[k] = t.swim_velocity[k] * 0.96 + t.stroke[k] * 0.12;
+            if surface && k == 2 {
+                t.swim_velocity[k] = 0.0;
+            }
+        }
+        let speed = t.swim_velocity.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if speed > limit {
+            for v in &mut t.swim_velocity {
+                *v *= limit / speed;
+            }
+        }
+        for k in 0..3 {
+            self.vel[k] = self.vel[k] + crate::ps2v::Pf::f(t.swim_velocity[k] / 60.0);
+        }
+    }
+
+    /// Continuous foot sweep before the native ground probe. Thin floors remain visible when a
+    /// falling step or capsule correction crosses their plane between two simulation positions.
+    pub(super) fn tracked_floor_sweep(&mut self, env: &super::Env, before: V4) {
+        use crate::ps2v::Pf;
+        if !self.tracked.enabled
+            || self.mode != 0
+            || self.gravity_mode != 0
+            || self.health <= 0
+            || self.frozen != 0
+            || self.pos[2] >= before[2]
+            || !matches!(self.group, 0 | 1 | 2 | 4)
+        {
+            return;
+        }
+        let mut a = before;
+        let mut b = self.pos;
+        a[2] = a[2] + Pf::f(0.035);
+        b[2] = b[2] - Pf::f(0.02);
+        let Some(hit) = env.line(a, b, 0x24) else {
+            return;
+        };
+        let n = hit.normal;
+        let length = n.iter().map(|v| v * v).sum::<f32>().sqrt();
+        if length < 1e-6 || n[2] / length < 0.65 || matches!(hit.surface_id(), 0 | 3 | 0xb | 0xd) {
+            return;
+        }
+        if hit.point[2] > before[2].to_f32() + 0.035 {
+            return;
+        }
+        self.pos[2] = Pf::f(hit.point[2] + 0.003);
+        if self.vel[2] < Pf::ZERO {
+            self.vel[2] = Pf::ZERO;
+        }
+    }
+}

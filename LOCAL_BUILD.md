@@ -182,3 +182,153 @@ Native checks with/without VR and executable build completed. SHA-256: `5776AC09
 Corrected the Blaster's 90-degree left roll while preserving its muzzle/aim. Replaced the procedural hand meshes with original class-0 hand triangles, UVs and textures mounted independently on both controllers. The original Bomb Glove substitutes the right hand when used. Added native Pyrocitor with tracked nozzle/aim, continuous flames, native damage/collisions/audio/particles and ammunition use. Blaster/Pyrocitor are granted when missing; all owned ammo-using weapons are filled once per application launch to their native record capacity.
 
 Native builds/checks with and without VR completed. SHA-256: `385EAEFE19F4838A92D050DCD7B24940EF40FEC55E09A21C86638364DFAF367A`. Build log: `work/vr/pyro-brown-hands-build.log`; normal launch: `work/vr/novalis-headset-20261022-230802.log`. Observed starting ammo: `[(10, 40), (15, 200), (16, 240)]`; quick select: `[10, 15, 16, 0, 0, 0, 0, 0]`; original hand geometry: `[{'side': 0, 'triangles': 582}, {'side': 1, 'triangles': 452}]`. No tests or commits performed. Physical fit/fire feedback remains pending. Previous executable/build record retained under `work/vr/before-pyro-brown-hands/`.
+
+## Arsenal and gesture traversal expansion
+
+Baseline snapshot committed as `3ee729e`. Native arsenal/gadgets and controller aim, original hand/glove corrections, thrown Mine/Doom/Decoy support, optional foregrips, quick-select pages, long-A pack jumps, native ledge grip/pull, arm-stroke swim and continuous floor support sweep are implemented. Native script-camera interactions use the headset panel.
+
+VR/non-VR compilation and executable build passed; no tests run. SHA-256: `58A8C1A5867D59429B0C39DB62F9AE1874C63DA80B8C169F591C81112D1A3F6F`. Build output: `work/vr/arsenal-traversal-final-build.log`. Normal runtime: `work/vr/novalis-headset-20261022-235646.log`. Stereo attached and starting reserves applied. Physical feedback remains pending as itemized in `overlay/docs/vr/IMPLEMENTATION_STATUS.md`. No additional commit created.
+
+## Arsenal and gesture traversal expansion
+
+Baseline snapshot committed as `3ee729e`. Native arsenal/gadgets and controller aim, original hand/glove corrections, thrown Mine/Doom/Decoy support, optional foregrips, quick-select pages, long-A pack jumps, native ledge grip/pull, arm-stroke swim and continuous floor support sweep are implemented. Native script-camera interactions use the headset panel.
+
+VR/non-VR compilation and executable build passed; no tests run. SHA-256: `4EAF5042B8A435AD63ABB0DA46F67FA6C367ADB1F6A613987BAA2C9FA6169CB2`. Build output: `work/vr/arsenal-traversal-final-build.log`. Normal runtime: `work/vr/novalis-headset-20261023-000025.log`. Stereo attached and starting reserves applied. Physical feedback remains pending as itemized in `overlay/docs/vr/IMPLEMENTATION_STATUS.md`. No additional commit created.
+
+## Palm-side ammunition, weapon grips, Morph aim and physical Walloper
+
+Read-only native geometry inspection identified separate rear grips and muzzle/sight lists. Per-weapon grip mounts replace muzzle anchoring for the affected weapons; foregrips include lateral offsets. Four glove objects move to controller-local -X. The Morph ray and its locks follow tracked aim. Walloper physical punches sweep the native fist with directional push, native damage/effects and per-stroke deduplication; original trigger lunge remains available.
+
+VR/non-VR compilation and build passed; no automated tests run and no commit created. SHA-256 `CF098A4872B3726BCEC9826C0CE0D69E510862705B52966076B5ADEC30F571BC`. Build log `work/vr/grips-morph-walloper-build.log`; normal runtime `work/vr/novalis-headset-20261023-084006.log`. Startup/stereo/inventory initialized; physical feedback remains pending.
+
+## Immediate A and trigger+A pack controls
+
+Removed the long-press charge and release-triggered ordinary jump. A now sends Cross immediately. Right index trigger held + a fresh ground A press queues the equipped pack's native high/long jump; Cross remains held for native jump height/glide. The combo reserves trigger input until release, preventing simultaneous gunfire or glove release.
+
+VR/non-VR compilation and VR executable build passed; no automated tests run. SHA-256 `6D05FF8DB17738687C634133369199AE024F23A318EDDA9E80A006BD02ECABE3`. Build log `work/vr/immediate-jump-build.log`; normal Novalis runtime `work/vr/novalis-headset-20261023-091058.log`. Stereo/inventory initialized; control feel awaits headset feedback.
+
+## Gadget grip and orientation correction
+
+Original Novalis gadget meshes, skinning, attachment lists and item-class definitions were inspected read-only. Added independent grip mounts for Swingshot, Trespasser, Hydrodisplacer and Metal Detector; upright Hologuise/Drone Device remotes and holder-facing PDA. Taunter and actual Morph-o-Ray class 185 also receive measured grips. Trespasser prong tip is explicit; listless PDA has a held-body use point. Presentation and native tracked aim share the same placement.
+
+VR/non-VR compilation and VR executable build passed; no automated tests. SHA-256 `8577B85E7255ACD48E14422E7CD6DF6494339226C43EC592BC2EE649BFA842B1`. Build log `work/vr/gadget-grips-build.log`; normal Novalis startup `work/vr/novalis-headset-20261023-091615.log` initialized stereo and inventory. Physical fit/readability and native contextual interactions await headset feedback.
+
+## Spatial vendor with live locomotion
+
+Native vendor screen targets and item/salesman/popup canvases are mapped to original animated monitor quads. Headset panels are hidden during shopping; canvas cameras stay independent of the headset. Tracked headset vendors retain hero/world updates, stick/room movement and A jump, bypass the native state-100 hold, hiding, fades/music pause, exit teleport/camera cut and weapon demo. Separate shopping pad/history uses right stick, fresh right trigger and Y. Physical vendors close on distance/death; PDA vendors use the same spatial presentation. Desktop/non-VR and gold upgrades retain native behavior.
+
+VR/non-VR compilation and VR executable build passed; no tests, scripted interactions or smoke tests. SHA-256 `43505A14D60401593AB9A12C1DE83FAC95E81C4F3BFF5854BCC4FE309339137F`. Build log `work/vr/spatial-vendor-build.log`; normal Novalis startup `work/vr/novalis-headset-20261023-093010.log` initialized stereo and inventory. Vendor-specific rendering, controls and purchases await headset feedback; startup alone does not verify them.
+
+## Kerwan default start and all destinations unlocked
+
+Default VR scene is Kerwan / Metropolis (native level 3). Run.ps1 supports kerwan, novalis and calibration; gameplay scenes receive the data directory. All native level IDs 0..18 are unlocked through the existing RC_UNLOCK_PLANETS / GameState::unlock_planet hook, including native galaxy-map order, without marking missions completed. Direct VR startup uses the same default when environment overrides are absent. All 19 extracted level cores are present, and the existing loader/VR integration applies to native level changes; full per-planet VR playthroughs remain unverified.
+
+VR/non-VR compilation and VR executable build passed. Normal Kerwan launch initialized stereo, starting inventory/ammo, native unlocks 0..18 and live level-3 ticks. No tests, scripted gameplay or all-level tour. SHA-256 `81DB59FAB86440C4C3C6328B27A9D0153283B3032DF9C7448DA4C24DF52D7B44`. Build log `work/vr/kerwan-unlocked-build.log`; runtime `work/vr/kerwan-headset-20261023-093425.log`.
+
+## Physical Walloper launches Ratchet; glove point advanced into palm
+
+A fresh physical Walloper punch supplies a bounded 18 game-unit/s launch for 10 simulation ticks along its initial 3-D tracked velocity, with gravity. Velocity is applied after native state physics and before original capsule integration/world/moby collision. Existing per-stroke hit/effect logic, rearm/cooldown and native trigger lunge remain. Invalid tracking/equipment/movement cancels the launch. Four throwing gloves now share controller-local point (-0.135,+0.01,-0.125), advanced 8 cm toward fingers after the user identified the previous point as the inner wrist. Hold/render/release use the same point.
+
+VR/non-VR compilation and VR executable build passed; no tests or scripted gameplay. SHA-256 `A3EF3F4A7877CA5307B5A120B5F449FF73B338650CAFD040E267B3F2E12EE217`. Build log `work/vr/walloper-dash-palm-build.log`; normal Kerwan runtime `work/vr/kerwan-headset-20261023-094222.log` initialized stereo, inventory and level-3 ticks. Physical launch/impacts and palm fit await headset feedback.
+
+## Left trigger as R1; native side/back flips; stable vendor screen meshes
+
+Left index trigger now maps to original R1 with independent hysteresis. The queued ground combo runs the native side/back flip chooser first, then the equipped pack jump; native airborne/chained R1 rules remain. Right trigger is independent for weapons. Headset pose does not follow flip/crouch animation. The user's prior vendor session (kerwan-headset-20261023-093425.log) recorded 21 GPU slab unallocated-key errors at opening, matching initially empty monitor meshes rewritten after upload. All monitor layers now share one complete immutable unit quad with pose and UV crop in transform/material data, preserving native targets and free locomotion. Sparse opening telemetry supports physical feedback.
+
+VR/non-VR compilation and VR executable build passed; no tests, scripted vendor input or jump sequence. SHA-256 `95B7EF0A7718B09C36544F3552F6F9C8EE68FE01EC75FE800A80F3633783A0A0`. Build log `work/vr/left-r1-vendor-build.log`; normal Kerwan runtime `work/vr/kerwan-headset-20261023-095603.log` initialized stereo, inventory and level-3 ticks. Physical monitor contents and left-trigger flips remain to be confirmed.
+
+## Ship list, monitor occlusion, cinematic panels, recall and Walloper sensitivity
+
+All 19 unlock flags were set in the prior user session, but the map order began `[3,0,1,2,...]`: zero truncates the native list. The repaired order has 18 contiguous destinations before its terminator (intro 0 remains unlocked; Veldin revisit is 18). Original opened vendor geometry was inspected read-only: opaque front faces sit +0.0224..0.0397 game units ahead of joint reference planes; content formerly at +0.002 was occluded. Vendor and PDA content now clears the faces at +0.05. Mode Cutscene/Ship omit the extra composed-frame panel. Empty-hand trigger recalls the last weapon through native selection, including latched wrench; firing requires release/new press and pending swaps are preserved. Walloper threshold is now 11 cm / 2.1 m/s with 0.10 s quiet rearm and 0.45 s cooldown.
+
+VR/non-VR compilation and executable build passed. SHA-256 `DDAC7B6392FC9AFB76112BACB4FA305BF6CB430E327702B58AE0B6E5AF153607`; build log `work/vr/planets-monitor-recall-build.log`; normal launch `work/vr/kerwan-headset-20261023-102654.log` initialized stereo, max starting reserves and live Kerwan ticks, with startup map order `[3, 1, 2, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 0, 0]`. No tests, commits or interaction sequences. Headset presentation and gesture behavior await user feedback.
+
+## Ship-menu joystick navigation
+
+The user reported that neither joystick changed planets. Read-only Kerwan overlay parsing found focused list flags 0x139 (BUTTONS_ONLY): the original list reads raw_pressed, excluding analog-derived directional bits. XR now encodes the dominant direction of either joystick into D-pad buttons in page/freeze menus at 0.55 threshold, retaining analog axes for native widgets. Up/down selects; centre between steps; A confirms, Y returns.
+
+VR/non-VR compilation and executable build passed; no tests or scripted/manual interaction sequence. SHA-256 `C1E7C158EE45F285F22FDAA74085CC7A0D4A1416FCC68FDCB5B61C770DBEA8F6`. Build `work/vr/ship-menu-input-build.log`; normal Kerwan launch `work/vr/kerwan-headset-20261023-103426.log` initialized stereo and live ticks without startup errors. Physical navigation remains to be confirmed.
+
+## Planet transition: effect target mismatch and missing VR travel view
+
+The user log `work/vr/kerwan-headset-20261023-103426.log` confirms destination 2 loaded and level 03-to-02 swapped, then GPU validation rejected an Rgba8Unorm effect pipeline in an Rgba8UnormSrgb pass. Effects now route according to ready pipeline attachment format as well as marker fallback during compilation, covering retained draws after old-level entity deletion. The exact offending entity was not identified by the log. Native sky initialization no longer overrides the retained XR cameras. VR now mirrors native world/sky layers and follows the authored camera during the blanked travel stage, preserving head-driven pitch/roll and native cards/HUD, with no duplicate cinematic frame.
+
+VR/non-VR compilation and executable build passed. SHA-256 `C1EC307E3D4852BFEB91C9147E07E320BC7FC4CAB24471F092DB66E7B20B944C`. Build `work/vr/planet-transition-render-build.log`; normal Kerwan startup `work/vr/kerwan-headset-20261023-104714.log` initialized stereo and live gameplay without startup errors. No tests, commits or interplanetary interaction sequence. Full travel/arrival in headset remains pending user feedback.
+
+## Combat, Hyper Strike, magnetic tracks, physical ledges and haptics
+
+Walloper restores its original broad three-sphere hit delivery, damage 3 and effects; the obsolete tiny fist-only check and aim-target filter are removed. Gesture sensitivity is 7 cm / 1.45 m/s with quiet rearm and cooldown. Gesture propulsion is removed; tracked trigger attacks suppress horizontal launch. Wrench is excluded from trigger recall, while tracked grip preserves the native Circle saved weapon. The wrench is 20% larger, elongates by up to 15% with a swing and has native reach extension/radius; crates demand a faster intentional strike. Downward airborne gestures request native Hyper Strike state 0x14, preserving native gates, accelerated fall, damage 2 and shockwave. Native melee uses the tracked wrench grip. Gold-bolt scripted cameras omit the duplicate full-frame panel. Magnetic tracks transport the camera/hand frame with native body up and collision-resolved room movement. Fixed ledge hand anchors and opposite hand displacement drive native probes/hang physics; a paired downward arm shove requests the same climb as A. Right-controller output haptics cover actual wrench hits and Blaster spawns.
+
+VR/non-VR compilation and executable build passed. SHA-256 `2B5A210AB7B1B4CE643D6B8433F4672DB82DF028CC24717E26C109D6FAE569A0`. Build `work/vr/combat-traversal-build.log`; normal Kerwan startup `work/vr/kerwan-headset-20261023-113506.log` initialized stereo and live gameplay without startup errors. No tests, commits or gameplay interaction sequences were run. Physical gesture thresholds, impacts, magnetic tracks, ledge behavior and haptics await user feedback.
+
+## Arsenal/gadget haptics, bilateral damage and cinematic skip
+
+Both OpenXR controller outputs are bound. `vr/haptics.rs` derives distinct recoil/stream/capture/attachment/puzzle/scan patterns from native committed ammo-use, actual Blaster spawns, missile counts and gadget states. Heavy support grips get reduced left-hand recoil. A native accepted-damage counter survives same-tick healing; a same-body health-drop fallback handles direct lethal/environmental damage. Damage applies a strong two-hand priority pulse with a softer tail, including active controllers during optical occlusion. Focus/menu loss clears queues; reload/respawn rebase counters.
+
+Fresh right-stick click during scenes/movies queues the native Start+shoulder skip combination through the opening window. Players retain normal fades, actor/dialogue cleanup and progression. Explicit VR skip also permits normally unskippable clips for the current movie only; global replay state is retained. The held click is suppressed through release after returning to gameplay. Ship travel/loading is not fast-forwarded.
+
+VR/non-VR compilation and executable build passed. SHA-256 `B388E2CD1E14965819A52ED24094C054FE6EB0514BD869DCA2180C89711CDDC7`. Build `work/vr/arsenal-haptics-skip-build.log`; normal Kerwan startup `work/vr/kerwan-headset-20261023-121719.log` initialized stereo and live gameplay without startup errors. No tests, commits or gameplay interaction sequence were run. Actual haptic feel and cinematic skipping await user feedback.
+
+## Native planar Walloper lunge, strong strikes/ledge shove, dorsal Swingshot and visible body
+
+Physical Walloper punches enter original state 0x20 instead of delivering a separate instant hit. Original readiness/grounding gates, windup, horizontal dash/ramp and three-sphere damage window run. Tracked dash direction is planar; vertical movement stays with native gravity. Wrench enemy hits now need 4 m/s tip, 1.8 m/s hand and 10 cm travel; crates need 5 m/s tip, 2.2 m/s hand and 12 cm travel, with no wrist-only bypass. Ledge translation ignores sticks in XR and native input after d-pad fallback; climbing by gesture needs both arms down 22 cm at 2.2 m/s within 0.10 s. Slow/single-hand climbing is removed; native A and grip-drop remain. Swingshot class 208 rolls 90 degrees from wrist right to wrist top about its anchored grip and forward axis. Original Ratchet body meshes are visible for inspection, retaining native animation.
+
+VR/non-VR compilation and executable build passed. SHA-256 `28C4E689EF1F0BFDFCA214CC5E1712CA5D6567BF9513A54C1F21A624F9F50DF6`. Build `work/vr/body-planar-dash-strikes-build.log`; normal Kerwan startup `work/vr/kerwan-headset-20261023-122601.log` initialized stereo and live gameplay without startup errors. No tests, commits or gameplay interaction sequences were run. Physical force/shove feel, dash behavior, Swingshot placement and visible-body presentation await user feedback.
+
+## Native glove/grip poses, deployment haptics, spatial pause and Visibomb monitor
+
+Gameplay RatchetMesh excluded from headset layers again; simulation/animation retained.
+
+Original complete brown glove/cuff geometry: left joints 74..91, right 54..71. Same native layered Ratchet palette; free palm controller placement; exact held-hand pose through native item attachment. Item scale propagated to tracked render presentation.
+
+Native b18=2 determines two-hand holds, including Hydrodisplacer. Authored primary/support palm centres determine controller mount/latch and support-hand orientation/fingers/cuff, replacing approximate foregrip positions.
+
+Distinct selectable-item amplitude, duration, frequency and accent profiles. Pulses follow native take-out sequence mechanical motion changes and animation sound markers; ready transition detent, static glove/wrench appearance cue. Focus/tracking/menu cancellation, bounded opening, firing/use/damage priorities retained.
+
+Original clipped HUD primitives and textures batched into world meshes, native animated frame geometry and true stereo menu preview models. Opening anchor remains fixed in world; no composed frame panel. Native navigation/pause retained.
+
+Native missile camera GameFrame refreshed every frame, sampled only on original articulated class-163 joint-9 monitor face. Headset panels/scanline mirroring suppressed; normal hero-relative HMD sky/fog retained, native steering/boost/detonation controls preserved. Decorative screen returns after remote flight.
+
+Left trigger remains native R1, visible blended crouch eye height 0.85 units, immediate ground A/flip queue independent of equipped pack. Native directional flip timing, pack gates and airborne behaviour retained. Wrench grip/release throw unchanged.
+
+VR/non-VR checks and executable build passed. SHA-256 `7E00E415C4913953EBB9E62B4F147C7D9DF0448F6233256228C9F2AD34060670`. Build `work/vr/spatial-equipment-build.log`; normal launch `work/vr/kerwan-headset-20261023-125408.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences; no commit. Pending user headset feedback on glove cuffs/grip alignment, support handles, deployment rhythms, spatial pause layout/occlusion/readability, missile inset and crouch comfort.
+
+## Right-controller pause pointer and trigger confirmation
+
+Tracked right-controller forward ray intersects original spatial menu canvas; pixel coordinates match native 512x416 layout. Headset-only beam/contact dot with cyan enabled targets.
+
+Hover updates native widget focus/cursors through original leave/enter behavior. List rows, equipment/gadget grids, toggles, camera/Port Options, sound controls, help icons and quit choices use clipped original layout bounds. Fresh trigger confirms via native actions. Port arrows scroll; trigger-held pointing adjusts volume sliders.
+
+One click per trigger press/native tick; release required after opening on a held trigger. Transitions reject old page targets; inactive/lost hand or focus clears queued clicks. Menu trigger is consumed through gameplay return until release, preventing unintended shots. Native buttons/stick fallback retained.
+
+VR/non-VR checks and executable build passed. SHA-256 `73DC66D3EDC93D1F5016D51592D3FD36D36A4774E73311C9D3BE248C23EBFC63`. Build `work/vr/pause-pointer-build.log`; normal launch `work/vr/kerwan-headset-20261023-133613.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences; no commit. Pending headset feedback on ray alignment, hover/confirm behavior, page changes, audio slider targeting and release handling.
+
+## Wrench wall collision and Hyper Strike impact feedback
+
+Native once-per-grounded-slam landing counter drives strong right-hand impact, softer left-hand shock and a short tail; light initiation cue. Damage haptics retain priority.
+
+Held native wrench/head and original gripping hand are constrained by solid level geometry using previous safe head sweep, radius overlap and grip/eye rays. Native sparks/sound and force-scaled haptics require 1.3 m/s normal head approach plus 0.65 m/s physical hand motion. Cooldown 0.22 s; withdrawal required to rearm. Enemy/crate swing gates and throwing input retained.
+
+Paused capture preserves fully valid tracked hand poses for the spatial pointer while resetting combat gestures and button edges.
+
+VR/non-VR checks and executable build passed. SHA-256 `F36903BCD795BEA778FCA58D03B902E916289F65361D6D0FFE278B7B64F37D49`. Build `work/vr/wrench-wall-hyper-build.log`; normal launch `work/vr/kerwan-headset-20261023-134947.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences; no commit. Pending headset feedback on wall clamping, contact rearming, Hyper Strike landing timing/intensity and paused pointer interaction.
+
+## Wrench rebound, stable spatial pause content and anchored ledge correction
+
+Held wrench/native hand recoil 3-5.5 cm opposite the measured incoming stroke over 150 ms, collision constrained and excluded from physical hit history. One recoil per accepted wall impact.
+
+Explicit painter-order transparent batch bias in both eyes; repeat samplers for monitor effects; additive FIX-style noise alpha. Content and pointer plane moved 0.035 units ahead of nominal monitor faces; native 3D frames/previews retained.
+
+Actual world-space hand-anchor error replaces integrated controller deltas. Held ledge targets reject automatic velocity-predicted reprobes. Validated steps limited to 0.045 units/tick with 0.008-unit dead zone; full ledge/found-flag rollback on failure. Catch tangent preserved; distant grip tracking released; anchors follow moving carriers. Native joystick ledge movement remains disabled; A/two-arm shove retained.
+
+VR/non-VR checks and executable build passed. SHA-256 `E8EC2F747E67B88887C31F48B92E7E9260A5EA03139BFBB7BC23915CC7C7AE2F`. Build `work/vr/rebound-menu-ledge-build.log`; normal launch `work/vr/kerwan-headset-20261023-141817.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences; no commit. Pending headset feedback on wrench rebound, consistent pause text/monitor visibility and stable anchored hand-over-hand ledge traversal.
+
+## Ledge grip/climb haptics, stronger wrench strikes and crate collision
+
+Per-hand native accepted anchor counters trigger a light latch pulse (0.23/25ms/175Hz). Accepted native ledge-climb launches by A or two-arm shove trigger both hands (0.65/75ms/85Hz plus 0.24/30ms/145Hz tail after 95ms). Rejected climbs and held grips cannot repeat feedback; damage retains priority.
+
+Enemies require tip 5.5m/s, hand 2.4m/s and 14cm stroke. Crates require tip 6.5m/s, hand 2.8m/s and 16cm stroke plus actual contact. Relative to previous tip-speed minima, kinetic energy demand for equal effective mass rises about 89%/69%.
+
+Separate crate-only native scene query includes meshes and primitive colliders, preserving independent world blocking. Intact crates stop the held model/native gripping hand with existing contact recoil/haptics. Crate damage requires actual collision contact and the stronger stroke; native destruction disables the original collider normally.
+
+VR/non-VR checks and executable build passed. SHA-256 `FE8172DCAF34B0184D4A8ABDD294722A03C5588A06F2E49108DE97E07FE310DA`. Build `work/vr/ledge-haptics-crate-contact-build.log`; normal launch `work/vr/kerwan-headset-20261023-143632.log`. NOT RUN per AGENTS.md. No gameplay interaction scripts or sequences. Pending headset feedback on ledge grip/climb haptics, stronger wrench strikes, intact crate blocking and destruction contact.

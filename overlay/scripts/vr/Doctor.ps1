@@ -11,4 +11,4 @@ foreach ($Key in @('HKLM:\SOFTWARE\Khronos\OpenXR\1','HKCU:\SOFTWARE\Khronos\Ope
 }
 try {Get-CimInstance Win32_VideoController|Select-Object Name,DriverVersion} catch {Write-Warning 'GPU query unavailable.'}
 Write-Host 'Expected: native Windows MSVC Rust target, C++ build tools + Windows SDK, CMake, PICO Connect, SteamVR as active OpenXR runtime.'
-Write-Host 'Without a headset, use Run.ps1 -Scene novalis -DataDir <extracted-folder> -DesktopPreview. Tracking and controller checks remain pending until hardware is connected.'
+Write-Host 'Without a headset, use Run.ps1 -Scene kerwan -DataDir <extracted-folder> -DesktopPreview. Tracking and controller checks remain pending until hardware is connected.'

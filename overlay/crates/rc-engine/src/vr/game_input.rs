@@ -14,7 +14,7 @@ use bevy_mod_xr::{
     session::{XrPreDestroySession, XrSessionCreated, session_available},
     spaces::XrSpaceSyncSet,
 };
-use openxr::{Action, ActionSet, Path, Posef, Vector2f};
+use openxr::{Action, ActionSet, Haptic, Path, Posef, Vector2f};
 use rc_game::pad::{PadInput, button};
 
 #[derive(Resource, Default)]
@@ -22,17 +22,34 @@ pub struct GamePad {
     pub pad: PadInput,
     pub active: bool,
     pub quick_select: Option<Vec2>,
+    pub vendor: Option<PadInput>,
+    pub skip_cutscene: bool,
 }
 #[derive(Resource, Default)]
 pub(super) struct Focused(pub bool);
 #[derive(Resource, Default)]
 pub(super) struct HandInput {
     pub grip: Option<f32>,
+    pub left_grip: Option<f32>,
     pub trigger: Option<f32>,
     firing: bool,
+    pack_modifier: bool,
+    pub pack_jump: bool,
+    pub menu_click: bool,
+    pub menu_held: bool,
+    menu_ready: bool,
+    menu_active: bool,
+    menu_consumed: bool,
+    quick_page: i8,
 }
 #[derive(Component, Clone, Copy)]
 pub(super) struct Hand(pub usize);
+
+#[derive(Resource, Default)]
+pub(super) struct Feedback {
+    pub wrench_impact: bool,
+    pub wrench_wall: Option<f32>,
+}
 
 #[derive(Default)]
 pub(super) struct HandSelect {
@@ -41,6 +58,7 @@ pub(super) struct HandSelect {
     previous: Option<Vec3>,
     revision: u64,
     selecting: bool,
+    page_held: bool,
 }
 impl HandSelect {
     fn direction(&mut self, hand: Option<Vec3>, head: Option<Transform>, revision: u64) -> Vec2 {
@@ -82,13 +100,31 @@ impl HandSelect {
         }
     }
 }
+#[derive(Default)]
+pub(super) struct SkipInput {
+    media: Option<rc_game::menus::mode::Mode>,
+    down: bool,
+    pending: bool,
+    suppress: bool,
+}
+
+#[derive(Default)]
+pub(super) struct JumpInput {
+    pressed: bool,
+    trigger_consumed: bool,
+    shopping: bool,
+    shop_ready: bool,
+}
 #[derive(Resource)]
 pub(super) struct Actions {
     set: ActionSet,
     movement: Action<Vector2f>,
     camera: Action<Vector2f>,
     grip: Action<f32>,
+    left_grip: Action<f32>,
+    left_trigger: Action<f32>,
     trigger: Action<f32>,
+    pub(super) vibration: [Action<Haptic>; 2],
     hands: [Action<Posef>; 2],
     buttons: Vec<(u32, Action<bool>)>,
 }
@@ -104,6 +140,13 @@ impl Plugin for GameInputPlugin {
             .add_systems(OxrSendActionBindings, bindings)
             .add_systems(XrSessionCreated, (attach, spawn_hands))
             .add_systems(XrPreDestroySession, clear)
+            .init_resource::<super::haptics::State>()
+            .add_systems(
+                FixedUpdate,
+                super::haptics::update
+                    .after(crate::gameplay::GameTick)
+                    .after(crate::menu_render::MenuFrameSet),
+            )
             .add_systems(
                 FixedUpdate,
                 hand_select_menu
@@ -138,7 +181,7 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
                 "Quick select / interact / back",
             ),
             (button::SELECT, "map", "Map"),
-            (button::START, "pause", "Pause menu"),
+            (button::START, "pause", "Pause / skip cinematic"),
         ] {
             buttons.push((bit, set.create_action(name, label, &[])?));
         }
@@ -146,7 +189,17 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
             movement: set.create_action("move", "Move Ratchet", &[])?,
             camera: set.create_action("camera", "Snap turn", &[])?,
             grip: set.create_action("grip", "Hold wrench / release to throw", &[])?,
+            left_grip: set.create_action("left_grip", "Support barrel / grab ledge", &[])?,
+            left_trigger: set.create_action(
+                "pack_modifier",
+                "R1 / pack jumps / side flips",
+                &[],
+            )?,
             trigger: set.create_action("bomb_trigger", "Hold bomb / release to throw", &[])?,
+            vibration: [
+                set.create_action("left_feedback", "Left-hand vibration", &[])?,
+                set.create_action("right_feedback", "Right-hand vibration", &[])?,
+            ],
             hands: [
                 set.create_action("left_hand", "Left hand pose", &[])?,
                 set.create_action("right_hand", "Right hand pose", &[])?,
@@ -242,6 +295,21 @@ fn bindings(a: Option<Res<Actions>>, mut out: MessageWriter<OxrSuggestActionBind
             profile,
             "/user/hand/right/input/trigger/value",
         );
+        bind(
+            a.vibration[0].as_raw(),
+            profile,
+            "/user/hand/left/output/haptic",
+        );
+        bind(
+            a.vibration[1].as_raw(),
+            profile,
+            "/user/hand/right/output/haptic",
+        );
+        bind(
+            a.left_trigger.as_raw(),
+            profile,
+            "/user/hand/left/input/trigger/value",
+        );
         let index = profile.ends_with("index_controller");
         let microsoft = profile.ends_with("motion_controller");
         bind(
@@ -255,6 +323,17 @@ fn bindings(a: Option<Res<Actions>>, mut out: MessageWriter<OxrSuggestActionBind
                 "/user/hand/right/input/squeeze/value"
             },
         );
+        bind(
+            a.left_grip.as_raw(),
+            profile,
+            if index {
+                "/user/hand/left/input/squeeze/force"
+            } else if microsoft {
+                "/user/hand/left/input/squeeze/click"
+            } else {
+                "/user/hand/left/input/squeeze/value"
+            },
+        );
         for (bit, action) in &a.buttons {
             if let Some(path) = button_path(*bit, profile) {
                 bind(action.as_raw(), profile, path);
@@ -264,7 +343,7 @@ fn bindings(a: Option<Res<Actions>>, mut out: MessageWriter<OxrSuggestActionBind
 }
 
 // Touch/PICO: A/B on the right, X/Y on the left. Index uses left A/B for X/Y.
-// Stick clicks are exclusively Select/Start; headset recenter stays on keyboard F8.
+// Stick clicks are Select/Start; right click requests native skip during scenes/movies.
 fn button_path(bit: u32, profile: &str) -> Option<&'static str> {
     let index = profile.ends_with("index_controller");
     let microsoft = profile.ends_with("motion_controller");
@@ -297,6 +376,31 @@ pub fn encode(movement: Vec2, camera: Vec2, buttons: u32) -> PadInput {
     p.ry = raw(-camera.y);
     p
 }
+
+fn menu_directions(left: Vec2, right: Vec2) -> u32 {
+    // The ship list sets lf::BUTTONS_ONLY: stick-derived PadState::held bits never reach its
+    // raw_pressed input. Send actual D-pad buttons, so either XR stick can navigate the menus.
+    let stick = if left.length_squared() >= right.length_squared() {
+        left
+    } else {
+        right
+    };
+    if stick.abs().max_element() < 0.55 {
+        return 0;
+    }
+    if stick.x.abs() > stick.y.abs() {
+        if stick.x > 0.0 {
+            button::RIGHT
+        } else {
+            button::LEFT
+        }
+    } else if stick.y > 0.0 {
+        button::UP
+    } else {
+        button::DOWN
+    }
+}
+
 pub(super) fn sample(
     a: Option<Res<Actions>>,
     session: Option<Res<OxrSession>>,
@@ -310,12 +414,25 @@ pub(super) fn sample(
     mut previous: Local<u32>,
     tracked: Query<(&Hand, &Transform, &OxrSpaceLocationFlags)>,
     mut selection: Local<HandSelect>,
+    mut jump: Local<JumpInput>,
+    mut skip: Local<SkipInput>,
 ) {
     *out = GamePad::default();
     hand.grip = None;
+    hand.left_grip = None;
     hand.trigger = None;
     if !focus.0 {
         hand.firing = false;
+        hand.menu_click = false;
+        hand.menu_held = false;
+        hand.menu_ready = false;
+        hand.menu_active = false;
+        hand.menu_consumed = true;
+        hand.pack_modifier = false;
+        hand.pack_jump = false;
+        hand.quick_page = 0;
+        *jump = JumpInput::default();
+        *skip = SkipInput::default();
         *previous = 0;
         *selection = HandSelect::default();
         return;
@@ -347,10 +464,59 @@ pub(super) fn sample(
         .ok()
         .filter(|s| s.is_active)
         .map(|s| s.current_state);
+    hand.left_grip = a
+        .left_grip
+        .state(&session, Path::NULL)
+        .ok()
+        .filter(|s| s.is_active)
+        .map(|s| s.current_state);
     if hand.trigger.is_some_and(|v| v > 0.6) {
         hand.firing = true;
     } else if hand.trigger.is_none_or(|v| v < 0.35) {
         hand.firing = false;
+    }
+    let pause = matches!(
+        mode.state.mode,
+        rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
+    );
+    if !hand.firing {
+        hand.menu_consumed = false;
+    }
+    if pause {
+        if !hand.menu_active {
+            hand.menu_ready = false;
+            hand.menu_click = false;
+        }
+        if !hand.firing {
+            hand.menu_ready = true;
+        }
+        if hand.firing && hand.menu_ready {
+            hand.menu_click = true;
+            hand.menu_ready = false;
+        }
+        hand.menu_held = hand.firing;
+        if hand.firing {
+            hand.menu_consumed = true;
+        }
+    } else {
+        hand.menu_click = false;
+        hand.menu_held = false;
+        if hand.menu_consumed && hand.firing {
+            hand.trigger = None;
+            jump.trigger_consumed = true;
+        }
+    }
+    hand.menu_active = pause;
+    let left_trigger = a
+        .left_trigger
+        .state(&session, Path::NULL)
+        .ok()
+        .filter(|s| s.is_active)
+        .map(|s| s.current_state);
+    if left_trigger.is_some_and(|v| v > 0.6) {
+        hand.pack_modifier = true;
+    } else if left_trigger.is_none_or(|v| v < 0.35) {
+        hand.pack_modifier = false;
     }
     let movement = vector(&a.movement);
     let camera = vector(&a.camera);
@@ -361,19 +527,96 @@ pub(super) fn sample(
             buttons |= *bit;
         }
     }
-    let gameplay = mode.state.mode == rc_game::menus::mode::Mode::Gameplay;
+    let media = matches!(
+        mode.state.mode,
+        rc_game::menus::mode::Mode::Cutscene | rc_game::menus::mode::Mode::Movie
+    );
+    let start_down = buttons & button::START != 0;
+    if media {
+        if skip.media != Some(mode.state.mode) {
+            skip.pending = false;
+        }
+        if start_down && !skip.down {
+            skip.pending = true;
+            skip.suppress = true;
+        }
+        out.skip_cutscene = skip.pending;
+        buttons &= !button::START;
+    } else {
+        skip.pending = false;
+        if skip.suppress {
+            buttons &= !button::START;
+        }
+        if !start_down {
+            skip.suppress = false;
+        }
+    }
+    skip.down = start_down;
+    skip.media = media.then_some(mode.state.mode);
+    let gameplay = mode.free_movement();
+    let shopping = mode.spatial_vendor && mode.state.mode == rc_game::menus::mode::Mode::Vendor;
     let mut movement = movement.unwrap_or_default();
     let mut camera = camera.unwrap_or_default();
     if gameplay {
+        if hand.pack_modifier {
+            buttons |= button::R1;
+        }
+        if shopping {
+            if !jump.shopping {
+                jump.shop_ready = false;
+            }
+            if !hand.firing {
+                jump.shop_ready = true;
+            }
+            let mut shop_buttons = buttons & button::TRIANGLE;
+            if hand.firing && jump.shop_ready {
+                shop_buttons |= button::CROSS;
+            }
+            if camera.x > 0.7 {
+                shop_buttons |= button::RIGHT;
+            }
+            if camera.x < -0.7 {
+                shop_buttons |= button::LEFT;
+            }
+            out.vendor = Some(encode(Vec2::ZERO, Vec2::ZERO, shop_buttons));
+            hand.trigger = None;
+            buttons &= !button::TRIANGLE;
+            *selection = HandSelect::default();
+        }
+        if jump.shopping && !shopping && hand.firing {
+            jump.trigger_consumed = true;
+        }
+        jump.shopping = shopping;
+        let down = buttons & button::CROSS != 0;
+        if !hand.firing {
+            jump.trigger_consumed = false;
+        }
+        if down && !jump.pressed && hand.pack_modifier {
+            let pack_ready = play.as_ref().is_some_and(|p| {
+                let h = &p.game.hero;
+                h.mode == 0 && h.grounded() && matches!(h.state, 0 | 2 | 3 | 4 | 0x73)
+            });
+            if pack_ready {
+                // Queued until the next fixed tick; native tracked transitions take priority over Cross.
+                hand.pack_jump = true;
+            }
+        }
+        jump.pressed = down;
+        // Cross always follows A immediately, including held-A jump height and glide.
+        // Only shopping reserves the right trigger; left-trigger pack/flip input leaves weapons independent.
+        if jump.trigger_consumed {
+            hand.trigger = None;
+        }
         // Circle is exclusively the trigger while the native Blaster is equipped; X remains a menu key.
         buttons &= !button::CIRCLE;
         if hand.firing
+            && !shopping
+            && !jump.trigger_consumed
             && buttons & button::TRIANGLE == 0
             && play.as_ref().is_some_and(|p| {
-                matches!(
-                    p.game.hero.items.slot.id,
-                    rc_game::hero::blaster::BLASTER | rc_game::hero::pyrocitor::PYROCITOR
-                ) && p.game.hero.items.slot.state == 2
+                super::blaster::supported(p.game.hero.items.slot.id)
+                    && !rc_game::hero::items::is_glove(p.game.hero.items.slot.id)
+                    && p.game.hero.items.slot.state == 2
             })
             && tracked.iter().any(|(h, _, f)| {
                 h.0 == 1 && f.pos_valid() && f.pos_tracked() && f.rot_valid() && f.rot_tracked()
@@ -385,6 +628,13 @@ pub(super) fn sample(
         if selecting {
             rig.snap(0.0);
             selection.held = true;
+            if camera.x.abs() < 0.25 {
+                selection.page_held = false;
+            }
+            if camera.x.abs() > 0.7 && !selection.page_held {
+                hand.quick_page = if camera.x > 0.0 { 1 } else { -1 };
+                selection.page_held = true;
+            }
             let left = tracked.iter().find_map(|(hand, pose, flags)| {
                 (hand.0 == 0 && flags.pos_valid() && flags.pos_tracked())
                     .then_some(pose.translation)
@@ -396,20 +646,50 @@ pub(super) fn sample(
             // Release confirms the last hand-selected sector without leaking the locomotion stick.
             movement = Vec2::ZERO;
             *selection = HandSelect::default();
-            rig.snap(camera.x);
+            rig.snap(if shopping { 0.0 } else { camera.x });
         } else {
-            rig.snap(camera.x);
+            rig.snap(if shopping { 0.0 } else { camera.x });
             if let (Some(head), Some(play)) = (super::game::pose(views.as_deref()), play.as_ref()) {
-                movement = rig.movement_for_camera(movement, head.rotation, &play.game);
+                if !super::game::native_panel(play)
+                    && !crate::visibomb_view::missile_view(Some(play))
+                {
+                    movement = rig.movement_for_camera(movement, head.rotation, &play.game);
+                }
             }
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.
-        buttons &=
-            button::CROSS | button::CIRCLE | button::TRIANGLE | button::START | button::SELECT;
+        let disguise_exit = if play.as_ref().is_some_and(|p| p.game.hero.mode == 3) {
+            button::SQUARE
+        } else {
+            0
+        };
+        buttons &= button::CROSS
+            | button::R1
+            | button::CIRCLE
+            | button::TRIANGLE
+            | button::START
+            | button::SELECT
+            | disguise_exit;
     } else {
         *selection = HandSelect::default();
+        *jump = JumpInput::default();
+        hand.pack_jump = false;
+        hand.quick_page = 0;
         rig.snap(0.0);
+        if matches!(
+            mode.state.mode,
+            rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
+        ) {
+            buttons |= menu_directions(movement, camera);
+        }
+    }
+    if gameplay
+        && play
+            .as_ref()
+            .is_some_and(|p| matches!(p.game.hero.state, 0x18..=0x1b))
+    {
+        movement = Vec2::ZERO;
     }
     out.pad = encode(movement, camera, buttons);
     if buttons != *previous {
@@ -422,7 +702,39 @@ fn hand_select_menu(
     input: Res<GamePad>,
     mode: Res<crate::menu_render::MenuMode>,
     play: Option<ResMut<crate::gameplay::Play>>,
+    mut hand: ResMut<HandInput>,
+    saved: Option<ResMut<crate::gameplay::Persistent>>,
+    menu: Option<ResMut<crate::menu_render::MenuRt>>,
+    mut page: Local<usize>,
 ) {
+    let change = std::mem::take(&mut hand.quick_page);
+    if change != 0 {
+        if let (Some(mut saved), Some(mut menu)) = (saved, menu) {
+            if let Some(qs) = menu.qs.as_mut().filter(|q| q.open && !q.command_page) {
+                let owned: Vec<i32> = super::blaster::SELECTABLE
+                    .into_iter()
+                    .filter(|&id| saved.0.global.owned[id as usize] != 0)
+                    .collect();
+                let pages = owned.len().div_ceil(8).max(1);
+                *page = (*page as isize + change as isize).rem_euclid(pages as isize) as usize;
+                for slot in 0..8 {
+                    let id = owned.get(*page * 8 + slot).copied().unwrap_or(0);
+                    saved.0.global.quick_select[slot] = id;
+                    qs.entries[slot].item = id;
+                    qs.entries[slot].icon =
+                        qs.items.icon.get(id as usize).copied().unwrap_or(0) as i32;
+                }
+                qs.sel = -1;
+                qs.arm = 1;
+                println!(
+                    "VR_GAME quick_select_page={}/{} items={:?}",
+                    *page + 1,
+                    pages,
+                    saved.0.global.quick_select
+                );
+            }
+        }
+    }
     if !input.active || mode.state.mode != rc_game::menus::mode::Mode::Gameplay {
         return;
     }

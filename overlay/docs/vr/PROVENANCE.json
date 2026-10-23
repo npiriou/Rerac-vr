@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_pyrocitor_brown_hands_max_ammo_built_and_launched",
+  "status": "native_windows_ledge_haptics_crate_contact_built_and_launched",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -19,8 +19,8 @@
     "https://docs.github.com/en/pull-requests/reference/forks"
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
-  "implementation": "Original full game with first-person VR, original brown Ratchet hand meshes/Bomb Glove, tracked wrench and native controller-aimed Blaster/Pyrocitor",
-  "latest_build_sha256": "385EAEFE19F4838A92D050DCD7B24940EF40FEC55E09A21C86638364DFAF367A",
+  "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
+  "latest_build_sha256": "FE8172DCAF34B0184D4A8ABDD294722A03C5588A06F2E49108DE97E07FE310DA",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Pending headset feedback on brown-glove fit/visibility, corrected gun roll, Pyrocitor flame/impacts/audio and Bomb Glove substitution"
+  "latest_build_physical_validation": "Pending headset feedback on ledge grip/climb haptics, stronger wrench strikes, intact crate blocking and destruction contact."
 }
