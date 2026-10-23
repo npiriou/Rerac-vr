@@ -17,6 +17,7 @@ pub use game::{game_plugins, install_game, prepare_game};
 pub use game_input::{GamePad, merge_pad};
 mod actions;
 mod core;
+mod deferred_end;
 mod diagnostics;
 mod early_submit;
 mod interaction;

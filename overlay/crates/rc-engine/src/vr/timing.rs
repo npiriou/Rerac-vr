@@ -10,7 +10,8 @@
 //! * `render`: the render world's Render schedule (preparation, encoding, submit, xrEndFrame);
 //! * `prep`: inside it, the Render schedule's start to the render graph (phases, batches, buffers);
 //! * `graph`: inside it, the render graph (every camera's encoding, submission, window present);
-//! * `xr_pre`: inside it, xrBeginFrame, swapchain image acquire and xrWaitSwapchainImage;
+//! * `xr_pre`: inside it, xrBeginFrame, swapchain image acquire and xrWaitSwapchainImage (with
+//!   a deferred xrEndFrame, the previous frame's xrEndFrame too, see vr/deferred_end.rs);
 //! * `xr_end`: inside it, xrReleaseSwapchainImage + xrEndFrame (SteamVR waits for the GPU there);
 //! * `spec`: per frame, the 3D views with meshes, their visible meshes, the meshes newly visible in a
 //!   view and the meshes Bevy marked changed: the last two are what pipeline specialization redoes;
@@ -31,10 +32,11 @@ use bevy::{
     },
 };
 use bevy_mod_openxr::{
-    render::{OxrWaitFrameSystem, begin_frame, end_frame, release_image, wait_image},
+    render::OxrWaitFrameSystem,
     resources::OxrFrameState,
 };
 use bevy_mod_xr::session::{XrFirst, XrRenderSystems};
+use super::deferred_end::DeferredSystems;
 use std::{
     sync::{Arc, Mutex, MutexGuard, PoisonError, atomic::Ordering},
     time::{Duration, Instant},
@@ -88,18 +90,24 @@ impl Plugin for FrameTimingPlugin {
             render.add_systems(
                 Render,
                 (
-                    xr_end_start.before(release_image),
-                    xr_end_done.after(end_frame),
-                )
-                    .in_set(XrRenderSystems::PostRender),
-            )
-            .add_systems(
-                Render,
-                (
-                    xr_pre_start.before(begin_frame),
-                    xr_pre_done.after(wait_image),
-                )
-                    .in_set(XrRenderSystems::PreRender),
+                    xr_end_start
+                        .after(RenderSystems::Render)
+                        .before(DeferredSystems::Post)
+                        .before(XrRenderSystems::PostRender),
+                    xr_end_done
+                        .after(DeferredSystems::Post)
+                        .after(XrRenderSystems::PostRender)
+                        .before(RenderSystems::Cleanup),
+                    xr_pre_start
+                        .after(XrRenderSystems::HandleEvents)
+                        .before(DeferredSystems::Pre)
+                        .before(XrRenderSystems::PreRender),
+                    xr_pre_done
+                        .after(DeferredSystems::Pre)
+                        .after(XrRenderSystems::PreRender)
+                        .before(RenderSystems::PrepareViews)
+                        .before(RenderSystems::PrepareAssets),
+                ),
             );
         }
     }
@@ -180,6 +188,7 @@ fn main_end(
     frame: Option<Res<OxrFrameState>>,
     cameras: Query<(&Camera, Option<&Name>, Has<Camera3d>)>,
     early: Option<Res<super::early_submit::EarlySubmit>>,
+    deferred: Option<Res<super::deferred_end::DeferredEnd>>,
 ) {
     let now = Instant::now();
     if let Some(awake) = clock.awake.take() {
@@ -209,6 +218,10 @@ fn main_end(
     if let Some(e) = early.as_ref().filter(|e| e.alternate) {
         e.on.store(!early_on, Ordering::Relaxed);
     }
+    let deferred_on = deferred.as_ref().is_some_and(|d| d.on.load(Ordering::Relaxed));
+    if let Some(d) = deferred.as_ref().filter(|d| d.alternate) {
+        d.on.store(!deferred_on, Ordering::Relaxed);
+    }
     let spec = format!(
         "views={:.1} visible={:.0} added={:.0} changed={:.0}",
         per(s.views),
@@ -227,7 +240,7 @@ fn main_end(
         eye(s.eye_entities[2])
     );
     println!(
-        "VR_PERF pipelined={} early_submit={early_on} frames={frames} fps={:.1} period_ms={} vsyncs_1/2/3/4+={}/{}/{}/{} ticks_per_frame={:.2} | interval {} | wait {} | main {} | handoff {} | render {} | prep {} | graph {} | xr_pre {} | xr_end {} | spec {spec} | eye_draws {draws}",
+        "VR_PERF pipelined={} early_submit={early_on} deferred_end={deferred_on} frames={frames} fps={:.1} period_ms={} vsyncs_1/2/3/4+={}/{}/{}/{} ticks_per_frame={:.2} | interval {} | wait {} | main {} | handoff {} | render {} | prep {} | graph {} | xr_pre {} | xr_end {} | spec {spec} | eye_draws {draws}",
         clock.pipelined,
         frames as f32 / elapsed.as_secs_f32(),
         period.map_or("-".into(), |p| format!("{p:.2}")),

@@ -326,6 +326,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     } else {
         app.insert_resource(OxrSessionConfig::default())
             .add_plugins(GameInputPlugin)
+            .add_plugins(super::deferred_end::DeferredEndPlugin)
             .add_systems(Startup, super::require_headset)
             .add_systems(XrPreDestroySession, reset_session)
             .add_systems(XrSessionCreated, configure_eyes.after(XrViewInit));

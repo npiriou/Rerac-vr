@@ -123,6 +123,15 @@ and 218 transparent draws (4,105 items): instancing already merges most entities
 Bevy's indirect drawing (`RC_INDIRECT=1`) was slower (about 40 fps) and the two sky
 eye views cost no measurable time, so neither was changed.
 
+**Deferred xrEndFrame** (`vr/deferred_end.rs`, off by default until measured in the
+headset): frame N's xrEndFrame, where SteamVR blocks until the GPU has finished,
+runs at the start of frame N+1's render schedule right before its xrBeginFrame,
+instead of at the end of frame N's. The GPU then finishes while the render world
+is handed back and the next frame is extracted, rather than with both threads
+stopped. xrBeginFrame stays at the start of each frame: with pipelined rendering,
+the next xrWaitFrame waits for it. `RC_VR_DEFERRED_END=1` enables it, `=ab`
+alternates it per VR_PERF window; `xr_pre` then includes the deferred xrEndFrame.
+
 VR_PERF also reports `prep` (render schedule up to the graph), `graph` (camera
 encoding, submission, present), `xr_pre` (xrBeginFrame, image acquire and wait),
 `spec` (views, visible and re-specialized meshes) and `eye_draws`.
