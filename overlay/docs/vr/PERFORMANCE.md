@@ -79,6 +79,54 @@ started without elevation is refused access to vrserver ("Unable to open process
 creation, and SteamVR's shared-resource namespace server shuts down until SteamVR
 is restarted. Launch the game elevated while Steam is elevated.
 
+## Render-thread reductions (identical image)
+
+Measured without a headset in the desktop preview (`RC_VR_DESKTOP_PREVIEW=1`, same
+four eye cameras, Kerwan debug-gold), frame-exact (`RC_DETERMINISTIC=1`, so frame N
+is the same scene in every run) and with the window's vsync off (`RC_NOVSYNC=1`).
+The eye size does not change the CPU cost: 640 and 1920 pixels give the same
+timings (`RC_VR_PREVIEW_SIZE`). Configurations were run alternately, each in its
+own process.
+
+| Change | fps | render thread avg / p95 (ms) |
+|---|---|---|
+| Pipelined, window world view refreshed every 4 frames | 56-59 | 16.5 / 31 |
+| Window world view not refreshed during VR gameplay | 74-77 | 12.3 / 14.5 |
+| + camera pipelines on a single-threaded executor | 80-82 | 11.4 / 13.6 |
+| + one transparent-order sort per view, in parallel | 87-89 | 10.4 / 12.8 |
+
+* **Window world view.** Re-activating the window's cameras every 4th frame made
+  Bevy drop and rebuild their pipeline specializations and render phases from
+  scratch (about 2,500 entities re-specialized per frame on average) and doubled
+  those frames' render time. `RC_VR_MIRROR_EVERY` now defaults to 0: the window's
+  world view stays frozen during VR gameplay; menus and native panels keep their
+  full frame. SteamVR's VR View mirrors the headset. Any value 1-120 restores a
+  refresh cadence.
+* **Camera pipelines.** Core3d/Core2d run each camera's passes in order; a
+  single-threaded executor removes a worker wake-up per pass and camera. The passes
+  still encode in parallel internally. `RC_VR_CAMERA_EXECUTOR=multi` restores Bevy's.
+* **Transparent order.** Bevy's sort, crate::determinism's tie-break sort and
+  crate::pre_shadow's game-order sort ran one after another over every view, and the
+  last two were not ordered with each other. One sort per view with the composite key
+  (pre-shadow group, game order, distance, entity), the views in parallel, gives the
+  order the three produced; pre-shadow `restore` inserts the few remaining items into
+  the stashed ones instead of the reverse. Frame 600 captured with the previous and
+  the new ordering (both without tracing) is identical pixel for pixel.
+* **Early submission** (`vr/early_submit.rs`): each camera's command buffers are
+  submitted when the next camera starts, so the GPU renders the first views while
+  the CPU records the others. Same commands, same order; it targets the GPU wait in
+  xrEndFrame and needs a headset session to measure (`RC_VR_EARLY_SUBMIT=ab`
+  alternates it per VR_PERF window; `=0` disables it).
+
+Per world eye: about 508 opaque draws (5,330 entities), 133 alpha-mask draws (4,012)
+and 218 transparent draws (4,105 items): instancing already merges most entities.
+Bevy's indirect drawing (`RC_INDIRECT=1`) was slower (about 40 fps) and the two sky
+eye views cost no measurable time, so neither was changed.
+
+VR_PERF also reports `prep` (render schedule up to the graph), `graph` (camera
+encoding, submission, present), `xr_pre` (xrBeginFrame, image acquire and wait),
+`spec` (views, visible and re-specialized meshes) and `eye_draws`.
+
 ## Retired visibility experiment
 
 The first batched-visibility experiment was rejected after the user reported worse

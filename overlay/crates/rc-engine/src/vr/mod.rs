@@ -18,6 +18,7 @@ pub use game_input::{GamePad, merge_pad};
 mod actions;
 mod core;
 mod diagnostics;
+mod early_submit;
 mod interaction;
 mod preview;
 mod scene;

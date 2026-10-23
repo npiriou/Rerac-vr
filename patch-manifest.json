@@ -1209,6 +1209,64 @@
           "new": "        sound_class: m.o_class,\n        pos: [m.position[0], m.position[1], m.position[2]],\n        tick: p.game.counter,\n    };\n    let listener = rc_game::audio::class_sounds::listener_for_hero(&p.game.camera.out, &p.game.hero);\n    audio.system().play_class_sound(&ev, Some(hero), &listener, &mut p.game.rng);\n}\n\n/// `RC_HUD_TEXT_WINDOW=1`: the text in a `DrawUIFrame` sized from a `FontPrintWindow` measure (regular font,\n"
         }
       ]
+    },
+    {
+      "path": "crates/rc-engine/src/pre_shadow.rs",
+      "expectedBlobSha": "3ae07b552d831df415283e479ddbf3eb12e87d60",
+      "replacements": [
+        {
+          "old": "use bevy::prelude::*;\nuse bevy::render::camera::ExtractedCamera;\n",
+          "new": "use bevy::math::FloatOrd;\nuse bevy::prelude::*;\nuse bevy::render::camera::ExtractedCamera;\n"
+        },
+        {
+          "old": "use bevy::render::{Extract, ExtractSchedule, Render, RenderApp, RenderSystems};\n",
+          "new": "use bevy::render::{Extract, ExtractSchedule, Render, RenderApp, RenderSystems};\nuse bevy::tasks::ComputeTaskPool;\n"
+        },
+        {
+          "old": "/// Puts the tagged items first, in the game's order (module doc, \"Order\"); the others keep Bevy's order (a stable\n/// sort). Before batching, so consecutive items of one mesh and material become one instanced draw.\nfn order(mut phases: ResMut<ViewSortedRenderPhases<Transparent3d>>, set: Res<Tagged>) {\n    if set.0.is_empty() { return; }\n    let key = |k: &(Entity, MainEntity)| set.0.get(&k.1).map_or((1, WorldDrawOrder::NONE), |o| (0, *o));\n    for phase in phases.values_mut() {\n        if !phase.items.keys().any(|k| set.0.contains_key(&k.1)) { continue; }\n        phase.items.sort_by_cached_key(|k, _| key(k));\n    }\n}\n",
+          "new": "/// The blended phase's final order, one sort per view (the views in parallel): the tagged items first, in the\n/// game's order (module doc, \"Order\"), then the others back to front as Bevy sorted them. Before batching, so\n/// consecutive items of one mesh and material become one instanced draw.\n///\n/// Equal keys go by distance, then by main-world entity, for run-to-run identical frames: Bevy's stable sort runs\n/// over a retained map whose order is the order items were first queued, i.e. the order their pipelines finished\n/// compiling on the async task pool, and items at equal depth (every part entity of one tie / shrub / moby\n/// instance shares its transform) would draw in a run-dependent order. The main-world entity index follows the\n/// deterministic spawn order (per instance, its parts in class order). This was crate::determinism's own sort\n/// before this one; one sort per view replaces the two.\nfn order(mut phases: ResMut<ViewSortedRenderPhases<Transparent3d>>, set: Res<Tagged>) {\n    let set = &set.0;\n    let key = |k: &(Entity, MainEntity), item: &Transparent3d| {\n        (set.get(&k.1).map_or((1, WorldDrawOrder::NONE), |o| (0, *o)), FloatOrd(item.distance), k.1)\n    };\n    let key = &key;\n    ComputeTaskPool::get().scope(|scope| {\n        for phase in phases.values_mut() {\n            scope.spawn(async move { phase.items.sort_by_cached_key(|k, item| key(k, item)) });\n        }\n    });\n}\n"
+        },
+        {
+          "old": "    let Some(phase) = phases.get_mut(&ev.retained_view_entity) else { return };\n    for (k, item) in out.items { phase.items.insert(k, item); }\n}\n",
+          "new": "    let Some(phase) = phases.get_mut(&ev.retained_view_entity) else { return };\n    // The stash holds most of the phase: insert the few items left into it rather than the reverse. The order\n    // does not matter: the next frame sorts the whole phase again ([`order`]).\n    let mut items = out.items;\n    items.extend(std::mem::take(&mut phase.items));\n    phase.items = items;\n}\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/determinism.rs",
+      "expectedBlobSha": "1971d535f6bcb37f72a5d45b89121385698ca462",
+      "replacements": [
+        {
+          "old": "//! - the blended (Transparent3d) phase breaks equal-distance ties by entity, see [`stable_transparent_order`].\n",
+          "new": "//! - the blended (Transparent3d) phase breaks equal-distance ties by entity, see crate::pre_shadow `order`.\n"
+        },
+        {
+          "old": "use bevy::core_pipeline::core_3d::Transparent3d;\nuse bevy::math::FloatOrd;\nuse bevy::prelude::*;\n",
+          "new": "use bevy::prelude::*;\n"
+        },
+        {
+          "old": "use bevy::render::render_phase::{sort_phase_system, ViewSortedRenderPhases};\n",
+          "new": ""
+        },
+        {
+          "old": "        if let Some(render_app) = app.get_sub_app_mut(RenderApp) {\n            render_app.add_systems(\n                Render,\n                stable_transparent_order.after(sort_phase_system::<Transparent3d>).in_set(RenderSystems::PhaseSort),\n            );\n        }\n",
+          "new": ""
+        },
+        {
+          "old": "/// Bevy sorts the blended (Transparent3d) phase by the view depth of each entity's origin (plus the\n/// material's depth bias) with a stable sort over a retained map whose order is the order items were first\n/// queued, i.e. the order their pipelines finished compiling on the async task pool. Items at equal depth\n/// (every part entity of one tie / shrub / moby instance shares its transform) therefore drew in a\n/// run-dependent order. Break those ties by the main-world entity, whose index follows the deterministic\n/// spawn order (per instance, its parts in class order).\nfn stable_transparent_order(mut phases: ResMut<ViewSortedRenderPhases<Transparent3d>>) {\n    for phase in phases.values_mut() {\n        phase.items.sort_by(|ka, a, kb, b| FloatOrd(a.distance).cmp(&FloatOrd(b.distance)).then_with(|| ka.1.cmp(&kb.1)));\n    }\n}\n\n",
+          "new": ""
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/world_lights.rs",
+      "expectedBlobSha": "7377908d3161a6090c8e66ad0c6d36402dadeebd",
+      "replacements": [
+        {
+          "old": "which reorders equal-distance blended draws (determinism.rs `stable_transparent_order`) and so changes frames\n",
+          "new": "which reorders equal-distance blended draws (pre_shadow.rs `order`) and so changes frames\n"
+        }
+      ]
     }
   ],
   "lockfile": {

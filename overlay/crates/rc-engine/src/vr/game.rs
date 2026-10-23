@@ -236,12 +236,15 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         "VR gameplay currently requires RAC1 data"
     );
     let settings = Settings::from_env()?;
+    // 0 (default): the window's world view stays frozen during VR gameplay (SteamVR's VR View
+    // mirrors the headset). Each re-activation of a window camera rebuilds its specializations and
+    // render phases from scratch, which cost a quarter of the render thread at a cadence of 4.
     let mirror_every = std::env::var("RC_VR_MIRROR_EVERY")
-        .unwrap_or_else(|_| "4".into())
+        .unwrap_or_else(|_| "0".into())
         .parse::<u32>()?;
     anyhow::ensure!(
-        (1..=120).contains(&mirror_every),
-        "RC_VR_MIRROR_EVERY must be 1..=120"
+        (0..=120).contains(&mirror_every),
+        "RC_VR_MIRROR_EVERY must be 0..=120"
     );
     let frames = Rendered::default();
     let draw = DrawAudit::default();
@@ -256,7 +259,9 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         .insert_resource(frames.clone())
         .insert_resource(draw.clone())
         .insert_resource(MonitorCadence {
-            every: if settings.desktop_preview {
+            // The preview shows the window every frame unless RC_VR_MIRROR_EVERY asks for the
+            // headset cadence (matched measurements).
+            every: if settings.desktop_preview && std::env::var_os("RC_VR_MIRROR_EVERY").is_none() {
                 1
             } else {
                 mirror_every
@@ -312,12 +317,15 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         .insert_resource(frames)
         .insert_resource(draw)
         .add_systems(Render, count.after(RenderSystems::Render));
+    app.add_plugins(super::early_submit::EarlySubmitPlugin)
+        .add_plugins(super::timing::FrameTimingPlugin {
+            xr: !settings.desktop_preview,
+        });
     if settings.desktop_preview {
         app.add_systems(Startup, preview_eyes);
     } else {
         app.insert_resource(OxrSessionConfig::default())
             .add_plugins(GameInputPlugin)
-            .add_plugins(super::timing::FrameTimingPlugin)
             .add_systems(Startup, super::require_headset)
             .add_systems(XrPreDestroySession, reset_session)
             .add_systems(XrSessionCreated, configure_eyes.after(XrViewInit));
@@ -335,8 +343,9 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     );
     Ok(())
 }
-// The monitor is an extra full world render. Refresh it less often during VR gameplay;
-// the headset and simulation still update every frame. Menus retain their original full frame.
+// The monitor is an extra full world render. Refresh it every `every` frames during VR gameplay
+// (never at 0); the headset and simulation still update every frame. Menus retain their original
+// full frame.
 // Restore before the original systems run, so their own camera activation remains authoritative.
 fn restore_monitor_cameras(mut cadence: ResMut<MonitorCadence>, mut cams: Query<&mut Camera>) {
     for e in cadence.restore.drain(..) {
@@ -362,7 +371,7 @@ fn pace_monitor_cameras(
         || play
             .as_deref()
             .is_some_and(|p| native_panel(p) || crate::visibomb_view::missile_view(Some(p)))
-        || cadence.frame % cadence.every == 0
+        || (cadence.every > 0 && cadence.frame % cadence.every == 0)
     {
         return;
     }
@@ -485,10 +494,16 @@ fn preview_eyes(
     let root = commands
         .spawn((XrTrackingRoot, crate::level_switch::KeepAcrossLevels))
         .id();
+    // RC_VR_PREVIEW_SIZE: eye size in pixels (default 640; the headset's 1920 for GPU-load runs).
+    let size = std::env::var("RC_VR_PREVIEW_SIZE")
+        .ok()
+        .and_then(|s| s.trim().parse::<u32>().ok())
+        .filter(|s| (64..=4096).contains(s))
+        .unwrap_or(640);
     for (i, x) in [-0.032, 0.032].into_iter().enumerate() {
         let target = images.add(Image::new_target_texture(
-            640,
-            640,
+            size,
+            size,
             TextureFormat::Bgra8UnormSrgb,
             None,
         ));
