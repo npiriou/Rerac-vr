@@ -433,3 +433,140 @@ Cable-slide state 0x74 targets eye height 0.55 units below the cable, capped to 
 Outbound and returning wrench models stay level and spin around world up, independent of release wrist pitch/roll. Native trajectories, hit tests, bounce and catch retained.
 
 Non-VR cargo check, VR cargo check and Windows executable build passed. Guarded patch regeneration and git diff --check passed. SHA-256 `E092B0F431794EB2987087DCCB53F1324A8BB7916D8E16B20DA6185D77CBBBA6`; build `work/vr/cranks-cinematics-complete-build.log`. NOT RUN per AGENTS.md; no smoke tests, headset launch or gameplay scripts run for this change. Existing debug executable was closed gracefully to allow rebuilding; game not restarted. Pending headset confirmation of crank socket geometry/turning, short-cutaway movement during all trigger variants, head/seat positions on all three ships, cable clearance and horizontal wrench spin.
+
+## Crank progress from walking around the bolt
+
+After seating the held wrench, progress comes exclusively from the actual native capsule orbit around the bolt. Left-stick locomotion and collision-resolved room-scale walking both count. Rotating the wrist, moving only the hand or turning the head contributes no progress. One full body orbit supplies one native turn, without discarding accepted angular movement through an extra speed cap.
+
+Right grip keeps the wrench head on the socket; snap turns retain the attachment and rebase the body-position history. Release/withdrawal still disengages without throwing. Teleports, large per-tick displacement and crossing the bolt center do not supply progress.
+
+Original progress consumers, turn counts, unwind, save, mission and completion paths retained. Bolt visual rotation uses the original crank::bolt_follow helper driven by Ratchet angle.
+
+Non-VR cargo check, VR cargo check and Windows executable build passed; patch regeneration and git diff --check passed. SHA-256 `52AC4C99081499CEFB91BEAF1F2728DF51350BD6B24DE12E9883CDA343DEEFBD`; log `work/vr/crank-body-orbit-build.log`. NOT RUN per AGENTS.md; no game launch or gameplay scripts. Pending headset confirmation of attachment and walking around native Novalis/Eudora/Batalia cranks, using both stick and room-scale locomotion. Previous cinematic and ship-seat validation remains pending.
+
+## Ship boarding camera, raised cockpit and longer crank reach
+
+Planet-side takeoff and landing follow the actual streamed Ratchet actor head attachment (native list 4), including boarding, sitting and climbing out. Headset rotation remains free, ship yaw follows gradually. Raised seated fallback from native seat +0.85 to +1.45 game units, used when the actor is absent. Animated head attachment uses current joint modifiers and adds 0.15 units for the eye.
+
+SUB_FLIGHT is excluded from pilot_view, restoring the pre-existing native external loading camera in space. Planet-side pilot/actor camera remains for takeoff, landing and flyaway.
+
+Normal engine scenes also resolve the native head attachment chain instead of confusing manipulator list 0x18 with bone index 0x18.
+
+Attached wrench uses the original crank sequence 0xb frame 2. Bounded axial stretching connects the controller grip to the bolt socket and keeps the head exactly seated; the holding glove remains rigid. This presentation cannot generate melee damage.
+
+Hand reach increased from 1.35 to 2.40 units, with 250 ms grace beyond hand reach or body distance 3.40. Grip release remains immediate and cannot throw from the socket. Orbit progress remains based on collision-resolved native capsule movement and accepts radius up to 3.0, preserving turns, saves, missions and native completion.
+
+Non-VR cargo check, VR cargo check and Windows executable build passed; patch regeneration and git diff --check passed. SHA-256 `CC59A3F3ED4E8C0E60A82FECBFE167E34A6E84E2C5F33ED962F533E6A6865E46`; log `work/vr/ship-boarding-crank-reach-build.log`. NOT RUN per AGENTS.md; no game launch or gameplay scripts for this revision. Previous debug game closed gracefully for compilation; not restarted. Pending headset confirmation of cockpit height, boarding/disembarking eye alignment on all three ships, original space loading view, crank pose/shaft extension/glove alignment and longer retention.
+
+## Individual Clank pack haptics
+
+Bilateral 165-180 Hz fine alternating rotor beats, native accepted long-jump takeoff/high-jump acceleration-curve/double-jump lift windows, stronger lift and softer glide, spin-up and release cues. No mere-button/equipped-idle rumble.
+
+Original thruster_flame::thrusting predicate drives accepted boost/flips/double-jump and ledge flame windows. 50-90 Hz ignition, stronger boost, quieter glide/hover, separate stomp rise/dive with speed-dependent descent rumble. First native stomp_ground edge gives 0.92 / 105 ms / 50 Hz to both hands plus a softer tail.
+
+Native Hydro swimming and ready/shown module gate feedback; no idle-on-land vibration. 50-65 Hz smooth propulsion load follows native speed; R1/R2 underwater acceleration selects stronger boost with its own onset.
+
+Independent pack phase/cadence and negative owner IDs preserve pack rumble across hand-weapon selection. Background pack priority 0 is below all weapon feedback; ignition uses priority 4, stomp impact 8 and accepted damage remains 20. Replaces old generic pack launch/glide/Hydro cues. Pack feedback reaches connected controllers through brief optical occlusion.
+
+Pause/focus loss, stopped native tick, hidden Clank/body changes, pack swaps, death and lost OpenXR session clear pack-owned cues. Motor stop has a gentle release only after actual operation. No game-physics or native control changes.
+
+Non-VR cargo check, VR cargo check and Windows executable build passed; git diff --check passed. SHA-256 `F357BD57636A0EC4B2421AC3598B73FB0D0A45EB0FEC92FC0BD040C7A8D4AF13`; log `work/vr/clank-pack-haptics-build.log`. NOT RUN per AGENTS.md; no game launch or gameplay scripts. Pending headset confirmation of all three pack intensities/rhythms, boost/hover/glide/stomp timing, underwater acceleration, cancellation and mixing with weapon/damage feedback.
+
+## Solid VR hands and held weapons
+
+Conservative spheres from slices of the actual posed mesh triangles, including original brown glove cuffs, articulated/deployed weapon parts and gold counterparts. Bounds use the same animation palette, scale and affine model rows as rendering.
+
+Native solid world/moby meshes and live crate meshes/primitives; excludes enemy bodies and disabled/destroyed colliders. Previous safe positions and offset sweeps catch fast crossings; initial eye recovery handles tracking starts beyond a wall. Iterated overlaps permit sliding. Raw controller samples and gesture velocities remain physical.
+
+Held weapon plus its native gripping hand and accepted supporting hand translate as one group. Free hands resolve independently. Native ledge anchors and engaged crank wrench remain intentional contact exceptions; thrown wrench keeps native flight collisions.
+
+Gun/gadget native tracked pose and muzzle are corrected before firing; render-time Visibomb live monitor follows the stopped weapon. Held glove ammunition uses safe preparation/release positions and follows the render group before native dynamic upload. Wrench crate query copies enable primitive-only flagged line queries.
+
+Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. SHA-256 `FB4FAE618B038C30F1B84917836958720B4FF994780F04A70F02431CE4D1CBB5`; log `work/vr/solid-hands-weapons-build.log`. NOT RUN per AGENTS.md; no game launch or gameplay scripts. Pending headset checks of wall/corner contact, fast strokes, breakable crates, all weapon/gadget sizes, two-hand grips, gloved ammunition and Visibomb monitor alignment; frame cost and conservative clearance need physical confirmation.
+
+## VR interaction and presentation polish — 2026-10-24
+
+Suppress VR wrench after-images and near-eye sparkles/bursts; persistent accepted hit events drive stronger wrench feedback. Suck Cannon committed captures and creature shots have heavy, distinct recoil. Bolt collection and actual grind rails have low-priority feedback.
+
+Green cockpit seat moved forward; full authored ship attitude and boarding eye path; Ratchet and duplicate riders hidden during takeoff/landing. Rail heading/pitch and interpolated fixed-step translation are smoothed.
+
+GPU-copy final unfaded space frame across level unload. Cover waits for meshes/images and queued pipelines, permits the first native landing world frame behind it, then waits for a second GPU readiness pass before revealing the destination.
+
+Point/trigger native page widgets, frontend Press Start, actual dialog labels and visible native directional/confirm/back controls. Actual animated vendor/PDA monitor rays drive selection, Buy, Close, popup Yes/No and ammo quantity.
+
+Grip hysteresis and native hang/probe guards retain accepted ledge anchors. Falling hand-height and higher-rung probes preserve native collision validation. Swimming and Hydro propulsion use headset gaze.
+
+Native Trespasser/Hydro attachment poses dock on their original target frames, preserving native action logic. Trespasser has a fixed small world puzzle above the tool, hands free. Physical insertion activates Hydro without requiring trigger. Crank socket uses animated bolt top, level wrench and forward-stick orbital movement.
+
+Native two-hand items gain bounded rotational inertia with one hand; accepted support grip stabilizes the same rendered/firing pose, including gold variants.
+
+Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. SHA-256 `DE5A220B37FA1CF716ED372BA5AD7463874198263B307CA95A020D2F9AF0C08E`; log `work/vr/vr-polish-batch-build.log`. NOT RUN per AGENTS.md. No scripted gameplay checks. Debug relaunch requested; startup verification pending. Pending headset confirmation of each row in VR_POLISH_REVIEW.md, especially actual ladder/rung geometry, all tool sockets, green/purple cockpit fit, menu flows, destination transitions, rail comfort and weapon inertia. Compilation does not establish physical fit or GPU frame cost.
+
+Debug relaunch completed on Kerwan with the matching final executable. OpenXR produced two head views and destination level 3 continued ticking with zero queued pipelines; process responding. Headset was not focused when inspected. Log: `X:\codex\worktrees\rerac-vr-build\work\vr\debug-kerwan-headset-20261024-113028.log`. Startup Bevy time/camera-order warnings remain; no panic/fatal error observed. No gameplay automation or tests run.
+
+## Wrench flash follow-up at maximum range
+
+The user still observed intense white/colored flashes, localized near the maximum throw range, after the prior after-image fix. OUT-to-BACK has no intentional flash. Read-only original wrench spin-asset inspection showed stable mesh bounds. These findings do not establish the precise observed cause.
+
+VR wrench wall bursts use at most four small unsplit sparks instead of 20 additive ribbons and ten splitting sparks. Actual tracked headset eye supplies effect clearance. Per-eye shader guards reject zero/view-aligned ribbons and near/behind-eye endpoints before projection/normalization. Stationary or non-finite flight collision segments cannot emit a bounce. Turnaround and bounce events now have separate diagnostic positions.
+
+Non-VR cargo check, VR cargo check and debug executable build passed; git diff --check passed. No automated tests run per AGENTS.md. Binary SHA-256 `52B6B56196A8CC8C389558D44DABA49CFD7EB836457EB15559213544415D2553`. Debug startup verified; log `X:\codex\worktrees\rerac-vr-build\work\vr\debug-kerwan-headset-20261024-114337.log`. Pending a physical throw into empty space at maximum range; the previous after-image change alone was insufficient.
+
+## Rigid VR wrench presentation through return and catch
+
+No improvement from the particle attempt; user identifies the wrench model during return. Captured throw logs contain finite natural turnarounds without bounces. Original asset inspection found finite spin/return-blend matrices and ready versus spin width about 1.02 versus 2.01 game units at VR scale. This is source/asset evidence, not a reproduced headset image or conclusive root-cause proof.
+
+Cloned VR wrench uses original ready pose (sequence 1/frame 0, no snapshot) during OUT, BACK and remaining catch blend. Native flight rows provide horizontal spin. Ready attachment pose matches the displayed mesh. Detached renderer clears held-item spring modifiers. Original distant impact bursts restored; per-eye numerical particle guards retained.
+
+Non-VR cargo check, VR cargo check and Windows debug executable build passed. git diff --check passed. No automated tests run per AGENTS.md. SHA-256 `7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2`. Debug startup verified: `X:\codex\worktrees\rerac-vr-build\work\vr\debug-kerwan-headset-20261024-115307.log`. Pending: verify the entire outgoing/return path and catch in the headset. Prior after-image and particle attempts were reported insufficient.
+
+## Wrench return, gadget lifecycle and actor eye corrections
+
+White flashes resolved; unreadable wrench return, broken utility insertion/water transfer, unwanted puzzle text, low cinematic/ship-exit camera and swallowing camera launch.
+
+- Preserve outgoing wrench flight; bound return homing speed, remove return ground correction, settle orientation into receiving hand, restore ready pose on catch and keep caught tool visible.
+- Preserve native gadget animation/state calls through VR cutaway filtering, acknowledge and retain accepted socket requests, relax physical push tolerances and retain optional trigger insertion.
+- Show native reach/use/withdraw gadget animation with both hands attached; use a canonical socket only for detection and fixed puzzle placement.
+- Remove puzzle footer text/buttons, help prompt, decorative background and controller pointer; retain native puzzle elements. Stick directions control rings; Y/right-stick-click/fresh trigger cancel via queued input consumed until release.
+- Evaluate cinematic eye from the complete head chain. Use actual streamed boarding actor scale/valid frames and ignore hidden actors. Hold last living camera position during capture/death until respawn.
+
+Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. No tests or gameplay run. Build log: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-121824.log`. SHA-256 `02237B9F69D84E24F9AC32D5BF77437501C8CE86647CCA115F7285CED4ECC54E`. Not launched. User closed the previous game to allow executable replacement. User headset confirmation: wrench full return/catch, manual and trigger insertion, puzzle controls/cancellation/reinsertion, water fill/empty, Batalia commando scene, ship exits and swallowing attacks.
+
+
+## Planet preparation during space flight and cinema presentation
+
+The disk worker was already asynchronous, but the engine did not publish the destination ECS world or prepare GPU resources until the flight ended. Destination publication now starts during flight. Flight-only entities, the departure simulation (whose actor IDs must not address the destination moby table), its level data and audio remain available until handoff. The destination simulation stays paused. A hidden eye-format view warms destination materials while the visible flight remains intact; shared LOD and occlusion use the destination view for the new world. Native flight completion waits for GPU readiness and can loop when needed, including first arrivals. The short blackout is now the cut to an already prepared planet, not the primary loading screen. Landing reveal waits for an actual native actor pose, not a gameplay tick that may stay stopped during the cinematic.
+
+Flat movies and slideshows use a black surround with the level sky/world excluded. Their screen is level, larger, preserves the composed frame aspect and stays at the viewer's entry pose rather than following every head movement. Recenter repositions it. No interface text was added.
+
+ECS publication and LevelStartup remain synchronous and may still produce a brief hitch during flight; this change does not claim fully asynchronous scene construction or measured hitch-free travel. The transition behavior and movie presentation require user headset confirmation. No tests or scripted gameplay were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-133506.log`. SHA-256: `17C40F0EFE9F54DCF82E484ABF6ED1C8E1A3C42F9DDCE316DF81295860034C90`.
+
+
+## Wrench return, utility gadgets and crank jaws
+
+The thrown wrench now returns along one planned path from where it turned back to the tracked hand as it moves. It starts at rest, accelerates, then eases into the catch in roughly 0.35-0.75 s depending on distance. The native spin continues, slows near the hand and is phased so that it ends on the held heading; only the last fifth of the path blends in the hand's tilt, so the model no longer flips while a fast spin is blended toward the hand. The headset draws the same path between the 60 Hz game ticks. Hits, bolt collection, the catch and the outbound flight are unchanged.
+
+The Trespasser lock puzzle again draws the original translucent grey background and frame with its rings, nodes and beams; HUD prompts stay hidden. The panel is placed just above the plugged prong tip, facing the viewer, rather than 0.55 units above the hand.
+
+The Hydrodisplacer's own update is the native water-transfer sequence. While plugged it has no controller aim, and the tracked-weapon suspension reset it to the reach pose every tick, so the transfer never started. A docked Hydrodisplacer now keeps its native update: reach, the fill/empty command, the cutaway and the withdraw. During the native water cutaway, the headset follows the authored camera glide, kept level, between its two black fades.
+
+On bolt cranks, the open jaws of the original crank pose (sequence 0xb) now straddle the hex head, centred on the bolt axis at the head's mid-height. This is the placement in Ratchet's native crank poses on his 1.05 ring, measured from the original assets. Previously the hub of the head was planted at the top centre of the bolt. The shaft points toward the hand with at most a 20 degree tilt and lengthens or shortens about the jaws.
+
+These changes require headset confirmation. No tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-145246.log`. SHA-256: `B97452996E0B308FC577712B71D77D1E75BB6D32F5E2B13B3D33E2AFF57B5F04`.
+
+
+## Trespasser panel, Hydrodisplacer pads and menu buttons
+
+The Trespasser panel had moved behind the lock's upright plate and disappeared. Measured on the class-615 lock, it now sits over the plugged tool, at 55 % of the native hand-to-prong line and 0.42 units above the tips, facing the eyes about a metre away, with nothing of the lock in between.
+
+VR skips the Hydrodisplacer's native water cutaway: no fades and no camera change; the transfer runs as on a pad without cutaway cameras. When the pad's tap is retracted into the ground (suck), a downward push of the nozzle onto it now plugs the tool, and the tool stays in the hand during the suck instead of jumping to the native pose at the pad centre. Utility tools keep their aim while their nozzle touches a surface, so plugging no longer resets the gadget out of its ready state.
+
+The French VR button bar (Retour, arrows, Valider) drawn at the bottom of the pause and front-end menus is removed with its hit areas. Native pointing and the controller buttons remain.
+
+No second wrench model is drawn by the engine at the turnaround. Per-frame diagnostics (`VR_GAME wrench_frame`) now log what each rendered frame draws around it. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-153506.log`. SHA-256: `DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F`.

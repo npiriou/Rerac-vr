@@ -28,6 +28,7 @@ pub(super) struct HeldBomb {
 struct Recall {
     weapon: Option<i32>,
     trigger_consumed: bool,
+    contact: super::solid_contact::History,
 }
 impl Plugin for BombGlovePlugin {
     fn build(&self, app: &mut App) {
@@ -38,11 +39,32 @@ impl Plugin for BombGlovePlugin {
     }
 }
 
-fn point(hand: Transform, root: Transform, scale: f32) -> Transform {
+pub(super) fn palm_point(hand: Transform, root: Transform, scale: f32) -> Transform {
     let mut world = root.mul_transform(hand);
     // -X is the hollow of the right glove; move 8 cm farther forward from the inner wrist into the palm.
     world.translation += world.rotation * Vec3::new(-0.135, 0.01, -0.125) * scale;
     world
+}
+
+fn point(hand: Transform, root: Transform, scale: f32) -> Transform {
+    palm_point(hand, root, scale)
+}
+
+fn solid_point(
+    p: &crate::gameplay::Play,
+    coll: &rc_formats::collision::Collision,
+    hand: Transform,
+    root: Transform,
+    scale: f32,
+    history: &mut super::solid_contact::History,
+) -> Transform {
+    let mut pose = point(hand, root, scale);
+    let palm = root.mul_transform(hand).translation;
+    let eye =
+        crate::tfrag_render::game_to_bevy(p.game.hero.position()) + root.rotation * Vec3::Y * 1.6;
+    let probes = [(palm, 0.13 * scale), (pose.translation, 0.15 * scale)];
+    pose.translation += super::solid_contact::constrain(p, coll, &probes, eye, history);
+    pose
 }
 
 /// The original Bomb Glove replaces the provisional right hand. Its authored palm (list 0)
@@ -285,7 +307,15 @@ fn update(
         motion.bomb = BombGesture::default();
         return;
     };
-    let pose = point(hand, root, settings.units_per_metre);
+    recall.contact.prepare(rig.revision, selected);
+    let pose = solid_point(
+        p,
+        coll,
+        hand,
+        root,
+        settings.units_per_metre,
+        &mut recall.contact,
+    );
     let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + Vec3::Y * 1.6;
     if !unobstructed(p, coll, eye, pose.translation) {
         cancel(p, &mut held);
@@ -338,7 +368,14 @@ fn update(
     }
     let Some(id) = held.id else { return };
     if let Some((hand, velocity, _)) = release {
-        let launch = point(hand, root, settings.units_per_metre);
+        let launch = solid_point(
+            p,
+            coll,
+            hand,
+            root,
+            settings.units_per_metre,
+            &mut recall.contact,
+        );
         if !unobstructed(p, coll, eye, launch.translation) {
             cancel(p, &mut held);
             return;
@@ -434,6 +471,7 @@ pub(super) fn follow_held(
     held: Res<HeldBomb>,
     mode: Res<crate::menu_render::MenuMode>,
     level: Res<crate::Level>,
+    contacts: Res<super::solid_contact::Contacts>,
 ) {
     let (Some(mut p), Some(id), Some(hand)) = (play, held.id, motion.hands[1]) else {
         return;
@@ -444,7 +482,8 @@ pub(super) fn follow_held(
     let Some(root) = rig.root_for(&p.game, settings.units_per_metre) else {
         return;
     };
-    let pose = point(hand, root, settings.units_per_metre);
+    let mut pose = point(hand, root, settings.units_per_metre);
+    pose.translation += contacts.right_shift;
     let Some(coll) = level.0.collision.as_ref() else {
         return;
     };

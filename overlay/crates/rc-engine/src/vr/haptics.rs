@@ -29,6 +29,120 @@ struct Lock {
     rotation: [i32; 3],
     powered: usize,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum PackUse {
+    HeliLift,
+    HeliGlide,
+    ThrusterBoost,
+    ThrusterGlide,
+    ThrusterHover,
+    ThrusterStompRise,
+    ThrusterStompDive,
+    HydroCruise,
+    HydroBoost,
+}
+impl PackUse {
+    fn owner(self) -> i32 {
+        match self {
+            Self::HeliLift | Self::HeliGlide => -102,
+            Self::HydroCruise | Self::HydroBoost => -104,
+            _ => -103,
+        }
+    }
+    fn start(self) -> (f32, u32, f32) {
+        match self {
+            Self::HeliLift => (0.32, 38, 165.0),
+            Self::HeliGlide => (0.23, 30, 175.0),
+            Self::ThrusterBoost | Self::ThrusterStompRise => (0.68, 65, 65.0),
+            Self::ThrusterStompDive => (0.52, 60, 50.0),
+            Self::ThrusterGlide => (0.38, 45, 80.0),
+            Self::ThrusterHover => (0.30, 50, 90.0),
+            Self::HydroCruise => (0.27, 70, 50.0),
+            Self::HydroBoost => (0.43, 85, 60.0),
+        }
+    }
+}
+#[derive(Clone, Copy)]
+struct PackSample {
+    module: i32,
+    phase: Option<PackUse>,
+    load: f32,
+    state: i32,
+    timer: i32,
+    stomp_ground: i32,
+}
+fn pack_sample(h: &rc_game::hero::Hero, pad: u32) -> PackSample {
+    use rc_game::hero::{
+        packs::{id, item},
+        physics::{DT, ticks},
+        swim,
+    };
+    let module = if h.mode == 0 && h.back_slot.clank_hidden == 0 {
+        h.back_module()
+    } else {
+        -1
+    };
+    let speed = h.speed.to_f32().abs() / DT.to_f32();
+    let phase = match module {
+        item::HELI_PACK => match h.state {
+            id::GLIDE => Some(PackUse::HeliGlide),
+            id::HELI_HIGH_JUMP
+                if h.jump.landed == 0
+                    && h.jump.curve_on != 0
+                    && h.timer >= h.jump.curve_from
+                    && h.timer < h.jump.curve_to =>
+            {
+                Some(PackUse::HeliLift)
+            }
+            id::HELI_LONG_JUMP
+                if h.jump.landed == 0 && h.timer >= h.jump.takeoff && h.jump.descending == 0 =>
+            {
+                Some(PackUse::HeliLift)
+            }
+            0xe if h.jump.landed == 0 && h.jump.descending == 0 => Some(PackUse::HeliLift),
+            _ => None,
+        },
+        item::THRUSTER_PACK
+            if rc_game::moby_update::classes::thruster_flame::thrusting(h, ticks) =>
+        {
+            Some(match h.state {
+                id::GLIDE => PackUse::ThrusterGlide,
+                id::HOVER => PackUse::ThrusterHover,
+                id::STOMP if h.packs.stomp_down => PackUse::ThrusterStompDive,
+                id::STOMP => PackUse::ThrusterStompRise,
+                _ => PackUse::ThrusterBoost,
+            })
+        }
+        item::HYDRO_PACK
+            if h.state == swim::id::HYDRO
+                && speed.max(h.target_speed.to_f32().abs() / DT.to_f32()) > 0.3 =>
+        {
+            Some(
+                if pad & (rc_game::pad::button::R1 | rc_game::pad::button::R2) != 0 {
+                    PackUse::HydroBoost
+                } else {
+                    PackUse::HydroCruise
+                },
+            )
+        }
+        _ => None,
+    };
+    PackSample {
+        module,
+        phase,
+        load: if h.state == id::STOMP {
+            (h.vel[2].to_f32().abs() / DT.to_f32() / 20.0).clamp(0.0, 1.0)
+        } else {
+            (speed / 7.0).clamp(0.0, 1.0)
+        },
+        state: h.state,
+        timer: h.timer,
+        stomp_ground: h.packs.stomp_ground,
+    }
+}
+fn pack_owner(owner: i32) -> bool {
+    matches!(owner, -102 | -103 | -104)
+}
 struct Snapshot {
     level: u32,
     tick: u64,
@@ -37,6 +151,7 @@ struct Snapshot {
     impacts: u64,
     blaster: u64,
     wrench: u32,
+    wrench_hits: u64,
     wrench_held: bool,
     hyper_landings: u64,
     ledge_grabs: [u64; 2],
@@ -62,6 +177,7 @@ struct Snapshot {
     gravity: i32,
     rail: Option<usize>,
     lock: Option<Lock>,
+    pack: PackSample,
 }
 struct Deployment {
     item: i32,
@@ -122,6 +238,12 @@ pub(super) struct State {
     continuous: Option<i32>,
     next: f64,
     error_reported: bool,
+    pack_phase: Option<PackUse>,
+    pack_next: f64,
+    pack_started: f64,
+    pack_beat: u64,
+    bolt_next: f64,
+    rail_next: f64,
 }
 impl State {
     fn pulse(
@@ -159,6 +281,91 @@ impl State {
             self.pulse(side, now, 1.0, 135, 55.0, 20, -1);
             self.pulse(side, now + 0.16, 0.65, 60, 35.0, 20, -1);
         }
+    }
+    fn stop_packs(&mut self) {
+        for cues in &mut self.cues {
+            cues.retain(|p| !pack_owner(p.owner));
+        }
+        self.pack_phase = None;
+        self.pack_beat = 0;
+        self.pack_next = 0.0;
+    }
+    fn packs(&mut self, now: f64, n: &PackSample, o: &PackSample) {
+        if n.module != o.module {
+            self.stop_packs();
+        }
+        let repeated_boost =
+            n.phase == Some(PackUse::ThrusterBoost) && (n.state != o.state || n.timer < o.timer);
+        if self.pack_phase != n.phase || repeated_boost {
+            for cues in &mut self.cues {
+                // Keep a native stomp impact ringing after the motor itself has stopped.
+                cues.retain(|p| !pack_owner(p.owner) || p.priority >= 8);
+            }
+            let previous = self.pack_phase;
+            self.pack_phase = n.phase;
+            self.pack_next = now;
+            self.pack_started = now;
+            self.pack_beat = 0;
+            if let Some(phase) = n.phase {
+                let (mut amp, ms, hz) = phase.start();
+                if !repeated_boost && previous.is_some_and(|p| p.owner() == phase.owner()) {
+                    amp *= 0.65;
+                }
+                for side in 0..2 {
+                    self.pulse(side, now, amp, ms, hz, 4, phase.owner());
+                    self.pulse(
+                        side,
+                        now + ms as f64 / 1000.0 + 0.025,
+                        amp * 0.42,
+                        28,
+                        hz * 1.25,
+                        3,
+                        phase.owner(),
+                    );
+                }
+            } else if let Some(previous) = previous.filter(|_| n.module == o.module) {
+                // Gentle motor release, only after actual operation, never on merely equipping a pack.
+                for side in 0..2 {
+                    self.pulse(side, now, 0.10, 25, 95.0, 2, previous.owner());
+                }
+            }
+        }
+        if n.module == 3 && n.stomp_ground > 0 && o.stomp_ground == 0 {
+            for side in 0..2 {
+                self.pulse(side, now, 0.92, 105, 50.0, 8, -103);
+                self.pulse(side, now + 0.13, 0.32, 45, 85.0, 8, -103);
+            }
+        }
+        let Some(phase) = n.phase else { return };
+        if now < self.pack_next {
+            return;
+        }
+        let ramp = ((now - self.pack_started) / 0.18).clamp(0.0, 1.0) as f32;
+        let wave = (self.pack_beat as f32 * 1.3).sin() * 0.025;
+        let (amp, ms, hz, interval) = match phase {
+            PackUse::HeliLift => (0.18 + 0.08 * ramp, 32, 165.0, 0.055),
+            PackUse::HeliGlide => (0.12 + 0.04 * ramp, 28, 180.0, 0.065),
+            PackUse::ThrusterBoost => (0.33 + n.load * 0.10 + wave, 65, 65.0, 0.085),
+            PackUse::ThrusterGlide => (0.23 + wave, 60, 75.0, 0.09),
+            PackUse::ThrusterHover => (0.16 + n.load * 0.07 + wave, 85, 85.0, 0.11),
+            PackUse::ThrusterStompRise => (0.38 + wave, 55, 65.0, 0.075),
+            PackUse::ThrusterStompDive => (0.24 + n.load * 0.24, 60, 50.0, 0.08),
+            PackUse::HydroCruise => (0.10 + n.load * 0.14 + wave * 0.4, 100, 50.0, 0.12),
+            PackUse::HydroBoost => (0.25 + n.load * 0.16 + wave * 0.4, 110, 65.0, 0.11),
+        };
+        for side in 0..2 {
+            let rotor = if matches!(phase, PackUse::HeliLift | PackUse::HeliGlide)
+                && side as u64 != self.pack_beat % 2
+            {
+                0.60
+            } else {
+                1.0
+            };
+            // Independent pack cadence; weapon firing/continuous use and damage remain stronger priorities.
+            self.pulse(side, now, amp * rotor, ms, hz, 0, phase.owner());
+        }
+        self.pack_next = now + interval;
+        self.pack_beat = self.pack_beat.wrapping_add(1);
     }
     /// Follow the item's original take-out sequence 0. Pulses occur on mechanical motion changes
     /// and native animation sound markers, rather than on a wall-clock equip timer.
@@ -352,6 +559,7 @@ pub(super) fn update(
             impacts: h.damage.impacts,
             blaster: h.weapons.blaster.shots,
             wrench: h.items.hit_sounds,
+            wrench_hits: h.tracked.wrench_hits,
             wrench_held: motion.wrench_held() && h.items.slot.id == 8,
             hyper_landings: h.melee.hyper_landings,
             ledge_grabs: h.tracked.ledge_grabs,
@@ -377,7 +585,10 @@ pub(super) fn update(
             }),
             bomb: bomb.id.map(|id| (id, bomb.item)),
             gravity: h.gravity_mode as i32,
-            rail: h.boots.rail,
+            rail: (h.group == 0xf && h.boots.off_rail == 0)
+                .then_some(h.boots.rail)
+                .flatten(),
+            pack: pack_sample(h, p.game.pad.held),
             lock: if h.items.slot.id == 26 {
                 lock_snapshot(p, state.previous.as_ref().and_then(|s| s.lock.as_ref()))
             } else {
@@ -395,6 +606,7 @@ pub(super) fn update(
         state.cues = default();
         state.deployment = None;
         state.continuous = None;
+        state.stop_packs();
     } else if let (Some(n), Some(o), Some(p)) = (snapshot.as_ref(), old.as_ref(), play.as_ref()) {
         let h = &p.game.hero;
         let hurt = n.impacts > o.impacts || (n.body == o.body && n.health < o.health);
@@ -402,6 +614,11 @@ pub(super) fn update(
             state.hurt(now);
         }
         if h.health > 0 && !p.death_pending {
+            if n.tick > o.tick {
+                state.packs(now, &n.pack, &o.pack);
+            } else {
+                state.stop_packs();
+            }
             if n.item != o.item {
                 for cues in &mut state.cues {
                     cues.retain(|p| p.owner < 0);
@@ -441,8 +658,12 @@ pub(super) fn update(
                 let profile = deploy_profile(8);
                 state.pulse(1, now, profile.strength, profile.ms, profile.hz, 3, 8);
             }
-            if physical_wrench || (motion.wrench_held() && n.item == 8 && n.wrench > o.wrench) {
-                state.right(now, 0.65, 45, 110.0, 8);
+            if physical_wrench
+                || n.wrench_hits > o.wrench_hits
+                || (motion.wrench_held() && n.item == 8 && n.wrench > o.wrench)
+            {
+                state.pulse(1, now, 0.92, 85, 75.0, 10, 8);
+                state.pulse(1, now + 0.09, 0.32, 30, 135.0, 10, 8);
             }
             if n.blaster > o.blaster {
                 state.right(now, 0.35, 25, 160.0, 15);
@@ -482,10 +703,18 @@ pub(super) fn update(
                 }
             }
             if n.suck_shots > o.suck_shots {
-                state.right(now, 0.78, 95, 65.0, 9);
+                state.pulse(1, now, 1.0, 145, 45.0, 10, 9);
+                state.pulse(1, now + 0.16, 0.45, 55, 90.0, 10, 9);
+                if support.held {
+                    state.pulse(0, now, 0.65, 110, 45.0, 10, 9);
+                }
             }
             if n.suck_load > o.suck_load {
-                state.double(now, 0.55, 9);
+                state.pulse(1, now, 0.95, 115, 60.0, 10, 9);
+                state.pulse(1, now + 0.13, 0.55, 65, 100.0, 10, 9);
+                if support.held {
+                    state.pulse(0, now, 0.5, 90, 60.0, 10, 9);
+                }
             } else if n.vacuumed > o.vacuumed {
                 state.right(now, 0.20, 20, 140.0, 9);
             }
@@ -554,12 +783,20 @@ pub(super) fn update(
                 }
             }
             // Back/boot gadgets give attachment/launch cues, rather than vibrating while merely equipped.
-            if (n.gravity != 0 && o.gravity == 0)
-                || (n.rail.is_some() && n.rail != o.rail)
-                || (n.hero_state != o.hero_state
-                    && matches!(n.hero_state, 0xc | 0xd | 0xe)
-                    && matches!(h.back_slot.slot.id, 2 | 3))
-            {
+            if n.bolts > o.bolts && !n.vendor && now >= state.bolt_next {
+                state.bolt_next = now + 0.09;
+                for side in 0..2 {
+                    state.pulse(side, now, 0.10, 16, 185.0, 0, -105);
+                }
+            }
+            if n.rail.is_some() && n.tick > o.tick && now >= state.rail_next {
+                state.rail_next = now + 0.085;
+                let amplitude = (0.055 + h.boots.speed.abs() * 0.004).clamp(0.055, 0.14);
+                for side in 0..2 {
+                    state.pulse(side, now, amplitude, 55, 90.0, 0, -106);
+                }
+            }
+            if (n.gravity != 0 && o.gravity == 0) || (n.rail.is_some() && n.rail != o.rail) {
                 for side in 0..2 {
                     state.pulse(side, now, 0.35, 60, 80.0, 4, -2);
                 }
@@ -567,11 +804,7 @@ pub(super) fn update(
             let mstate = h.items.slot.item.as_ref().map_or(0, |i| i.mstate);
             let wave = (now as f32 * 21.0).sin() * 0.05;
             let ready = h.items.slot.state == 2 && !n.vendor;
-            let continuous = if n.hero_state == 0x35 {
-                Some((-4, 0.20, 65, 60.0, 0.12, true))
-            } else if n.hero_state == 8 && matches!(h.back_slot.slot.id, 2 | 3) {
-                Some((-5, 0.12, 60, 75.0, 0.18, true))
-            } else if ready {
+            let continuous = if ready {
                 match n.item {
                     16 if mstate == 3 => Some((16, 0.28 + wave, 70, 70.0, 0.08, support.held)),
                     19 if h.weapons.tesla.firing => Some((
@@ -655,12 +888,15 @@ pub(super) fn update(
                     cues.retain(|p| p.priority != 1);
                 }
             }
+        } else {
+            state.stop_packs();
         }
     }
     state.previous = snapshot;
     let (Some(actions), Some(session)) = (actions, session) else {
         state.cues = default();
         state.sent = default();
+        state.stop_packs();
         return;
     };
     for side in 0..2 {
@@ -670,12 +906,13 @@ pub(super) fn update(
             input.grip.is_some() || input.trigger.is_some()
         };
         let focused = focus.0 && mode.free_movement();
-        // Damage reaches both connected controllers even during a brief optical occlusion.
-        // Weapon/gadget feedback still requires a valid tracked hand.
+        // Body-worn packs and damage reach connected controllers through optical occlusion.
+        // Held weapon/gadget feedback still requires a valid tracked hand.
         state.cues[side].retain(|p| {
             p.end > now
                 && focused
-                && (motion.hands[side].is_some() || (p.priority == 20 && controller_active))
+                && (motion.hands[side].is_some()
+                    || ((p.priority == 20 || pack_owner(p.owner)) && controller_active))
         });
         let damage_pending = state.cues[side].iter().any(|p| p.priority == 20);
         let cue = state.cues[side]

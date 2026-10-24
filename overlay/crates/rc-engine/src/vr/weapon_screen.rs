@@ -16,7 +16,12 @@ impl Plugin for WeaponScreenPlugin {
                 crate::level_switch::LevelUnload,
                 crate::level_switch::reset::<Screen>,
             )
-            .add_systems(PostUpdate, present.before(TransformSystems::Propagate));
+            .add_systems(
+                PostUpdate,
+                present
+                    .after(super::solid_contact::Presented)
+                    .before(TransformSystems::Propagate),
+            );
     }
 }
 #[allow(clippy::too_many_arguments)]
@@ -27,6 +32,7 @@ fn present(
     settings: Res<super::Settings>,
     motion: Res<super::embodied::Motion>,
     support: Res<super::blaster::SupportGrip>,
+    attach: Option<Res<crate::moby_attach::MobyAttach>>,
     frame: Res<crate::display::GameFrame>,
     mode: Res<crate::menu_render::MenuMode>,
     mut screen: ResMut<Screen>,
@@ -69,6 +75,12 @@ fn present(
     };
     let hand = root.mul_transform(super::blaster::weapon_hand(hand, motion.hands[0], &support));
     super::blaster::place(&mut item, hand, data, support.primary);
+    if let Some(at) = attach
+        .as_ref()
+        .and_then(|a| a.tracked_position(item.o_class))
+    {
+        item.position = at;
+    }
     let Some(class) = data.class(163) else { return };
     let palette = rc_formats::moby_anim::evaluate_with_snapshot(
         &class.anim,

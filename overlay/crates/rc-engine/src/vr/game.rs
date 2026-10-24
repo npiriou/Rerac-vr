@@ -44,6 +44,8 @@ pub struct GameEye;
 #[derive(Component, Clone, ExtractComponent)]
 struct EyeSky;
 #[derive(Component)]
+struct DestinationWarmup;
+#[derive(Component)]
 struct Panel(u8);
 #[derive(Resource, Default)]
 pub(super) struct Rig {
@@ -60,14 +62,18 @@ pub(super) struct Rig {
     gravity_frame: Quat,
     front_root: Option<Transform>,
     cinematic_root: Option<Transform>,
+    last_live_eye: Option<Vec3>,
+    eye_level: u32,
     pilot_heading: Option<f32>,
+    pilot_rotation: Option<Quat>,
     rail_heading: Option<f32>,
     rail_center: Option<Vec3>,
     rail_pitch: f32,
     rail_time: Option<f64>,
     rail_position: Option<Vec3>,
+    rail_samples: Option<(u64, Vec3, Vec3)>,
 }
-pub(super) fn native_panel(play: &crate::gameplay::Play) -> bool {
+pub(crate) fn native_panel(play: &crate::gameplay::Play) -> bool {
     let gold_bolt = play
         .game
         .mobys
@@ -111,10 +117,19 @@ impl Rig {
         let rotation = self.gravity_frame
             * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw)
             * Quat::from_rotation_x(self.rail_pitch);
-        let eye = self
+        let body_eye = self
             .rail_position
             .unwrap_or_else(|| crate::tfrag_render::game_to_bevy(game.hero.position()))
             + self.gravity_frame * Vec3::Y * self.eye_height.unwrap_or(1.6);
+        // Death scripts can park the swallowed body far outside the level. Keep the
+        // last living viewpoint, with normal head tracking, until the respawn.
+        let eye = if (game.hero.health <= 0 || game.hero.group == 0x14 || game.hero.state == 0x78)
+            && self.eye_level == crate::level_load::level_index()
+        {
+            self.last_live_eye.unwrap_or(body_eye)
+        } else {
+            body_eye
+        };
         // Room-scale displacement has already been consumed by the native capsule.
         Some(Transform {
             translation: eye - rotation * (center * scale),
@@ -305,12 +320,17 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         })
         .add_systems(
             RunFixedMainLoop,
-            (follow_game_camera, super::bomb_glove::follow_held)
-                .chain()
+            follow_game_camera
                 .in_set(RunFixedMainLoopSystems::AfterFixedMainLoop)
                 .after(crate::play_camera::apply)
                 .after(crate::scene_render::apply_camera)
                 .after(crate::scene_render::hold_camera),
+        )
+        .add_systems(
+            PostUpdate,
+            super::bomb_glove::follow_held
+                .after(super::solid_contact::Presented)
+                .before(crate::gameplay::upload),
         )
         .add_systems(
             PostUpdate,
@@ -320,7 +340,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         .add_systems(
             PostUpdate,
             (
-                mirror_pass::<crate::scene_render::SceneFade>,
+                mirror_scene_fade.after(crate::scene_render::fade_pass),
                 mirror_pass::<crate::fog_state::UnderwaterTint>,
                 mirror_pass::<crate::screen_tint::ScreenTint>,
             ),
@@ -341,7 +361,8 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
             s.set_executor(SingleThreadedExecutor::new());
         });
     }
-    app.add_plugins(super::fullscreen_refresh::FullscreenRefreshPlugin)
+    app.add_plugins(super::loading::LoadingPlugin)
+        .add_plugins(super::fullscreen_refresh::FullscreenRefreshPlugin)
         .add_plugins(super::timing::FrameTimingPlugin {
             xr: !settings.desktop_preview,
         });
@@ -365,7 +386,41 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
             .after(update_views)
             .before(TransformSystems::Propagate),
     );
+    app.add_systems(PostUpdate, warm_destination
+        .after(sky_policy).before(TransformSystems::Propagate));
     Ok(())
+}
+
+fn warm_destination(
+    mut commands: Commands,
+    play: Option<Res<crate::gameplay::Play>>,
+    eyes: Query<(&RenderTarget, &Projection, &Msaa), With<GameEye>>,
+    warm: Query<Entity, With<DestinationWarmup>>,
+) {
+    if !super::loading::streaming() || super::loading::destination_ready() {
+        for e in &warm { commands.entity(e).despawn(); }
+        return;
+    }
+    if !warm.is_empty() { return; }
+    let Some(play) = play else { return };
+    let Some((target, projection, msaa)) = eyes.iter().next() else { return };
+    let view = Transform::from_translation(crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y * 1.6)
+        .with_rotation(Quat::from_rotation_y(play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2));
+    super::loading::set_destination_view(view);
+    // Prepare the destination's visible material pipelines using the real eye target/format.
+    // The flight sky and eye render AFTER this view and replace it completely; none of the
+    // unfinished planet is presented. One temporary view is enough for both eyes' pipelines.
+    commands.spawn((
+        Camera3d::default(),
+        Camera { order: 8, output_mode: CameraOutputMode::Skip,
+            clear_color: ClearColorConfig::Custom(Color::BLACK), ..default() },
+        target.clone(), projection.clone(), *msaa,
+        view,
+        RenderLayers::default(), Tonemapping::None, DebandDither::Disabled,
+        crate::shadow_render::ShadowCamera,
+        crate::level_switch::KeepAcrossLevels,
+        DestinationWarmup, Name::new("Destination pipeline warmup behind flight"),
+    ));
 }
 // The monitor is an extra full world render. Refresh it every `every` frames during VR gameplay
 // (never at 0); the headset and simulation still update every frame. Menus retain their original
@@ -459,6 +514,29 @@ fn mirror_pass<T: Component + Clone + PartialEq>(
             }
             _ => {}
         }
+    }
+}
+
+fn mirror_scene_fade(
+    mut commands: Commands,
+    loading: Res<super::loading::Hold>,
+    travel: Res<crate::travel_render::Travel>,
+    main: Query<Option<&crate::scene_render::SceneFade>, With<crate::fly_cam::FlyCam>>,
+    eyes: Query<(Entity, Option<&crate::scene_render::SceneFade>), With<GameEye>>,
+) {
+    let native = main.iter().next().flatten().copied();
+    let enabled = native.is_some() || travel.in_transition() || loading.opacity() > 0.0;
+    let mut want = native.unwrap_or_default();
+    if loading.opacity() > 0.0 {
+        let native_black = if want.rgba.truncate() == UVec3::ZERO { want.rgba.w } else { 0 };
+        want.rgba = UVec4::new(0, 0, 0, native_black.max((loading.opacity() * 128.0).ceil() as u32));
+    }
+    // Warm this pass on both eyes during the flight, before replacing the level. Ordinary
+    // gameplay keeps the original zero-overhead path when no screen fade is needed.
+    for (e, have) in &eyes {
+        if enabled {
+            if have != Some(&want) { commands.entity(e).insert(want); }
+        } else if have.is_some() { commands.entity(e).remove::<crate::scene_render::SceneFade>(); }
     }
 }
 
@@ -710,6 +788,7 @@ fn follow_game_camera(
     travel: Res<crate::travel_render::Travel>,
     scene: Res<crate::scene_render::ActiveScene>,
     scene_runtime: Res<crate::scene_render::SceneRuntime>,
+    fixed: Res<Time<Fixed>>,
 ) {
     let Some(play) = play else { return };
     // Startup poses while the headset is on the desk are not the player's neutral pose.
@@ -759,6 +838,12 @@ fn follow_game_camera(
         return;
     }
     rig.front_root = None;
+    let level_id = crate::level_load::level_index();
+    if rig.eye_level != level_id {
+        rig.eye_level = level_id;
+        rig.last_live_eye = None;
+        rig.cinematic_root = None;
+    }
     let now = time.elapsed_secs_f64();
     let dt = rig
         .rail_time
@@ -770,19 +855,26 @@ fn follow_game_camera(
         .then(|| crate::scene_render::ratchet_eye(&scene_runtime))
         .flatten()
         .map(crate::tfrag_render::game_to_bevy);
-    let cinematic_eye = pilot.map(|(eye, _)| eye).or(actor_eye);
+    let cinematic_eye = pilot.map(|(eye, _)| eye).or(actor_eye).or_else(|| {
+        // A streamed scene may have no valid Ratchet key on its first frame.
+        (scene.running && rig.cinematic_root.is_none()).then(|| {
+            rig.last_live_eye.unwrap_or_else(|| {
+                crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y * 1.6
+            })
+        })
+    });
     if let Some(eye) = cinematic_eye {
-        let yaw = if let Some((_, target)) = pilot {
-            let previous = rig.pilot_heading.unwrap_or(target);
-            let error = (target - previous).sin().atan2((target - previous).cos());
-            let next = previous + (error * (1.0 - (-dt / 0.35).exp())).clamp(-dt * 1.05, dt * 1.05);
-            rig.pilot_heading = Some(next);
+        let frame = if let Some((_, target)) = pilot {
+            let previous = rig.pilot_rotation.unwrap_or(target);
+            let next = previous.slerp(target, 1.0 - (-dt / 0.08).exp());
+            rig.pilot_rotation = Some(next);
             next
         } else {
             rig.pilot_heading = None;
-            rig.world_yaw + rig.turn
+            rig.pilot_rotation = None;
+            Quat::from_rotation_y(rig.world_yaw + rig.turn)
         };
-        let rotation = Quat::from_rotation_y(yaw - rig.yaw);
+        let rotation = frame * Quat::from_rotation_y(-rig.yaw);
         rig.cinematic_root = Some(Transform {
             translation: eye
                 - rotation * (rig.center.unwrap_or(head.translation) * settings.units_per_metre),
@@ -792,6 +884,7 @@ fn follow_game_camera(
     } else if !scene.running {
         rig.cinematic_root = None;
         rig.pilot_heading = None;
+        rig.pilot_rotation = None;
     }
     let boots = &play.game.hero.boots;
     let on_rail = play.game.hero.group == 0xf && boots.rail.is_some() && boots.off_rail == 0;
@@ -804,11 +897,7 @@ fn follow_game_camera(
         if let Some(previous) = rig.rail_heading {
             let error = (rail - previous).sin().atan2((rail - previous).cos());
             // Average a span of the path, then reject tiny tangent noise and bound virtual turning.
-            let change = if error.abs() < 0.006 {
-                0.0
-            } else {
-                (error * (1.0 - (-dt / 0.35).exp())).clamp(-dt * 1.05, dt * 1.05)
-            };
+            let change = (error * (1.0 - (-dt / 0.48).exp())).clamp(-dt * 0.85, dt * 0.85);
             rig.world_yaw += change;
             rig.rail_heading = Some(previous + change);
         } else {
@@ -821,13 +910,28 @@ fn follow_game_camera(
         rig.rail_center = None;
     }
     let pitch_error = target_pitch - rig.rail_pitch;
-    if pitch_error.abs() > 0.008 || !on_rail {
-        rig.rail_pitch += (pitch_error * (1.0 - (-dt / 0.50).exp())).clamp(-dt * 0.35, dt * 0.35);
-    }
+    rig.rail_pitch += (pitch_error * (1.0 - (-dt / 0.62).exp())).clamp(-dt * 0.30, dt * 0.30);
     let position = crate::tfrag_render::game_to_bevy(play.game.hero.position());
+    let smooth_position = if on_rail {
+        let (tick, old, current) =
+            rig.rail_samples
+                .unwrap_or((play.game.counter, position, position));
+        let sample = if tick != play.game.counter {
+            (play.game.counter, current, position)
+        } else {
+            (tick, old, current)
+        };
+        rig.rail_samples = Some(sample);
+        sample
+            .1
+            .lerp(sample.2, fixed.overstep_fraction().clamp(0.0, 1.0))
+    } else {
+        rig.rail_samples = None;
+        position
+    };
     if on_rail || rig.rail_position.is_some() {
         let old = rig.rail_position.unwrap_or(position);
-        let next = old.lerp(position, 1.0 - (-dt / 0.08).exp());
+        let next = old.lerp(smooth_position, 1.0 - (-dt / 0.08).exp());
         // Large teleports/reloads rebase immediately rather than dragging a camera across the level.
         rig.rail_position = if old.distance(position) > 20.0 {
             Some(position)
@@ -870,6 +974,16 @@ fn follow_game_camera(
     rig.eye_height = Some(
         height + (target_height - height).clamp(-time.delta_secs() * 2.0, time.delta_secs() * 2.0),
     );
+    if play.game.hero.health > 0
+        && play.game.hero.group != 0x14
+        && play.game.hero.state != 0x78
+        && !play.death_pending
+        && !scene.running
+        && pilot.is_none()
+    {
+        rig.last_live_eye =
+            Some(position + rig.gravity_frame * Vec3::Y * rig.eye_height.unwrap_or(1.6));
+    }
     // The flight is drawn on a separate world layer, about its authored camera, not about the
     // hero left on the departure planet. Keep head-driven pitch/roll and show the actual voyage.
     let root = if rig.cinematic_root.is_some() {
@@ -919,6 +1033,9 @@ fn eye_msaa(
 
 fn sky_policy(
     play: Option<Res<crate::gameplay::Play>>,
+    mode: Res<crate::menu_render::MenuMode>,
+    movie: Res<crate::movie_render::MovieState>,
+    travel: Res<crate::travel_render::Travel>,
     mut cams: Query<
         (&mut Camera, &mut Camera3d, &mut RenderLayers, Has<EyeSky>),
         Or<(With<EyeSky>, With<GameEye>)>,
@@ -940,6 +1057,8 @@ fn sky_policy(
         ),
     >,
 ) {
+    let cinema = movie.busy() || matches!(mode.state.mode,
+        rc_game::menus::mode::Mode::Movie | rc_game::menus::mode::Mode::Slideshow);
     let sky_layers = native_sky
         .iter()
         .next()
@@ -952,7 +1071,9 @@ fn sky_policy(
         .unwrap_or((ClearColorConfig::Default, RenderLayers::default()));
     for (mut c, mut d, mut layers, sky) in &mut cams {
         if sky {
-            *layers = if play
+            *layers = if cinema {
+                RenderLayers::none()
+            } else if play
                 .as_deref()
                 .is_some_and(|p| crate::visibomb_view::missile_view(Some(p)))
             {
@@ -961,13 +1082,19 @@ fn sky_policy(
                 sky_layers.clone()
             };
             c.order = 10;
-            c.clear_color = ClearColorConfig::Default;
+            c.clear_color = if cinema || travel.blanked() {
+                ClearColorConfig::Custom(Color::BLACK)
+            } else { ClearColorConfig::Default };
             c.output_mode = CameraOutputMode::Skip;
             d.depth_load_op = Camera3dDepthLoadOp::Clear(0.0);
         } else {
-            *layers = world_layers.clone().with(PANEL_LAYER);
+            *layers = if cinema {
+                RenderLayers::layer(PANEL_LAYER)
+            } else {
+                world_layers.clone().with(PANEL_LAYER)
+            };
             c.order = 11;
-            c.clear_color = world_clear.clone();
+            c.clear_color = if cinema { ClearColorConfig::None } else { world_clear.clone() };
             c.output_mode = CameraOutputMode::Write {
                 blend_state: Some(BlendState::REPLACE),
                 clear_color: ClearColorConfig::None,
@@ -997,6 +1124,8 @@ fn update_panels(
     )>,
     mut mats: ResMut<Assets<StandardMaterial>>,
     play: Option<Res<crate::gameplay::Play>>,
+    rig: Res<Rig>,
+    mut cinema_anchor: Local<Option<(u64, Transform)>>,
 ) {
     use rc_game::menus::mode::Mode;
     // Ship/engine movies already exist in the stereo world. Only actual menus, flat video and
@@ -1007,12 +1136,23 @@ fn update_panels(
         _ => false,
     };
     let head = pose(views.as_deref()).unwrap_or_else(|| Transform::from_xyz(0.0, 1.6, 0.0));
+    let cinema = matches!(mode.state.mode, Mode::Movie | Mode::Slideshow);
+    if cinema {
+        if cinema_anchor.as_ref().is_none_or(|(revision, _)| *revision != rig.revision) {
+            *cinema_anchor = Some((rig.revision, Transform::from_translation(head.translation)
+                .with_rotation(Quat::from_rotation_y(heading(head.rotation)))));
+        }
+    } else { *cinema_anchor = None; }
     let spatial_pause = matches!(mode.state.mode, Mode::Menu | Mode::Freeze);
     let missile = play
         .as_deref()
         .is_some_and(|p| crate::visibomb_view::missile_view(Some(p)));
     for (panel, mut t, mut visibility, material) in &mut panels {
-        if spatial_pause || missile || (mode.spatial_vendor && mode.state.mode == Mode::Vendor) {
+        if spatial_pause
+            || missile
+            || play.as_deref().is_some_and(native_panel)
+            || (mode.spatial_vendor && mode.state.mode == Mode::Vendor)
+        {
             *visibility = Visibility::Hidden;
             continue;
         }
@@ -1041,7 +1181,15 @@ fn update_panels(
             }
         }
         // Composite order toward the viewer: frame, HUD, static.
-        *t = head.mul_transform(Transform::from_xyz(0.0, 0.0, -2.0 + panel.0 as f32 * 0.002));
+        if cinema && panel.0 == 0 {
+            // A level screen in a black room, fixed where the viewer was looking at entry.
+            // Head motion remains free instead of dragging a picture across the face.
+            let anchor = cinema_anchor.as_ref().map_or(head, |(_, anchor)| *anchor);
+            *t = anchor.mul_transform(Transform::from_xyz(0.0, 0.0, -3.0));
+            t.scale = Vec3::new(1.8, 3.6 * frame.size.y as f32 / frame.size.x.max(1) as f32 / 1.5, 1.0);
+        } else {
+            *t = head.mul_transform(Transform::from_xyz(0.0, 0.0, -2.0 + panel.0 as f32 * 0.002));
+        }
     }
 }
 fn audit(

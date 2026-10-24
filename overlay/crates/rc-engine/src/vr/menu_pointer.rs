@@ -80,12 +80,60 @@ fn target(
     point: Option<[f32; 2]>,
 ) -> Option<Target> {
     let point = point?;
+    let make = |rect: [f32; 4], key| Target {
+        page: 0,
+        widget: u32::MAX,
+        rect,
+        action: rc_game::menus::pause::pointer::Action::Key(key),
+        enabled: true,
+    };
+    // Match the actual native dialog labels, so memory-card and confirmation buttons
+    // keep their measured positions and original Cross/Circle/Triangle semantics.
+    for draw in &rt.draws {
+        if let rc_game::menus::MenuDraw::Hud(rc_game::hud::Draw::Text {
+            font, x, y, text, ..
+        }) = draw
+        {
+            let key = [
+                (0x524a, rc_game::pad::button::CROSS),
+                (0x524e, rc_game::pad::button::CROSS),
+                (0x524f, rc_game::pad::button::CIRCLE),
+                (0x524b, rc_game::pad::button::TRIANGLE),
+                (0x4fa8, rc_game::pad::button::TRIANGLE),
+                (0x5249, rc_game::pad::button::CROSS),
+                (0x5248, rc_game::pad::button::CIRCLE),
+            ]
+            .into_iter()
+            .find(|(id, _)| rt.assets.msg(*id) == text.as_slice())
+            .map(|(_, key)| key);
+            if let Some(key) = key {
+                let t = make(
+                    [
+                        *x as f32 - 8.0,
+                        *y as f32 - 5.0,
+                        rt.assets.width(*font, text) as f32 + 16.0,
+                        26.0,
+                    ],
+                    key,
+                );
+                if t.contains(point) {
+                    return Some(t);
+                }
+            }
+        }
+    }
     rt.menu
-        .as_ref()?
-        .pointer_targets(&rt.assets, &saved.0)
-        .into_iter()
-        .rev()
-        .find(|t| t.contains(point))
+        .as_ref()
+        .and_then(|m| {
+            m.pointer_targets(&rt.assets, &saved.0)
+                .into_iter()
+                .rev()
+                .find(|t| t.contains(point))
+        })
+        .or_else(|| {
+            (crate::saves::front_end_active() && rt.menu.as_ref().is_none_or(|m| !m.active))
+                .then(|| make([0.0, 0.0, 512.0, 416.0], rc_game::pad::button::START))
+        })
 }
 #[allow(clippy::too_many_arguments)]
 fn interact(
@@ -99,15 +147,22 @@ fn interact(
     saved: Option<Res<crate::gameplay::Persistent>>,
     mut rt: Option<ResMut<crate::menu_render::MenuRt>>,
     mut input: ResMut<HandInput>,
+    mut pad: ResMut<crate::input_map::PadFrame>,
 ) {
-    let pressed = std::mem::take(&mut input.menu_click);
+    let pressed = input.menu_click;
     let Some(mut rt) = rt.take() else { return };
     if let Some(m) = rt.menu.as_mut() {
         m.pointer = None;
     }
-    if mode.state.mode != rc_game::menus::mode::Mode::Menu || !focus.0 || settings.desktop_preview {
+    if !matches!(
+        mode.state.mode,
+        rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
+    ) || !focus.0
+        || settings.desktop_preview
+    {
         return;
     }
+    input.menu_click = false;
     let (Some(play), Some(saved)) = (play, saved) else {
         return;
     };
@@ -115,6 +170,14 @@ fn interact(
         return;
     };
     let hit = target(&rt, &saved, ray.point);
+    if let Some(t) = hit.filter(|t| t.widget == u32::MAX) {
+        if pressed {
+            if let rc_game::menus::pause::pointer::Action::Key(key) = t.action {
+                pad.0.buttons |= key as u16;
+            }
+        }
+        return;
+    }
     if let Some(m) = rt.menu.as_mut() {
         m.pointer = Some(Input {
             target: hit,
@@ -139,13 +202,25 @@ fn present(
     mut visuals: ResMut<Visuals>,
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
+    vendor: Res<crate::interact_render::VendorRt>,
 ) {
-    let active =
-        mode.state.mode == rc_game::menus::mode::Mode::Menu && focus.0 && !settings.desktop_preview;
-    let ray = play
-        .as_ref()
-        .filter(|_| active)
-        .and_then(|p| ray(&menu, &rig, p, &settings, &motion));
+    let active = (matches!(
+        mode.state.mode,
+        rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
+    ) || mode.spatial_vendor)
+        && focus.0
+        && !settings.desktop_preview;
+    let ray = play.as_ref().filter(|_| active).and_then(|p| {
+        if mode.spatial_vendor {
+            super::vendor::ray(&vendor, &rig, p, &settings, &motion).map(|(origin, end, hit)| Ray {
+                origin,
+                end,
+                point: hit.map(|(_, uv)| uv.to_array()),
+            })
+        } else {
+            ray(&menu, &rig, p, &settings, &motion)
+        }
+    });
     let Some(ray) = ray else {
         if let Some((beam, dot, _)) = &visuals.0 {
             commands.entity(*beam).insert(Visibility::Hidden);
@@ -157,7 +232,10 @@ fn present(
         .as_ref()
         .zip(saved.as_ref())
         .and_then(|(rt, s)| target(rt, s, ray.point));
-    let color = if hit.is_some_and(|t| t.enabled) {
+    let color = if hit.is_some_and(|t| t.enabled)
+        || ((mode.spatial_vendor || play.as_ref().is_some_and(|p| super::game::native_panel(p)))
+            && ray.point.is_some())
+    {
         Color::srgb(0.2, 0.95, 1.0)
     } else {
         Color::srgb(0.5, 0.55, 0.6)

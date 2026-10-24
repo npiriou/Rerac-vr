@@ -5,9 +5,10 @@ use crate::ps2v::Pf;
 #[derive(Clone, Debug, Default)]
 pub struct Tracked {
     pub enabled: bool,
-    /// Physical wrench socket, with this simulation tick's tracking-only angular travel.
+    /// Physical wrench socket and the native capsule's angular travel around the bolt this tick.
     pub crank_target: Option<usize>,
     pub crank_turn: f32,
+    pub crank_radius: f32,
     /// The last gameplay tick belonged to a short camera cutaway, not a dialogue/ship scene.
     pub cutaway_free: bool,
     pub pack_jump: bool,
@@ -32,6 +33,69 @@ pub struct Tracked {
     /// Accepted grip anchors and native climb launches, consumed as presentation events.
     pub ledge_grabs: [u64; 2],
     pub ledge_climbs: u64,
+    pub wrench_hits: u64,
+    /// The thrown wrench's way back to the tracked hand (planned when it turns back).
+    pub wrench_return: Option<WrenchReturn>,
+}
+
+/// The tracked wrench's return: one readable path from where it turned back to the hand that catches it.
+/// It starts at rest (the outbound flight decelerates to zero), accelerates, then eases into the hand. The
+/// spin keeps the outbound rate, slows near the hand and is phased to end on the held yaw.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct WrenchReturn {
+    pub from: [f32; 3],
+    /// Progress (0..1) at the last game tick, and its gain per tick.
+    pub progress: f32,
+    pub step: f32,
+    /// The spin about world up where it turned back, and its total over the return.
+    pub spin_from: f32,
+    pub spin: f32,
+}
+
+impl WrenchReturn {
+    /// The native spin, radians per tick (`0x277380(0, 0, dt·24.43)`).
+    const SPIN: f32 = 24.434_608 / 60.0;
+    /// The spin rate holds until this progress, then falls linearly to [`Self::SPIN_END`] of it.
+    const SPIN_HOLD: f32 = 0.55;
+    const SPIN_END: f32 = 0.4;
+
+    /// `hand_yaw`: the held wrench's shaft heading (None: no tracked hand, no phasing).
+    pub fn plan(from: [f32; 3], hand: [f32; 3], spin_from: f32, hand_yaw: Option<f32>) -> Self {
+        let dist = (0..3).map(|i| (hand[i] - from[i]).powi(2)).sum::<f32>().sqrt();
+        // About 0.35 s for a short throw and 0.6 s from the native 8-unit turnaround.
+        let ticks = (18.0 + dist * 2.1).clamp(21.0, 45.0);
+        let nominal = Self::SPIN * ticks * Self::spin_area(1.0);
+        let spin = match hand_yaw {
+            Some(yaw) => {
+                let tau = std::f32::consts::TAU;
+                let gap = (yaw - spin_from - nominal).rem_euclid(tau);
+                nominal + if gap > std::f32::consts::PI { gap - tau } else { gap }
+            }
+            None => nominal,
+        };
+        WrenchReturn { from, progress: 0.0, step: 1.0 / ticks, spin_from, spin }
+    }
+
+    /// The share of the path covered at progress `p`: 2.4p² − 1.4p³ (zero speed at the turn, 1.37× the mean
+    /// speed at 57 %, 0.6× the mean speed into the hand).
+    pub fn ease(p: f32) -> f32 {
+        let p = p.clamp(0.0, 1.0);
+        p * p * (2.4 - 1.4 * p)
+    }
+
+    /// The integral of the spin rate profile from 0 to `p`.
+    fn spin_area(p: f32) -> f32 {
+        let p = p.clamp(0.0, 1.0);
+        let late = (p - Self::SPIN_HOLD).max(0.0);
+        p - (1.0 - Self::SPIN_END) * late * late / (2.0 * (1.0 - Self::SPIN_HOLD))
+    }
+
+    /// The position and the spin at progress `p` toward `hand`.
+    pub fn at(&self, p: f32, hand: [f32; 3]) -> ([f32; 3], f32) {
+        let e = Self::ease(p);
+        let pos = std::array::from_fn(|i| self.from[i] + (hand[i] - self.from[i]) * e);
+        (pos, self.spin_from + self.spin * Self::spin_area(p) / Self::spin_area(1.0))
+    }
 }
 
 impl Hero {
@@ -90,20 +154,21 @@ impl Hero {
         if !self.tracked.enabled || self.mode != 0 || self.health <= 0 || self.frozen != 0 {
             return false;
         }
+        if !matches!(self.state, 0x18..=0x1c)
+            && matches!(self.prev_state, 0x18..=0x1b)
+            && (0..2).any(|s| self.tracked.grabbed[s] && self.tracked.grips[s])
+        {
+            self.set_state(c, 0x19, false);
+        }
         if matches!(self.state, 0x18..=0x1b) {
             let anchor = self.tracked_ledge_anchor();
             for side in 0..2 {
-                self.tracked.grabbed[side] &= self.tracked.grips[side]
-                    && self.tracked.hands[side].is_some_and(|hand| {
-                        self.tracked.anchors[side].is_none_or(|at| {
-                            (hand[0] - at[0]).hypot(hand[1] - at[1]) < 0.9
-                                && (hand[2] - at[2]).abs() < 0.75
-                        })
-                    });
+                // A pull moves the controller away from the lip; only grip release unbinds it.
+                self.tracked.grabbed[side] &= self.tracked.grips[side];
                 if self.tracked.grips[side]
                     && self.tracked.hands[side].is_some_and(|h| {
-                        (h[0] - anchor[0]).hypot(h[1] - anchor[1]) < 0.80
-                            && (h[2] - anchor[2]).abs() < 0.50
+                        (h[0] - anchor[0]).hypot(h[1] - anchor[1]) < 1.05
+                            && (h[2] - anchor[2]).abs() < 0.75
                     })
                 {
                     self.tracked.grabbed[side] = true;
@@ -150,7 +215,7 @@ impl Hero {
                             // Reach along the edge is wider than reach into/across it.
                             let normal =
                                 d[0] * self.ledge_blk.yaw.cos() + d[1] * self.ledge_blk.yaw.sin();
-                            d[0].hypot(d[1]) < 0.80 && normal.abs() < 0.48 && d[2].abs() < 0.50
+                            d[0].hypot(d[1]) < 1.05 && normal.abs() < 0.65 && d[2].abs() < 0.75
                         });
                 }
                 if !self.tracked.grabbed.iter().any(|&g| g) {
@@ -253,6 +318,17 @@ impl Hero {
             t.swim_velocity[k] = t.swim_velocity[k] * 0.96 + t.stroke[k] * 0.12;
             if surface && k == 2 {
                 t.swim_velocity[k] = 0.0;
+            }
+        }
+        if let Some(view) = t.view {
+            let mut forward = to_f32x3(view.rows[0]);
+            if surface {
+                forward[2] = 0.0;
+            }
+            let len = forward.iter().map(|v| v * v).sum::<f32>().sqrt();
+            if len > 0.01 {
+                let speed = t.swim_velocity.iter().map(|v| v * v).sum::<f32>().sqrt();
+                t.swim_velocity = forward.map(|v| v / len * speed);
             }
         }
         let speed = t.swim_velocity.iter().map(|v| v * v).sum::<f32>().sqrt();

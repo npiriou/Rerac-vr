@@ -20,12 +20,15 @@ use std::collections::{HashMap, HashSet, VecDeque};
 pub(super) struct EmbodiedPlugin;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub(super) struct WrenchUpdate;
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub(super) struct HandPresentation;
 impl Plugin for EmbodiedPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Motion>()
             .init_resource::<super::game_input::Feedback>()
             .init_resource::<Melee>()
             .add_plugins((
+                super::solid_contact::SolidContactPlugin,
                 super::bomb_glove::BombGlovePlugin,
                 super::blaster::BlasterPlugin,
                 super::gadget_socket::GadgetSocketPlugin,
@@ -49,6 +52,7 @@ impl Plugin for EmbodiedPlugin {
             .add_systems(
                 PostUpdate,
                 present
+                    .in_set(HandPresentation)
                     .before(crate::moby_attach::upload)
                     .before(TransformSystems::Propagate),
             );
@@ -60,6 +64,7 @@ pub(super) struct Motion {
     pub hands: [Option<Transform>; 2],
     pub bomb: BombGesture,
     held: bool,
+    was_flying: bool,
     grip_down: bool,
     grip_suppressed: bool,
     equip_wrench: bool,
@@ -103,7 +108,8 @@ struct Melee {
     wall_until: f64,
     rebound: Option<(f64, Vec3)>,
     crank: Option<usize>,
-    crank_previous: Option<(u64, Transform)>,
+    crank_previous: Option<Vec3>,
+    crank_far_since: Option<f64>,
 }
 
 #[derive(Clone, Copy)]
@@ -179,10 +185,12 @@ pub(super) fn capture(
         let grip_down = motion.grip_down;
         let grip_suppressed = motion.grip_suppressed;
         let bomb_held = motion.bomb.held;
+        let was_flying = motion.level == level && motion.was_flying;
         *motion = Motion {
             revision: rig.revision,
             level,
             held,
+            was_flying,
             grip_down,
             grip_suppressed,
             bomb: BombGesture {
@@ -214,6 +222,16 @@ pub(super) fn capture(
         return;
     };
     let now = time.elapsed_secs_f64();
+    let wrench = play.as_ref().and_then(|p| {
+        (p.game.hero.items.slot.id == 8 && p.game.hero.health > 0)
+            .then_some(p.game.hero.items.slot.item.as_ref())
+            .flatten()
+    });
+    if motion.was_flying && wrench.is_some_and(|i| i.mstate == 0) {
+        // The returning tool is caught and stays visible until the next grip release.
+        motion.held = true;
+    }
+    motion.was_flying = wrench.is_some_and(|i| i.mstate != 0);
     if motion.release.is_some_and(|(_, _, t)| now - t > 0.12) {
         motion.release = None;
     }
@@ -287,7 +305,7 @@ pub(super) fn capture(
         motion.equip_ready_tick = None;
         motion.release = None;
     }
-    if value < 0.35 {
+    if value < 0.35 && motion.grip_down {
         if motion.held && !motion.grip_suppressed && motion.velocity.length() >= 1.0 {
             motion.release = Some((hand, motion.velocity, now));
         }
@@ -343,7 +361,29 @@ fn grip_frame(item: &HandItem, data: &ItemData) -> Option<rc_formats::moby_anim:
         .copied()
 }
 
+// The original spin pose expands and moves the wrench's joints, then blends them
+// back into the held pose before catching. Use the original ready mesh as a rigid
+// object in VR: the native flight rows already supply the complete horizontal spin.
+// Only the cloned presentation/socket pose changes; native hit joints and flight stay intact.
+fn rigid_wrench_pose(item: &mut HandItem, data: Option<&ItemData>) {
+    if item.o_class != rc_game::hero::melee::WRENCH_CLASS
+        || !(item.mstate != 0 || item.anim.seq_a == 6 || item.anim.seq_b == 6)
+        || !data
+            .and_then(|d| d.class(item.o_class))
+            .is_some_and(|c| c.anim.frame(1, 0).is_some())
+    {
+        return;
+    }
+    item.anim.seq_a = 1;
+    item.anim.seq_b = 1;
+    item.anim.frame_a = 0;
+    item.anim.frame_b = 0;
+    item.anim.t = 0.0;
+    item.snapshot = None;
+}
+
 fn place(item: &mut HandItem, transform: Transform, data: Option<&ItemData>, stretch: f32) {
+    rigid_wrench_pose(item, data);
     if let Some(class) = data.and_then(|d| d.class(item.o_class)) {
         item.scale = class.scale * 1.20;
     }
@@ -435,6 +475,10 @@ impl rc_game::collision_query::mobys::MobySource for WrenchCrates<'_> {
         self.0
             .moby(id)
             .filter(|m| crate_class(m.o_class) && m.collision)
+            .map(|mut m| {
+                m.mode |= 0x4000;
+                m
+            })
     }
     fn joints(&self, id: usize, count: usize) -> Vec<[u32; 4]> {
         self.0.joints(id, count)
@@ -717,16 +761,35 @@ fn interact(
         || melee.level != crate::level_load::level_index()
         || p.game.counter < melee.last_tick
     {
+        // A snap turn changes the view, not the wrench's attachment to the bolt.
+        let crank = (melee.level == crate::level_load::level_index()
+            && p.game.counter >= melee.last_tick)
+            .then_some(melee.crank)
+            .flatten();
         *melee = Melee {
             revision: rig.revision,
             level: crate::level_load::level_index(),
+            crank,
             ..default()
         };
     }
     melee.last_tick = p.game.counter;
-    let stretch = 1.0 + ((motion.velocity.length() - 0.6) / 3.0).clamp(0.0, 1.0) * 0.15;
+    let stretch = if item.mstate == 0 {
+        1.0 + ((motion.velocity.length() - 0.6) / 3.0).clamp(0.0, 1.0) * 0.15
+    } else {
+        1.0
+    };
     place(&mut item, world_hand, p.game.item_data.as_ref(), stretch);
-    if crank_wrench(p, &mut item, &mut motion, &mut melee, hand, &root) {
+    if crank_wrench(
+        p,
+        &mut item,
+        &mut motion,
+        &mut melee,
+        hand,
+        &root,
+        time.elapsed_secs_f64(),
+        &level.0,
+    ) {
         p.game.hero.items.tracked_hand = Some((item.position, item.rows));
         p.game.hero.items.tracked_class = item.o_class;
         melee.clear_contact();
@@ -990,6 +1053,7 @@ fn interact(
         .hits
         .retain(|_, t| p.game.counter.saturating_sub(*t) < 120);
     if let Some(id) = hit {
+        p.game.hero.tracked.wrench_hits = p.game.hero.tracked.wrench_hits.wrapping_add(1);
         feedback.wrench_impact = true;
         let sound = rc_game::hero::melee::wrench_hit_sound(&p.game.mobys, Some(id));
         if wall.and_then(|contact| contact.moby) != Some(id) || feedback.wrench_wall.is_none() {
@@ -1001,15 +1065,122 @@ fn interact(
     }
 }
 
-fn crank_socket(play: &crate::gameplay::Play, id: usize) -> Option<Vec3> {
+/// A level moby's high-LOD vertices in its current pose, relative to its origin (game coordinates).
+pub(super) fn posed_offsets(
+    m: &rc_game::moby_runtime::Moby,
+    level: &crate::level_load::LoadedLevel,
+) -> Vec<Vec3> {
+    let Some(ci) = level.mobys.classes.iter().position(|c| c.o_class == m.o_class as i32) else {
+        return Vec::new();
+    };
+    let class = &level.mobys.classes[ci].class;
+    let palette = rc_formats::moby_anim::evaluate_with_snapshot(&level.mobys.anim[ci], &m.anim, None);
+    let axes = Mat3::from_cols_array_2d(&[0, 1, 2].map(|i| {
+        let r = m.rows[i];
+        [r[0], r[1], r[2]]
+    }));
+    class
+        .high_lod
+        .iter()
+        .flat_map(|p| p.vertices.iter())
+        .map(|v| {
+            let raw = Vec3::new(v.x as f32, v.y as f32, v.z as f32);
+            let posed = if v.skin.count == 0 {
+                raw
+            } else {
+                (0..v.skin.count as usize)
+                    .map(|k| {
+                        palette.get(v.skin.joints[k] as usize).map_or(raw, |p| {
+                            Mat4::from_cols_array_2d(p).transform_point3(raw)
+                        }) * (v.skin.weights[k] as f32 / 256.0)
+                    })
+                    .sum()
+            };
+            axes * posed * (m.scale / 1024.0)
+        })
+        .collect()
+}
+/// A class-280 bolt's hex head: the bolt axis at its mid-height, and its top and bottom (Bevy coordinates).
+#[derive(Clone, Copy)]
+struct CrankSocket {
+    nut: Vec3,
+    top: f32,
+    bottom: f32,
+}
+fn crank_socket(
+    play: &crate::gameplay::Play,
+    id: usize,
+    level: &crate::level_load::LoadedLevel,
+) -> Option<CrankSocket> {
     let m = play.game.mobys.mobys.get(id)?;
-    (m.o_class == 280 && matches!(m.state, 1 | 3) && m.pvars.len() >= 0x40).then(|| {
-        crate::tfrag_render::game_to_bevy([m.position[0], m.position[1], m.position[2] + 0.45])
+    if !(m.o_class == 280 && matches!(m.state, 1 | 3) && m.pvars.len() >= 0x40) {
+        return None;
+    }
+    let offsets = posed_offsets(m, level);
+    // The hex head is the widest part of the bolt: everything beyond 75 % of its largest radius.
+    let widest = offsets.iter().map(|v| v.truncate().length()).fold(0.0, f32::max);
+    let head = offsets.iter().filter(|v| v.truncate().length() >= widest * 0.75);
+    let top = offsets.iter().map(|v| v.z).fold(f32::NEG_INFINITY, f32::max);
+    let bottom = head.map(|v| v.z).fold(f32::INFINITY, f32::min);
+    let (top, bottom) = if top.is_finite() && bottom.is_finite() {
+        (top, bottom.min(top))
+    } else {
+        (1.0, 0.8)
+    };
+    let z = m.position[2];
+    Some(CrankSocket {
+        nut: crate::tfrag_render::game_to_bevy([
+            m.position[0],
+            m.position[1],
+            z + (top + bottom) * 0.5,
+        ]),
+        top: z + top,
+        bottom: z + bottom,
     })
 }
-fn seat_wrench(item: &mut HandItem, data: &ItemData, socket: Vec3) {
-    let shift = socket - tip(item, data);
-    item.position = game_point(crate::tfrag_render::game_to_bevy(item.position) + shift);
+// The original crank pose straddles the bolt's hex head between the two jaws that sequence 0xb opens.
+// This point of the wrench model (raw units, sequence 0xb frame 2) lies on the bolt axis, at the jaws'
+// mid-thickness, in Ratchet's native 0x3f/0x40/0x41 poses on his 1.05 ring (measured from the original
+// assets); the grip (joint list 0) is at x = -90 on the same shaft.
+const CRANK_JAWS: Vec3 = Vec3::new(10670.0, -930.0, -351.0);
+const CRANK_GRIP_X: f32 = -90.0;
+fn seat_wrench(item: &mut HandItem, data: &ItemData, socket: CrankSocket, hand: Transform) {
+    let Some(class) = data.class(item.o_class) else {
+        return;
+    };
+    // Original bolt-crank pose, including the wrench's authored extension.
+    if class.anim.frame(0xb, 2).is_some() {
+        item.anim.seq_a = 0xb;
+        item.anim.seq_b = 0xb;
+        item.anim.frame_a = 2;
+        item.anim.frame_b = 2;
+        item.anim.t = 0.0;
+        item.snapshot = None;
+    }
+    item.scale = class.scale * 1.20;
+    let k = item.scale / 1024.0;
+    let nut = Vec3::from_array(game_point(socket.nut));
+    let palm = Vec3::from_array(game_point(hand.translation));
+    // The shaft heads from the hand to the bolt; the jaws stay nearly level around the hex head.
+    let to = nut - palm;
+    let flat = to.truncate();
+    let heading = if flat.length() > 0.05 {
+        flat.normalize()
+    } else {
+        let f = crate::game_camera::game_rows(&hand)[0].truncate();
+        if f.length() > 0.05 { f.normalize() } else { Vec2::X }
+    };
+    let pitch = to.z.atan2(flat.length()).clamp(-0.35, 0.35);
+    let x = (heading * pitch.cos()).extend(pitch.sin());
+    let z = (Vec3::Z - x * x.z).normalize();
+    let y = z.cross(x);
+    // Lengthen or shorten the shaft about the jaws so the handle meets the palm; the head keeps its width.
+    let length = (CRANK_JAWS.x - CRANK_GRIP_X) * k;
+    let ratio = (to.dot(x) / length).clamp(0.55, 2.5);
+    let rows = [x * ratio, y, z];
+    let jaws = rows[0] * CRANK_JAWS.x * k + rows[1] * CRANK_JAWS.y * k + rows[2] * CRANK_JAWS.z * k;
+    item.position = (nut - jaws).to_array();
+    item.rows = rows.map(|r| [r.x.to_bits(), r.y.to_bits(), r.z.to_bits(), 0]);
 }
 fn crank_wrench(
     play: &mut crate::gameplay::Play,
@@ -1018,6 +1189,8 @@ fn crank_wrench(
     melee: &mut Melee,
     hand: Transform,
     root: &Transform,
+    now: f64,
+    level: &crate::level_load::LoadedLevel,
 ) -> bool {
     let was_attached = melee.crank.is_some();
     let data = play.game.item_data.as_ref();
@@ -1025,10 +1198,11 @@ fn crank_wrench(
     if !ready
         || melee
             .crank
-            .is_some_and(|id| crank_socket(play, id).is_none())
+            .is_some_and(|id| crank_socket(play, id, level).is_none())
     {
         melee.crank = None;
         melee.crank_previous = None;
+        melee.crank_far_since = None;
         if was_attached {
             motion.release = None;
         }
@@ -1044,46 +1218,62 @@ fn crank_wrench(
             .iter()
             .enumerate()
             .filter_map(|(id, _)| {
-                let socket = crank_socket(play, id)?;
+                let socket = crank_socket(play, id, level)?;
                 let eye = crate::tfrag_render::game_to_bevy(play.game.hero.position());
-                (socket.distance(eye) < 3.2 && socket.distance(head) < 0.50)
-                    .then_some((id, socket.distance_squared(head)))
+                // Bring the wrench head to the hex head: beside it, on it or just above it.
+                let beside = Vec2::new(head.x - socket.nut.x, head.z - socket.nut.z).length();
+                (socket.nut.distance(eye) < 3.2
+                    && beside < 0.55
+                    && (socket.bottom - 0.45..socket.top + 0.45).contains(&head.y))
+                    .then_some((id, socket.nut.distance_squared(head)))
             })
             .min_by(|a, b| a.1.total_cmp(&b.1))
             .map(|(id, _)| id);
     }
     let Some(id) = melee.crank else { return false };
-    let socket = crank_socket(play, id).unwrap();
-    // Walking away or withdrawing the hand releases the socket. Only optical motion turns it.
-    if root.mul_transform(hand).translation.distance(socket) > 1.35 {
-        melee.crank = None;
-        melee.crank_previous = None;
-        motion.release = None;
-        return true;
+    let socket = crank_socket(play, id, level).unwrap();
+    let nut = socket.nut;
+    // Withdraw from the bolt to release; walking around it keeps the wrench head seated.
+    let body = crate::tfrag_render::game_to_bevy(play.game.hero.position());
+    if !was_attached {
+        play.game.hero.tracked.crank_radius = Vec2::new(body.x - nut.x, body.z - nut.z)
+            .length()
+            .clamp(0.8, 2.5);
+    }
+    if root.mul_transform(hand).translation.distance(nut) > 2.40 || body.distance(nut) > 3.40
+    {
+        let since = *melee.crank_far_since.get_or_insert(now);
+        if now - since >= 0.25 {
+            melee.crank = None;
+            melee.crank_previous = None;
+            melee.crank_far_since = None;
+            motion.release = None;
+            return true;
+        }
+    } else {
+        melee.crank_far_since = None;
     }
     let mut angle = 0.0;
-    if let Some((serial, previous)) = melee.crank_previous {
-        if serial != motion.serial {
-            // Quaternion twist stays defined when the controller points straight down at the bolt.
-            let delta = hand.rotation * previous.rotation.inverse();
-            let twist = 2.0 * delta.y.atan2(delta.w);
-            let yaw = twist.sin().atan2(twist.cos());
-            let radial = root.rotation.inverse() * (root.mul_transform(hand).translation - socket);
-            let tangent = Vec3::new(-radial.z, 0.0, radial.x).normalize_or_zero();
-            let arc = (hand.translation - previous.translation).dot(tangent)
-                / radial.x.hypot(radial.z).max(0.25);
-            if hand.translation.distance(previous.translation) < 0.25 && yaw.abs() < 0.7 {
-                angle = if yaw.abs() > arc.abs() { yaw } else { arc };
-                if angle.abs() < 0.003 {
-                    angle = 0.0;
-                }
+    if let Some(previous) = melee.crank_previous {
+        let before = Vec2::new(previous.x - nut.x, previous.z - nut.z);
+        let after = Vec2::new(body.x - nut.x, body.z - nut.z);
+        // Observe native capsule positions after collision: stick movement and room-scale walking
+        // count equally. Wrist rotation, head turns and moving just the hand cannot turn the bolt.
+        if body.distance(previous) < 0.30
+            && before.length() >= 0.60
+            && after.length() >= 0.60
+            && after.length() < 3.0
+        {
+            let orbit = before.perp_dot(after).atan2(before.dot(after));
+            if orbit.abs() <= 0.30 {
+                angle = orbit;
             }
         }
     }
-    melee.crank_previous = Some((motion.serial, hand));
+    melee.crank_previous = Some(body);
     play.game.hero.tracked.crank_target = Some(id);
     play.game.hero.tracked.crank_turn = angle;
-    seat_wrench(item, data, socket);
+    seat_wrench(item, data, socket, root.mul_transform(hand));
     motion.release = None;
     true
 }
@@ -1110,13 +1300,48 @@ fn launch_wrench(game: &mut rc_game::tick::Game, hand: Transform, velocity: Vec3
     h.items.slot.detached = 1;
     h.items.pending_blend = Some((6, 0, 5));
     h.melee.hit = 0;
-    h.fx.trails.wrench.start(rc_game::hero::melee::WRENCH_CLASS);
-    h.fx.trails.wrench.add(0x30, 3);
-    h.fx.trails.wrench.add(0x17, 5);
+    h.tracked.wrench_return = None;
+    // Native screen-space additive ghosts can cross the stereo near plane on release.
+    h.fx.trails.wrench.kill();
     println!(
         "VR_GAME tracked_wrench_throw origin={:?} direction={dir:?}",
         it.position
     );
+}
+
+/// Diagnostics of the thrown wrench around its turnaround: what each rendered frame draws against the 60 Hz game.
+#[derive(Default)]
+struct WrenchTrace {
+    stage: u8,
+    since: f64,
+    frames: u32,
+    counter: u64,
+}
+impl WrenchTrace {
+    fn frame(&mut self, it: &HandItem, game: &rc_game::tick::Game, now: f64, overstep: f32) {
+        if it.o_class != rc_game::hero::melee::WRENCH_CLASS {
+            return;
+        }
+        if it.mstate != self.stage {
+            (self.stage, self.since, self.frames) = (it.mstate, now, 0);
+        }
+        let ticks = game.counter.wrapping_sub(self.counter);
+        self.counter = game.counter;
+        let sim = game.hero.items.slot.item.as_ref().map_or([0.0; 3], |i| i.position);
+        // The last slow outbound frames and the first half second back.
+        let slow = it.mstate == rc_game::hero::comet::OUT && it.flight.speed < 4.0 / 60.0;
+        if (slow || it.mstate == rc_game::hero::comet::BACK) && self.frames < 36 {
+            self.frames += 1;
+            println!(
+                "VR_GAME wrench_frame stage={} t={:.1}ms ticks={ticks} overstep={overstep:.2} drawn={:?} sim={:?} spin={:.2}",
+                it.mstate,
+                (now - self.since) * 1000.0,
+                it.position,
+                sim,
+                f32::from_bits(it.rows[0][1]).atan2(f32::from_bits(it.rows[0][0])),
+            );
+        }
+    }
 }
 
 fn present(
@@ -1134,7 +1359,8 @@ fn present(
     support: Res<super::blaster::SupportGrip>,
     level: Res<crate::Level>,
     melee: Res<Melee>,
-    time: Res<Time<Real>>,
+    (time, fixed, mut trace): (Res<Time<Real>>, Res<Time<Fixed>>, Local<WrenchTrace>),
+    mut flight_report: Local<Option<u8>>,
 ) {
     for e in &body {
         commands.entity(e).insert(RenderLayers::layer(61));
@@ -1181,7 +1407,60 @@ fn present(
             return;
         }
         let mut item = play.game.hero.items.slot.item.clone();
+        // A catch can occur in FixedUpdate after the controller sample. Keep that
+        // first ready-pose frame visible until capture latches the received tool.
+        let holding_wrench = motion.wrench_held()
+            || (motion.was_flying
+                && item.as_ref().is_some_and(|i| {
+                    i.o_class == rc_game::hero::melee::WRENCH_CLASS && i.mstate == 0
+                }));
+        if let Some(it) = item.as_mut() {
+            let native_anim = (it.anim.seq_a, it.anim.seq_b, it.anim.t);
+            rigid_wrench_pose(it, play.game.item_data.as_ref());
+            if it.o_class == rc_game::hero::melee::WRENCH_CLASS {
+                if *flight_report != Some(it.mstate) && (it.mstate != 0 || flight_report.is_some())
+                {
+                    println!(
+                        "VR_GAME wrench_model stage={} native_anim={native_anim:?} render_anim=({}, {}) pos={:?} scale={}",
+                        it.mstate, it.anim.seq_a, it.anim.seq_b, it.position, it.scale
+                    );
+                }
+                *flight_report = Some(it.mstate);
+            } else {
+                *flight_report = None;
+            }
+        } else {
+            *flight_report = None;
+        }
         if let (Some(it), Some(hand)) = (item.as_mut(), motion.hands[1]) {
+            if let Some(back) = play.game.hero.tracked.wrench_return.filter(|_| {
+                it.o_class == rc_game::hero::melee::WRENCH_CLASS
+                    && it.mstate == rc_game::hero::comet::BACK
+            }) {
+                let mut caught = it.clone();
+                place(
+                    &mut caught,
+                    root.mul_transform(hand),
+                    play.game.item_data.as_ref(),
+                    1.0,
+                );
+                // The game's planned path, sampled between its 60 Hz ticks and aimed at the hand as it is now.
+                let p = (back.progress + back.step * fixed.overstep_fraction()).min(1.0);
+                let (at, spin) = back.at(p, caught.position);
+                it.position = at;
+                // The spin is phased onto the held heading; the last fifth only settles the hand's tilt,
+                // so the blend never chases a fast spin through the opposite orientation.
+                let settle = ((p - 0.8) / 0.2).clamp(0.0, 1.0);
+                let settle = settle * settle * (3.0 - 2.0 * settle);
+                let held = Mat3::from_cols_array_2d(&caught.rows.map(|r| {
+                    [f32::from_bits(r[0]), f32::from_bits(r[1]), f32::from_bits(r[2])]
+                }));
+                let rotation = Quat::from_rotation_z(spin)
+                    .slerp(Quat::from_mat3(&held).normalize(), settle);
+                let rows = Mat3::from_quat(rotation).to_cols_array_2d();
+                it.rows = rows.map(|r| [r[0].to_bits(), r[1].to_bits(), r[2].to_bits(), 0]);
+            }
+            trace.frame(it, &play.game, time.elapsed_secs_f64(), fixed.overstep_fraction());
             if super::blaster::supported(play.game.hero.items.slot.id)
                 && !rc_game::hero::items::is_glove(play.game.hero.items.slot.id)
             {
@@ -1208,10 +1487,10 @@ fn present(
                     .game
                     .item_data
                     .as_ref()
-                    .zip(melee.crank.and_then(|id| crank_socket(&play, id)))
+                    .zip(melee.crank.and_then(|id| crank_socket(&play, id, &level.0)))
                 {
-                    seat_wrench(it, data, socket);
-                } else if motion.wrench_held() && active {
+                    seat_wrench(it, data, socket, root.mul_transform(hand));
+                } else if holding_wrench && active {
                     if let Some(coll) = level.0.collision.as_ref() {
                         let eye = crate::tfrag_render::game_to_bevy(play.game.hero.position())
                             + root.rotation * Vec3::Y * 1.6;
@@ -1241,7 +1520,7 @@ fn present(
                     }
                 }
                 let bucket = play.game.counter / 300;
-                if motion.wrench_held() && *alignment_report != Some(bucket) {
+                if holding_wrench && *alignment_report != Some(bucket) {
                     if let Some(grip) = play.game.item_data.as_ref().and_then(|d| grip_frame(it, d))
                     {
                         let at = rc_formats::moby_anim::bone_points(
@@ -1266,6 +1545,11 @@ fn present(
                 }
             }
         }
+        let docked = super::gadget_socket::docked(&play, attach);
+        let plugged = docked.is_some();
+        if let Some(docked) = docked {
+            item = Some(docked);
+        }
         let blaster = super::blaster::supported(play.game.hero.items.slot.id)
             && !rc_game::hero::items::is_glove(play.game.hero.items.slot.id);
         let wrench = item
@@ -1279,14 +1563,11 @@ fn present(
             if let Some(glove) = bomb_glove.as_ref() {
                 shown.push(glove);
             }
-            if !play.game.hero.hand_hidden()
+            if (!play.game.hero.hand_hidden() || plugged)
                 && (flying || !play.game.hero.tracked.grabbed[1])
                 && (blaster
                     || flying
-                    || (wrench
-                        && motion.wrench_held()
-                        && bomb_glove.is_none()
-                        && bomb.id.is_none()))
+                    || (wrench && holding_wrench && bomb_glove.is_none() && bomb.id.is_none()))
             {
                 if let Some(item) = item.as_ref() {
                     shown.push(item);
@@ -1295,11 +1576,11 @@ fn present(
         }
         // A flying wrench can remain visible while the Bomb Glove replaces the right-hand mesh.
         attach.tracked_items(&shown);
-        let holding_weapon = !play.game.hero.hand_hidden()
+        let holding_weapon = (!play.game.hero.hand_hidden() || plugged)
             && !play.game.hero.tracked.grabbed[1]
             && item.as_ref().is_some_and(|i| {
                 if i.o_class == rc_game::hero::melee::WRENCH_CLASS {
-                    i.mstate == 0 && motion.wrench_held()
+                    i.mstate == 0 && holding_wrench
                 } else {
                     !rc_game::hero::items::is_glove(play.game.hero.items.slot.id)
                 }
@@ -1334,7 +1615,7 @@ fn present(
             }),
             &play,
             item.as_ref().filter(|_| holding_weapon),
-            support.held,
+            support.held || plugged,
         );
     }
 }

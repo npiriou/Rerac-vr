@@ -156,10 +156,38 @@ Compilation evidence is separate from physical headset feedback. No tests or gam
 
 The right hand now chooses quick-select sectors while holding the right-stick click (Triangle). Y remains Start/pause/skip.
 
-Bring the held wrench head within 50 cm of a bolt crank socket, keep the right grip held and turn the hand or move it around the bolt. The wrench head seats on the bolt; tracking-only angular travel feeds the original progress, driven doors/platforms, completion, mission and save code. Releasing or withdrawing the hand disengages without throwing the wrench. Native desktop cranking remains available outside VR.
+Bring the held wrench head within 50 cm of a bolt crank socket and keep the right grip held. Walk Ratchet around the bolt with the left stick or physical room-scale movement, as in the original game. Progress uses the actual capsule orbit after collision; rotating the wrist or moving only the hand contributes nothing. The wrench uses its original crank sequence 0xb at frame 2 and stretches from the tracked grip to the socket while the glove stays rigid. The head remains seated during snap turns and brief reach excursions. Distance release requires more than 2.40 units of hand reach or 3.40 units of body distance for 250 ms; releasing the grip still disengages immediately. Body orbit progress remains valid out to 3.0 units. A full orbit counts as one native turn; original driven doors/platforms, completion, mission and save code remain. Releasing or withdrawing the hand disengages without throwing the wrench. Native desktop cranking remains available outside VR.
 
-Short gameplay cutaways retain their event timelines but no longer draw letterbox bars in VR or impose their cinematic holds, forced poses/teleports or blocking entry fades. Ratchet keeps native movement, jumping and weapon input. Dialogue/engine scenes retain their authored actor progression: the VR eye follows the animated Ratchet head with free headset rotation and the duplicate scene body hidden. Ship takeoff/landing uses the animated ship origin and each ship's native Ratchet seat, with a seated eye offset and gradual yaw follow, rather than the hero left on the ground. Full-motion video remains video.
+Short gameplay cutaways retain their event timelines but no longer draw letterbox bars in VR or impose their cinematic holds, forced poses/teleports or blocking entry fades. Ratchet keeps native movement, jumping and weapon input. Dialogue/engine scenes retain their authored actor progression: the VR eye follows the animated Ratchet head with free headset rotation and the duplicate scene body hidden. Planet-side takeoff/landing follows the animated Ratchet actor's actual helmet/head attachment through boarding, sitting and climbing out, retaining free head rotation. When no Ratchet actor is available, the cockpit uses the animated ship root and native Ratchet seat with a raised 1.45-unit seated eye offset (previously 0.85). Space loading between planets retains the original external camera; no cockpit override is applied there. Full-motion video remains video.
 
 Kerwan cable-slide eye height leaves 55 cm below the cable (target 0.55–1.15 game units above the capsule origin), blended through the existing posture transition. Thrown wrenches spin in a horizontal plane through outbound and returning flight, independent of release wrist pitch/roll; the native travel and collision paths remain.
 
 These changes require physical headset confirmation, especially crank socket alignment, scene head position and cockpit placement on all three ships. No automated tests were run, per AGENTS.md.
+
+
+The scene eye now resolves the native head attachment chain (list 4), rather than treating manipulator list 0x18 as a bone index. Ship boarding/landing samples that same actual head chain with current streamed animation and joint modifiers; it adds 0.15 game units at the helmet attachment for the eye position. Wrench socket stretching uses the authored crank pose, rigid grip position and a bounded axial scale, so its head remains on the bolt while the handle follows the controller. Shaft stretch does not stretch the visible holding glove. These placements still require headset confirmation; no automated tests or game relaunch were performed for this revision.
+
+
+## Clank pack haptics
+
+All three packs now have their own bilateral motor feedback, independent of held weapon feedback:
+
+| Pack | Feedback and native trigger |
+|---|---|
+| Heli-Pack | Fine, alternating rotor beats at 165–180 Hz; stronger during native long-jump lift/high-jump acceleration and double-jump lift, softer while gliding. Starts at actual takeoff or the native high-jump curve window, with a short spin-up and gentle release. |
+| Thruster-Pack | Deeper ignition kicks and jet rumble at 50–90 Hz. Uses the original `thruster_flame::thrusting` predicate, including boosts, powered flips/double jumps and ledge-climb flame windows. Distinct glide/hover strength, rising/falling stomp phases and a strong two-hand impact on accepted grounded stomp. |
+| Hydro-Pack | Smooth 50–65 Hz propulsion in native Hydro swimming; strength follows speed, with a stronger acceleration profile under native R1/R2 boost. No motor vibration while merely equipped on land or motionless without propulsion. |
+
+Pack motor pulses have their own cadence and owners, so firing or changing a hand weapon cannot reset them and weapon continuous-use feedback remains available simultaneously. Pack background rumble has lower priority than weapons; accepted damage retains highest priority. Pause, focus loss, death, pack swaps and stopped simulation clear pack pulses. Body-worn pack feedback can reach connected controllers through optical hand occlusion. No tests or gameplay scripts were run, and physical intensity/rhythm still require headset feedback.
+
+## Solid VR hands and held weapons
+
+Free hands, original glove cuffs, held weapons and gadgets now stop against native solid world/moby geometry and live crate colliders. Conservative contact spheres are derived from slices of each actual animated mesh, including deployed parts, rather than a single controller point. Fast movement sweeps from the previous safe pose; initial eye recovery handles starting beyond a wall. Contact slides along surfaces and broken/disabled crates stop blocking the models.
+
+A held weapon and its original gripping hands receive one shared translation, preserving both native handles. Free hands resolve separately. Accepted ledge grips and a wrench seated in a crank retain their intentional native anchoring; thrown wrench flight retains native collisions. Physical controller poses and velocities remain the gesture source. Fixed weapon aim/muzzle and glove preparation/release positions use safe contacts, and the live Visibomb monitor stays attached to the rendered weapon. Primitive-only crate line queries are now included in wrench contact detection.
+
+Compilation is separate from headset validation. Conservative clearance, all weapon sizes, corners, two-hand contact, held ammunition and frame cost still require headset confirmation. No tests, game launch or commit were requested for this change.
+
+## VR interaction and presentation polish
+
+[Detailed VR polish review](VR_POLISH_REVIEW.md) records every requested change, compilation evidence and pending headset checks for this batch.

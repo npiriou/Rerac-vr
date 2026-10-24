@@ -25,6 +25,9 @@ pub(super) struct SupportGrip {
     weapon: i32,
     pub primary: Option<Vec3>,
     offset: Option<Vec3>,
+    rotation: Option<Quat>,
+    two_handed: bool,
+    revision: u64,
 }
 /// Authored model coordinates in game units, measured on the original held meshes.
 /// Local X is top, -Y is forward, Z is lateral for gun-shaped items.
@@ -64,7 +67,7 @@ fn foregrip(id: i32) -> Vec3 {
 fn support_point(right: Transform, support: &SupportGrip) -> Vec3 {
     right.transform_point(support.offset.unwrap_or_else(|| foregrip(support.weapon)))
 }
-pub(super) fn weapon_hand(
+fn physical_weapon_hand(
     mut right: Transform,
     left: Option<Transform>,
     support: &SupportGrip,
@@ -84,6 +87,19 @@ pub(super) fn weapon_hand(
         }
     }
     right
+}
+pub(super) fn weapon_hand(
+    right: Transform,
+    left: Option<Transform>,
+    support: &SupportGrip,
+) -> Transform {
+    let mut pose = physical_weapon_hand(right, left, support);
+    if support.two_handed && !support.held {
+        if let Some(rotation) = support.rotation {
+            pose.rotation = rotation;
+        }
+    }
+    pose
 }
 pub(super) fn support_hand(
     right: Transform,
@@ -302,6 +318,7 @@ fn aim(
     hand_input: Option<Res<super::game_input::HandInput>>,
     mut support: ResMut<SupportGrip>,
     attach: Option<Res<crate::moby_attach::MobyAttach>>,
+    mut contact: Local<super::solid_contact::History>,
 ) {
     let Some(mut play) = play else { return };
     let p = &mut *play;
@@ -317,6 +334,8 @@ fn aim(
     let id = p.game.hero.items.slot.id;
     if !supported(id) || rc_game::hero::items::is_glove(id) {
         support.held = false;
+        support.rotation = None;
+        support.two_handed = false;
         return;
     }
     p.game.hero.items.tracked_hand = None;
@@ -339,6 +358,16 @@ fn aim(
         return;
     };
     let authored = attach.as_ref().and_then(|a| a.tracked_grips(p));
+    if let Some(item) = attach
+        .as_ref()
+        .and_then(|a| super::gadget_socket::docked(p, a))
+    {
+        support.held = false;
+        support.rotation = None;
+        p.game.hero.items.tracked_hand = Some((item.position, item.rows));
+        p.game.hero.items.tracked_class = item.o_class;
+        return;
+    }
     // The native item definition selects one or two holding arm layers. Hydrodisplacer included.
     support.primary = authored.map(|g| g[0]);
     support.offset = authored.map(|g| {
@@ -354,6 +383,9 @@ fn aim(
     let left = motion.hands[0];
     let grip = hand_input.as_ref().and_then(|i| i.left_grip).unwrap_or(0.0);
     if !two_handed || support.weapon != id || grip < 0.35 || left.is_none() {
+        if support.weapon != id {
+            support.rotation = None;
+        }
         support.held = false;
     }
     support.weapon = id;
@@ -363,19 +395,58 @@ fn aim(
     {
         support.held = true;
     }
-    let hand = root.mul_transform(weapon_hand(hand, left, &support));
+    support.two_handed = two_handed;
+    let desired = physical_weapon_hand(hand, left, &support).rotation;
+    let old = if support.revision != rig.revision {
+        desired
+    } else {
+        support.rotation.unwrap_or(desired)
+    };
+    support.revision = rig.revision;
+    // Only the native heavy/two-arm inventory items gain inertia with a single grip.
+    let alpha = if two_handed && !support.held {
+        1.0 - (-1.0_f32 / (60.0 * 0.18)).exp()
+    } else {
+        1.0
+    };
+    let mut weighted = old.slerp(desired, alpha);
+    let lag = weighted.angle_between(desired);
+    if lag > 0.70 {
+        weighted = weighted.slerp(desired, 1.0 - 0.70 / lag);
+    }
+    support.rotation = Some(weighted);
+    let mut hand = root.mul_transform(weapon_hand(hand, left, &support));
     let Some(mut item) = p.game.hero.items.slot.item.as_ref().cloned() else {
         return;
     };
     let Some(data) = p.game.item_data.as_ref() else {
         return;
     };
-    let Some(muzzle) = place(&mut item, hand, data, support.primary) else {
+    let Some(mut muzzle) = place(&mut item, hand, data, support.primary) else {
         return;
     };
-    let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + Vec3::Y * 1.6;
+    let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + rig.surface_up() * 1.6;
+    if let Some(attach) = attach.as_ref() {
+        let mut probes = attach.tracked_item_shape(&item);
+        probes.push((hand.translation, 0.11 * settings.units_per_metre));
+        if support.held {
+            if let Some(left) = support_hand(motion.hands[1].unwrap(), left, &support) {
+                probes.push((
+                    root.transform_point(left.translation),
+                    0.11 * settings.units_per_metre,
+                ));
+            }
+        }
+        contact.prepare(rig.revision, id);
+        let shift = super::solid_contact::constrain(p, coll, &probes, eye, &mut contact);
+        item.position = game_point(crate::tfrag_render::game_to_bevy(item.position) + shift);
+        hand.translation += shift;
+        muzzle += shift;
+    }
+    // Utility tools are meant to touch their pad/lock: a nozzle against the floor keeps its aim (losing it
+    // would suspend the item and reset it out of its ready state just as it is plugged).
     if !unobstructed(p, coll, eye, hand.translation)
-        || (id != rc_game::hero::walloper::WALLOPER
+        || (!matches!(id, rc_game::hero::walloper::WALLOPER | 22 | 26)
             && !unobstructed(p, coll, hand.translation, muzzle))
     {
         return;

@@ -40,14 +40,132 @@ fn input(
     pad: Option<Res<super::game_input::GamePad>>,
     mut vendor: ResMut<crate::interact_render::VendorRt>,
     mut previous: Local<PadState>,
+    mut hand_input: ResMut<super::game_input::HandInput>,
+    play: Option<Res<crate::gameplay::Play>>,
+    rig: Res<super::game::Rig>,
+    settings: Res<super::Settings>,
+    motion: Res<super::embodied::Motion>,
+    focus: Res<super::game_input::Focused>,
 ) {
-    let Some(pad) = pad.and_then(|p| p.vendor) else {
+    let Some(mut pad) = pad.and_then(|p| p.vendor) else {
         *previous = PadState::default();
         vendor.spatial_input = None;
         return;
     };
+    pad.buttons &= !(rc_game::pad::button::CROSS as u16);
+    let clicked = std::mem::take(&mut hand_input.menu_click);
+    let hit = play
+        .as_ref()
+        .filter(|_| focus.0)
+        .and_then(|p| ray(&vendor, &rig, p, &settings, &motion))
+        .and_then(|r| r.2);
+    if clicked {
+        if let Some((screen, uv)) = hit {
+            match screen {
+                screens::BUTTONS => pad.buttons |= rc_game::pad::button::CROSS as u16,
+                screens::PROMPT => pad.buttons |= rc_game::pad::button::TRIANGLE as u16,
+                screens::STRIP => {
+                    if let Some(v) = vendor.vendor.as_ref() {
+                        let width = vendor
+                            .draw
+                            .screens
+                            .iter()
+                            .find(|s| s.s == screen)
+                            .map_or(512.0, |s| s.placed.texel_size().0 as f32);
+                        let x = uv.x * width;
+                        let n = v.items.len();
+                        if n > 0 {
+                            let index = if n < 8 {
+                                ((x - 12.0) / 56.0).floor().clamp(0.0, (n - 1) as f32) as usize
+                            } else {
+                                let k = ((x - v.scroll as f32 + 76.0) / 56.0).round() as i32 - 2;
+                                (2 * n as i32 + k + v.sel as i32 - 3).rem_euclid(n as i32) as usize
+                            };
+                            vendor.spatial_selection = Some(index);
+                        }
+                    }
+                }
+                screens::POPUP => {
+                    let ammo = vendor
+                        .vendor
+                        .as_ref()
+                        .and_then(|v| v.current())
+                        .is_some_and(|e| e.ammo);
+                    pad.buttons |= (if !ammo {
+                        if uv.y > 0.5 {
+                            rc_game::pad::button::TRIANGLE
+                        } else {
+                            rc_game::pad::button::CROSS
+                        }
+                    } else if uv.x < 0.25 {
+                        rc_game::pad::button::LEFT
+                    } else if uv.x > 0.75 {
+                        rc_game::pad::button::RIGHT
+                    } else {
+                        rc_game::pad::button::CROSS
+                    }) as u16
+                }
+                _ => {}
+            }
+        }
+    }
     previous.update(Some(&pad.bytes()), false);
     vendor.spatial_input = Some(MenuInput::from_pad(&previous, true));
+}
+
+pub(super) fn ray(
+    vendor: &crate::interact_render::VendorRt,
+    rig: &super::game::Rig,
+    play: &crate::gameplay::Play,
+    settings: &super::Settings,
+    motion: &super::embodied::Motion,
+) -> Option<(Vec3, Vec3, Option<(usize, Vec2)>)> {
+    let hand = rig
+        .root_for(&play.game, settings.units_per_metre)?
+        .mul_transform(motion.hands[1]?);
+    let origin = hand.translation + *hand.forward() * 0.025;
+    let dir = *hand.forward();
+    let mut nearest = None;
+    for screen in &vendor.draw.screens {
+        let [c, ca, cb, _] = screen
+            .placed
+            .quad
+            .corners()
+            .map(crate::tfrag_render::game_to_bevy);
+        let (a, b) = (ca - c, cb - c);
+        let n = a.cross(b).normalize_or_zero();
+        let den = n.dot(dir);
+        if den.abs() < 1e-5 {
+            continue;
+        }
+        let t = n.dot(c - origin) / den;
+        if !(0.02..8.0).contains(&t) {
+            continue;
+        }
+        let d = origin + dir * t - c;
+        let det = a.length_squared() * b.length_squared() - a.dot(b).powi(2);
+        if det.abs() < 1e-8 {
+            continue;
+        }
+        let uv = Vec2::new(
+            (d.dot(a) * b.length_squared() - d.dot(b) * a.dot(b)) / det,
+            (d.dot(b) * a.length_squared() - d.dot(a) * a.dot(b)) / det,
+        );
+        if uv.min_element() < 0.0 || uv.max_element() > 1.0 {
+            continue;
+        }
+        if nearest
+            .as_ref()
+            .is_none_or(|(_, _, old): &(usize, Vec2, f32)| t < *old)
+        {
+            nearest = Some((screen.s, uv, t));
+        }
+    }
+    Some((
+        origin,
+        origin + dir * nearest.map_or(2.5, |(_, _, t)| t),
+        nearest.map(|(s, uv, _)| (s, uv)),
+    ))
 }
 
 // The native canvas images cover 512x416; HUD targets may have the display's extra side margins.

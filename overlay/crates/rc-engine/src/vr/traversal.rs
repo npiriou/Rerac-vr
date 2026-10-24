@@ -110,7 +110,11 @@ fn drive(
     t.hands = motion
         .hands
         .map(|hand| hand.map(|h| game_point(root.transform_point(h.translation))));
-    t.grips = [input.left_grip, input.grip].map(|v| v.is_some_and(|v| v > 0.5));
+    for (side, value) in [input.left_grip, input.grip].into_iter().enumerate() {
+        t.grips[side] = value.map_or(t.grabbed[side] && t.grips[side], |v| {
+            v > if t.grabbed[side] { 0.20 } else { 0.45 }
+        });
+    }
     t.stroke = [0.0; 3];
     let mut ledge_motion = Vec3::ZERO;
     let mut grips = 0;
@@ -168,6 +172,12 @@ fn drive(
         gestures.shove_at = [None; 2];
     }
     if swimming {
+        if let Some(view) = t.view {
+            let gaze =
+                crate::tfrag_render::game_to_bevy(rc_game::hero::physics::to_f32x3(view.rows[0]))
+                    .normalize_or_zero();
+            force = gaze * force.dot(gaze).max(0.0);
+        }
         t.stroke = game_point(force.clamp_length_max(3.5));
     } else {
         t.swim_velocity = [0.0; 3];

@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_cranks_and_first_person_cinematics_built_not_launched",
+  "status": "native_windows_gadget_pause_fixes_build_ready",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "E092B0F431794EB2987087DCCB53F1324A8BB7916D8E16B20DA6185D77CBBBA6",
+  "latest_build_sha256": "DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Pending headset confirmation of crank socket geometry/turning, short-cutaway movement during all trigger variants, head/seat positions on all three ships, cable clearance and horizontal wrench spin.",
+  "latest_build_physical_validation": "Trespasser panel visibility and distance, Hydrodisplacer fill/empty without camera change, insertion into the retracted tap, absence of the menu button bar, wrench_frame log of a maximum-range throw.",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",
@@ -133,5 +133,126 @@
     "physical_validation": "User free play observed through live logs; subjective smoothness and full visual/gameplay equivalence are not certified",
     "launch_script": "X:/dev/Rerac-vr/.local-build/Launch-Performance-ReRAC-VR.ps1",
     "rollback": "Original B4250C4E and unchanged-source dev opt3 A3E2431D builds preserved in target/debug; remove the dedicated NVIDIA application profile to restore previous power policy"
+  },
+  "latest_launch": {
+    "mode": "debug",
+    "scene": "Kerwan",
+    "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-kerwan-headset-20261024-115307.log",
+    "binary_sha256": "7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2",
+    "verified_utc": "2026-10-24T04:53:41.101862+00:00",
+    "evidence": "Level 3 ticking, two XR views, pipeline queue drained; physical throw confirmation pending."
+  },
+  "wrench_turnaround_flash_fix": {
+    "reported_behavior": "The user still observed intense white/colored flashes, localized near the maximum throw range, after the prior after-image fix.",
+    "changes": "VR wrench wall bursts use at most four small unsplit sparks instead of 20 additive ribbons and ten splitting sparks. Actual tracked headset eye supplies effect clearance. Per-eye shader guards reject zero/view-aligned ribbons and near/behind-eye endpoints before projection/normalization. Stationary or non-finite flight collision segments cannot emit a bounce. Turnaround and bounce events now have separate diagnostic positions.",
+    "source_review": "OUT-to-BACK has no intentional flash. Read-only original wrench spin-asset inspection showed stable mesh bounds. These findings do not establish the precise observed cause.",
+    "preserved": "Flight direction, native acceleration/return, horizontal spin, damage, collection, sounds, hand placement and haptics. Native random draws inside the impact burst remain consumed.",
+    "binary_sha256": "52B6B56196A8CC8C389558D44DABA49CFD7EB836457EB15559213544415D2553",
+    "build_log": "work/vr/wrench-turnaround-flash-build.log",
+    "validation": "Non-VR cargo check, VR cargo check and debug executable build passed; git diff --check passed. No automated tests run per AGENTS.md.",
+    "physical_confirmation": "Pending a physical throw into empty space at maximum range; the previous after-image change alone was insufficient.",
+    "launch": {
+      "mode": "debug",
+      "scene": "Kerwan",
+      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-kerwan-headset-20261024-114337.log",
+      "verified_utc": "2026-10-24T04:44:17.249047+00:00",
+      "evidence": "Level 3 ticking; two XR head views and drained pipeline queue. Physical throw still requires user confirmation."
+    },
+    "outcome": "User reported no improvement; superseded by rigid VR wrench presentation."
+  },
+  "wrench_rigid_return_model": {
+    "reported_behavior": "No improvement from the particle attempt; user identifies the wrench model during return.",
+    "changes": "Cloned VR wrench uses original ready pose (sequence 1/frame 0, no snapshot) during OUT, BACK and remaining catch blend. Native flight rows provide horizontal spin. Ready attachment pose matches the displayed mesh. Detached renderer clears held-item spring modifiers. Original distant impact bursts restored; per-eye numerical particle guards retained.",
+    "preserved": "Native flight acceleration/return, authored simulation animation/hit joints, damage, collection, sounds, haptics and crank extension.",
+    "inspection": "Captured throw logs contain finite natural turnarounds without bounces. Original asset inspection found finite spin/return-blend matrices and ready versus spin width about 1.02 versus 2.01 game units at VR scale. This is source/asset evidence, not a reproduced headset image or conclusive root-cause proof.",
+    "binary_sha256": "7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2",
+    "build_log": "work/vr/wrench-rigid-return-model-build.log",
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug executable build passed. git diff --check passed. No automated tests run per AGENTS.md.",
+    "physical_confirmation": "Pending: verify the entire outgoing/return path and catch in the headset. Prior after-image and particle attempts were reported insufficient.",
+    "launch": {
+      "mode": "debug",
+      "scene": "Kerwan",
+      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-kerwan-headset-20261024-115307.log",
+      "binary_sha256": "7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2",
+      "verified_utc": "2026-10-24T04:53:41.101862+00:00",
+      "evidence": "Level 3 ticking, two XR views, pipeline queue drained; physical throw confirmation pending."
+    }
+  },
+  "gadget_camera_return_fix": {
+    "recorded_utc": "2026-10-24T05:20:30.169356+00:00",
+    "reported_behavior": "White flashes resolved; unreadable wrench return, broken utility insertion/water transfer, unwanted puzzle text, low cinematic/ship-exit camera and swallowing camera launch.",
+    "changes": [
+      "Preserve outgoing wrench flight; bound return homing speed, remove return ground correction, settle orientation into receiving hand, restore ready pose on catch and keep caught tool visible.",
+      "Preserve native gadget animation/state calls through VR cutaway filtering, acknowledge and retain accepted socket requests, relax physical push tolerances and retain optional trigger insertion.",
+      "Show native reach/use/withdraw gadget animation with both hands attached; use a canonical socket only for detection and fixed puzzle placement.",
+      "Remove puzzle footer text/buttons, help prompt, decorative background and controller pointer; retain native puzzle elements. Stick directions control rings; Y/right-stick-click/fresh trigger cancel via queued input consumed until release.",
+      "Evaluate cinematic eye from the complete head chain. Use actual streamed boarding actor scale/valid frames and ignore hidden actors. Hold last living camera position during capture/death until respawn."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. No tests or gameplay run.",
+    "headset_tested": false,
+    "remaining_confirmation": "User headset confirmation: wrench full return/catch, manual and trigger insertion, puzzle controls/cancellation/reinsertion, water fill/empty, Batalia commando scene, ship exits and swallowing attacks.",
+    "binary_sha256": "02237B9F69D84E24F9AC32D5BF77437501C8CE86647CCA115F7285CED4ECC54E",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-121824.log",
+    "launch": "Not launched. User closed the previous game to allow executable replacement."
+  },
+  "planet_preload_cinema": {
+    "recorded_utc": "2026-10-24T06:37:59.958833+00:00",
+    "requested_behavior": "Prepare the next planet during the space voyage, keep the voyage until preparation finishes, remove the monochrome gap and improve the black surround of Drek movies.",
+    "changes": [
+      "Start destination ECS creation during the native flight once the disk worker is ready, instead of waiting for FlightDone.",
+      "Retain flight meshes, sky, effects, departure simulation and collision data separately while the new planet initializes. Keep flight audio until the handoff.",
+      "Warm destination materials with a hidden eye-format view. World LOD and occlusion use the destination eye during this warmup; visible flight actors keep their own camera and records.",
+      "Gate the native flight completion on destination GPU readiness, including first-arrival flights; loop only when preparation has not finished at the native flight boundary.",
+      "Use a short acknowledged black stereo cut for handoff to the ready planet. Reveal on the first valid landing pose rather than waiting for a gameplay counter that can remain stopped during a movie.",
+      "Use black clear and panel-only world layers for flat movies/slideshows. Anchor a larger level screen at entry with preserved frame aspect and explicit recenter support; remove the visible planet sky/background."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, scripted travel or movie playback performed.",
+    "headset_tested": false,
+    "remaining_confirmation": "Confirm first and repeat arrivals, continued animated flight while preparing, no monochrome gap, beginning of native landing retained, Drek movie surround and free head motion.",
+    "limitation": "Disk decoding is asynchronous and GPU preparation is overlapped with flight. ECS publication/LevelStartup still runs on the main thread and can cause a brief hitch; no zero-stall claim or measured transition latency.",
+    "binary_sha256": "17C40F0EFE9F54DCF82E484ABF6ED1C8E1A3C42F9DDCE316DF81295860034C90",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-133506.log",
+    "ordinary_debug_startup": {
+      "visible": true,
+      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-visible-20261024-133712",
+      "mode": "debug",
+      "foreground_requested": true,
+      "title": "rerac",
+      "responding": true,
+      "executable_sha256": "17C40F0EFE9F54DCF82E484ABF6ED1C8E1A3C42F9DDCE316DF81295860034C90",
+      "pid": 52700,
+      "recorded_at": "2026-10-24T13:37:42.2050050+07:00"
+    }
+  },
+  "wrench_return_utility_crank": {
+    "recorded_utc": "2026-10-24T07:57:09.796545+00:00",
+    "reported_behavior": "Wrench return unreadable; Trespasser screen showed only the beams and sat too close to the eyes; Hydrodisplacer insertion played a quick reach/withdraw with no water transfer; the crank wrench stabbed into the bolt instead of gripping it.",
+    "changes": [
+      "Wrench return: one planned path from the turnaround to the moving tracked hand, starting at rest, accelerating, easing into the catch (2.4p^2 - 1.4p^3, about 0.35-0.75 s). The native spin continues, slows near the hand and is phased onto the held heading; only the last fifth blends the hand tilt. The same plan is drawn between 60 Hz ticks. Replaces the speed-chasing homing and the slerp from a fast spin.",
+      "Trespasser: the native translucent grey background/frame is drawn again with the rings, nodes and beams (HUD prompts stay hidden). The panel sits just above the plugged prong tip, facing the viewer, instead of 0.55 units above the hand.",
+      "Hydrodisplacer: the item update is no longer suspended while plugged (no controller aim when docked had reset it to the reach pose every tick). The native reach, transfer command, cutaway and withdraw run. During the native water cutaway the headset rides the authored camera glide, level, between its two black fades.",
+      "Bolt cranks: the open jaws of the original crank pose (sequence 0xb) straddle the hex head, centred on the bolt axis at the head mid-height, as in Ratchet's native 1.05-ring crank poses measured from the assets. The shaft points to the hand with a bounded tilt and lengthens about the jaws."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "headset_tested": false,
+    "remaining_confirmation": "Wrench return/catch readability, Trespasser panel distance and frame, Hydrodisplacer fill/empty with and without a cutaway, crank jaw fit on Novalis/Eudora/Batalia bolts.",
+    "binary_sha256": "B97452996E0B308FC577712B71D77D1E75BB6D32F5E2B13B3D33E2AFF57B5F04",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-145246.log"
+  },
+  "gadget_pause_fixes": {
+    "recorded_utc": "2026-10-24T08:39:23.669682+00:00",
+    "reported_behavior": "Headset feedback on the previous build: wrench return good but a fast second wrench is still seen at maximum range; Trespasser panel invisible; Hydrodisplacer works but the camera change is unwanted and motion insertion fails when the tap is in the ground; a French overlay sometimes appears in the pause menu.",
+    "changes": [
+      "Trespasser: the panel was placed behind the upright plate of the lock (measured on class 615 at Eudora: 376 lock vertices between the eyes and the panel). It now sits at 55 % of the native hand-to-prong line, 0.42 above the tips, facing the eyes, about 1 m away; no lock vertex occludes it.",
+      "Hydrodisplacer: VR skips the native water cutaway (no fades, no camera); the transfer runs as on a pad without cutaway cameras. The headset camera that followed the cutaway was removed.",
+      "Hydrodisplacer insertion with the tap retracted (suck): the native suck pose keeps Ratchet at the pad centre, so the VR target was in mid-air. A downward push of the nozzle onto the retracted tap (top of the pad mesh in its live pose) is now accepted; during the suck the tool stays in the tracked hand. Utility tools keep their aim when the nozzle touches a surface (the lost aim suspended the item out of its ready state).",
+      "Pause and front-end menus: the VR-added French button bar (Retour, arrows, Valider) and its hidden hit areas are removed; native pointing and controller buttons remain.",
+      "Wrench: no second wrench model is drawn by the engine (after-images hidden, single attached item, no item shadows). Per-frame turnaround diagnostics (VR_GAME wrench_frame) were added to locate the reported fast duplicate."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "headset_tested": false,
+    "remaining_confirmation": "Trespasser panel visibility and distance, Hydrodisplacer fill/empty without camera change, insertion into the retracted tap, absence of the menu button bar, wrench_frame log of a maximum-range throw.",
+    "binary_sha256": "DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-153506.log"
   }
 }

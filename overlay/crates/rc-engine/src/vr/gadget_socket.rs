@@ -4,7 +4,7 @@ use super::{
     blaster::{self, SupportGrip, WeaponAim},
     embodied::{Motion, game_point, gameplay, unobstructed},
     game::Rig,
-    game_input::Focused,
+    game_input::{Focused, HandInput},
 };
 use bevy::prelude::*;
 use rc_game::collision_query::{
@@ -13,6 +13,95 @@ use rc_game::collision_query::{
 };
 
 pub(super) struct GadgetSocketPlugin;
+pub(super) fn docked(
+    p: &crate::gameplay::Play,
+    attach: &crate::moby_attach::MobyAttach,
+) -> Option<rc_game::hero::items::HandItem> {
+    let id = p.game.hero.items.slot.id;
+    if !matches!(id, 22 | 26) {
+        return None;
+    }
+    let target = p.game.hero.tracked.utility_target?;
+    let active = if id == 26 {
+        p.game.hero.state == 0x72
+    } else {
+        matches!(p.game.hero.state, 0x38..=0x3a)
+            || p.game
+                .hero
+                .items
+                .slot
+                .item
+                .as_ref()
+                .is_some_and(|i| matches!(i.mstate, 3..=5))
+    };
+    // Sucking, native Ratchet stays at the pad centre with the gadget at his side, away from the retracted tap
+    // the player plugs into: the tool stays in the tracked hand where it was plugged.
+    if !active || (id == 22 && sucking(p)) {
+        return None;
+    }
+    attach.socket_item(p, p.game.hero.items.slot.item.as_ref()?, target, !active)
+}
+/// The Hydrodisplacer use is a suck (Ratchet's 0x46..0x48), or about to be one; `hydro_full` flips mid-use.
+fn sucking(p: &crate::gameplay::Play) -> bool {
+    let s = &p.ratchet.state;
+    let suck = |q: u8| matches!(q, 0x46..=0x48);
+    let pour = |q: u8| matches!(q, 0x83..=0x85);
+    suck(s.seq_a)
+        || suck(s.seq_b)
+        || (!pour(s.seq_a) && !pour(s.seq_b) && !p.game.hero.gadgets.hydro_full)
+}
+/// A pad's tap retracted into the ground (the suck position): the top of its lowered column (Bevy coordinates).
+/// Raised, the tap is the native pour socket instead.
+fn retracted_tap(
+    p: &crate::gameplay::Play,
+    level: &crate::level_load::LoadedLevel,
+    target: usize,
+) -> Option<Vec3> {
+    let m = p.game.mobys.mobys.get(target)?;
+    let offsets = super::embodied::posed_offsets(m, level);
+    let top = offsets.iter().map(|v| v.z).fold(f32::NEG_INFINITY, f32::max);
+    // Raised it stands about 1.3 units high; retracted, about 0.27.
+    if !top.is_finite() || top > 0.6 {
+        return None;
+    }
+    let cap: Vec<_> = offsets.iter().filter(|v| v.z >= top - 0.03).collect();
+    let centre = cap.iter().map(|v| v.truncate()).sum::<Vec2>() / cap.len() as f32;
+    Some(crate::tfrag_render::game_to_bevy([
+        m.position[0] + centre.x,
+        m.position[1] + centre.y,
+        m.position[2] + top,
+    ]))
+}
+pub(super) fn tool_tip(
+    item: &rc_game::hero::items::HandItem,
+    data: &rc_game::hero::items::ItemData,
+) -> Option<Vec3> {
+    let class = data.class(item.o_class)?;
+    let local = if item.o_class == 188 {
+        Vec3::new(0.04, -1.0, -0.025)
+    } else {
+        let chain = class.chains.first()?;
+        let p = rc_formats::moby_anim::evaluate_chains(
+            &class.anim,
+            &item.anim,
+            item.snapshot.as_ref(),
+            &[chain],
+        )
+        .into_iter()
+        .next()?[3];
+        Vec3::new(p[0], p[1], p[2]) * (item.scale / 1024.0)
+    };
+    let axes = Mat3::from_cols_array_2d(&item.rows.map(|r| {
+        [
+            f32::from_bits(r[0]),
+            f32::from_bits(r[1]),
+            f32::from_bits(r[2]),
+        ]
+    }));
+    Some(crate::tfrag_render::game_to_bevy(
+        (Vec3::from_array(item.position) + axes * local).to_array(),
+    ))
+}
 impl Plugin for GadgetSocketPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<Insertion>().add_systems(
@@ -28,6 +117,7 @@ struct Contact {
     normal: Vec3,
     travel: f32,
     used: bool,
+    acknowledged: bool,
     requested_at: f64,
 }
 #[derive(Resource, Default)]
@@ -64,9 +154,11 @@ fn engage(
     motion: Res<Motion>,
     support: Res<SupportGrip>,
     focus: Res<Focused>,
+    mut input: ResMut<HandInput>,
     mode: Res<crate::menu_render::MenuMode>,
     time: Res<Time<Real>>,
     mut insertion: ResMut<Insertion>,
+    attach: Option<Res<crate::moby_attach::MobyAttach>>,
 ) {
     let Some(mut play) = play else {
         *insertion = default();
@@ -76,8 +168,8 @@ fn engage(
     let now = time.elapsed_secs_f64();
     let id = p.game.hero.items.slot.id;
     let level_id = crate::level_load::level_index();
-    let stale =
-        insertion.revision != rig.revision || insertion.level != level_id || insertion.weapon != id;
+    // Turning/recentring changes controller coordinates, not the accepted native socket.
+    let stale = insertion.level != level_id || insertion.weapon != id;
     if stale {
         *insertion = Insertion {
             revision: rig.revision,
@@ -86,6 +178,14 @@ fn engage(
             ..default()
         };
     }
+    if insertion.revision != rig.revision {
+        insertion.revision = rig.revision;
+        insertion.previous = None;
+        if insertion.contact.is_some_and(|c| !c.used) {
+            insertion.contact = None;
+        }
+    }
+    let prior_target = p.game.hero.tracked.utility_target;
     p.game.hero.tracked.utility_use = false;
     p.game.hero.tracked.utility_target = None;
     if settings.desktop_preview
@@ -100,21 +200,70 @@ fn engage(
     // Preserve the accepted binding throughout native cutaways and the lock puzzle.
     // They may temporarily capture input or hide the held item.
     let active = if id == 22 {
-        p.game
-            .hero
-            .items
-            .slot
-            .item
-            .as_ref()
-            .is_some_and(|it| matches!(it.mstate, 3..=5))
+        matches!(p.game.hero.state, 0x38..=0x3a)
+            || p.game
+                .hero
+                .items
+                .slot
+                .item
+                .as_ref()
+                .is_some_and(|it| matches!(it.mstate, 3..=5))
     } else {
         p.game.hero.state == 0x72
     };
+    // Circle remains optional, but its native platform activation must dock to the same socket.
+    if active && insertion.contact.is_none() {
+        let target = prior_target.or(p.game.hero.ground_moby).filter(|&target| {
+            p.game
+                .mobys
+                .mobys
+                .get(target)
+                .is_some_and(|m| m.o_class == if id == 22 { 341 } else { 615 })
+        });
+        if let Some(target) = target {
+            let socket = attach.as_ref().and_then(|a| {
+                a.socket_item(p, p.game.hero.items.slot.item.as_ref()?, target, true)
+            });
+            let point = socket
+                .as_ref()
+                .zip(p.game.item_data.as_ref())
+                .and_then(|(item, data)| tool_tip(item, data));
+            let normal = socket.as_ref().map(|item| {
+                crate::tfrag_render::game_to_bevy([
+                    f32::from_bits(item.rows[1][0]),
+                    f32::from_bits(item.rows[1][1]),
+                    f32::from_bits(item.rows[1][2]),
+                ])
+                .normalize_or_zero()
+            });
+            insertion.contact = Some(Contact {
+                target,
+                point: point.unwrap_or(Vec3::ZERO),
+                normal: normal.unwrap_or(Vec3::Y),
+                travel: 0.0,
+                used: true,
+                acknowledged: true,
+                requested_at: now,
+            });
+        }
+    }
     // The moby loop reads the previous hero item update. Retain a pending request
     // across that boundary until the native action acknowledges it (or times out).
+    let cancel = std::mem::take(&mut input.utility_cancel);
+    if let Some(contact) = insertion.contact.as_mut() {
+        contact.acknowledged |= active || cancel;
+    }
+    if cancel {
+        // Keep the target through this tick so the native cancel/withdraw calls survive
+        // the generic cutaway filter. Disarm until the controller leaves the socket.
+        p.game.hero.tracked.utility_target = prior_target;
+        p.game.hero.gadgets.item_bc = 0;
+        insertion.previous = None;
+        return;
+    }
     if let Some(contact) = insertion
         .contact
-        .filter(|c| c.used && (active || now - c.requested_at < 0.25))
+        .filter(|c| c.used && (active || (!c.acknowledged && now - c.requested_at < 1.5)))
     {
         if p.game
             .mobys
@@ -124,6 +273,10 @@ fn engage(
         {
             p.game.hero.tracked.utility_target = Some(contact.target);
             p.game.hero.tracked.utility_use = !active;
+            if let Some(item) = attach.as_ref().and_then(|a| docked(p, a)) {
+                p.game.hero.items.tracked_hand = Some((item.position, item.rows));
+                p.game.hero.items.tracked_class = item.o_class;
+            }
             insertion.previous = None;
             return;
         }
@@ -180,14 +333,14 @@ fn engage(
                     .distance(eye)
                     < 3.0 * units
         });
-        if !valid || depth < -0.16 * units || lateral > 0.18 * units || depth > 0.35 * units {
+        if !valid || depth < -0.28 * units || lateral > 0.28 * units || depth > 0.40 * units {
             insertion.contact = None;
         } else if !contact.used && -forward.dot(contact.normal) > 0.45 {
             if let Some(delta) = delta {
                 contact.travel = (contact.travel - delta.dot(contact.normal)).max(0.0);
             }
-            if contact.travel >= 0.035 * units
-                && depth >= 0.012 * units
+            if (contact.travel >= 0.005 * units || input.trigger.is_some_and(|v| v > 0.6))
+                && depth >= -0.12 * units
                 && p.game.hero.air_ticks == 0
                 && p.game.hero.items.slot.state == 2
                 && (id != 22
@@ -199,7 +352,6 @@ fn engage(
                             .item
                             .as_ref()
                             .is_some_and(|it| it.mstate == 2)))
-                && delta.is_some_and(|d| -d.dot(contact.normal) > 0.0001 * units)
             {
                 // The shaft may now overlap the target. Reject a nearer world/other-moby obstruction.
                 let src = p.svc.scene_parts(&p.game.mobys, &*p.classes);
@@ -213,14 +365,17 @@ fn engage(
                     Some(p.game.hero_moby),
                 )
                 .is_some_and(|h| {
+                    // A retracted tap sits in the floor: the nozzle reaches it through the ground around it.
+                    let reach = if contact.normal == Vec3::Y { 0.45 } else { 0.05 };
                     h.moby != Some(contact.target)
                         && crate::tfrag_render::game_to_bevy(h.point).distance(contact.point)
-                            > 0.05 * units
+                            > reach * units
                 });
                 if !blocked {
                     p.game.hero.tracked.utility_target = Some(contact.target);
                     p.game.hero.tracked.utility_use = true;
                     contact.used = true;
+                    contact.acknowledged = false;
                     contact.requested_at = now;
                     println!("VR_GAME tool_insert item={id} target={}", contact.target);
                 }
@@ -229,6 +384,62 @@ fn engage(
         }
     }
     if insertion.contact.is_none() {
+        if let Some(attach) = attach.as_ref() {
+            let found = p
+                .game
+                .mobys
+                .mobys
+                .iter()
+                .enumerate()
+                .filter(|(_, m)| m.o_class == if id == 22 { 341 } else { 615 })
+                .filter_map(|(target, m)| {
+                    if m.state >= 0x80 || (id == 26 && m.state != 1) {
+                        return None;
+                    }
+                    // Sucking from a retracted tap: push the nozzle down onto it, where it is in the ground.
+                    if let Some(tap) = (id == 22 && !p.game.hero.gadgets.hydro_full)
+                        .then(|| retracted_tap(p, &level.0, target))
+                        .flatten()
+                    {
+                        let beside = Vec2::new(tip.x - tap.x, tip.z - tap.z).length();
+                        if beside < 0.30 * units
+                            && (-0.40 * units..0.35 * units).contains(&(tip.y - tap.y))
+                            && forward.dot(Vec3::NEG_Y) > 0.35
+                            && eye.distance(tap) < 3.0 * units
+                        {
+                            return Some((target, tap, Vec3::Y, tip.distance(tap)));
+                        }
+                    }
+                    let native = attach.socket_item(p, &item, target, true)?;
+                    let point = tool_tip(&native, data)?;
+                    let forward_native = -Vec3::new(
+                        f32::from_bits(native.rows[1][0]),
+                        f32::from_bits(native.rows[1][1]),
+                        f32::from_bits(native.rows[1][2]),
+                    );
+                    let approach = crate::tfrag_render::game_to_bevy(forward_native.to_array())
+                        .normalize_or_zero();
+                    let distance = tip.distance(point);
+                    (distance < 0.30 * units
+                        && forward.dot(approach) > 0.35
+                        && eye.distance(point) < 3.0 * units)
+                        .then_some((target, point, -approach, distance))
+                })
+                .min_by(|a, b| a.3.total_cmp(&b.3));
+            if let Some((target, point, normal, _)) = found {
+                insertion.contact = Some(Contact {
+                    target,
+                    point,
+                    normal,
+                    travel: 0.0,
+                    used: false,
+                    acknowledged: false,
+                    requested_at: 0.0,
+                });
+            }
+        }
+    }
+    if insertion.contact.is_none() && attach.is_none() {
         let src = p.svc.scene_parts(&p.game.mobys, &*p.classes);
         let scene = p.svc.scene(&src);
         let targets = SocketTargets {
@@ -264,6 +475,7 @@ fn engage(
                         normal,
                         travel: 0.0,
                         used: false,
+                        acknowledged: false,
                         requested_at: 0.0,
                     });
                 }

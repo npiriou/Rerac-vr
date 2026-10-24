@@ -37,6 +37,7 @@ pub(super) struct HandInput {
     pub pack_jump: bool,
     pub menu_click: bool,
     pub menu_held: bool,
+    pub utility_cancel: bool,
     menu_ready: bool,
     menu_active: bool,
     menu_consumed: bool,
@@ -416,6 +417,8 @@ pub(super) fn sample(
     mut selection: Local<HandSelect>,
     mut jump: Local<JumpInput>,
     mut skip: Local<SkipInput>,
+    mut utility_down: Local<u32>,
+    mut utility_consumed: Local<bool>,
 ) {
     *out = GamePad::default();
     hand.grip = None;
@@ -435,6 +438,9 @@ pub(super) fn sample(
         *skip = SkipInput::default();
         *previous = 0;
         *selection = HandSelect::default();
+        hand.utility_cancel = false;
+        *utility_down = 0;
+        *utility_consumed = false;
         return;
     }
     let (Some(a), Some(session)) = (a, session) else {
@@ -478,7 +484,8 @@ pub(super) fn sample(
     let pause = matches!(
         mode.state.mode,
         rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
-    );
+    ) || mode.spatial_vendor
+        || play.as_ref().is_some_and(|p| super::game::native_panel(p));
     if !hand.firing {
         hand.menu_consumed = false;
     }
@@ -525,6 +532,44 @@ pub(super) fn sample(
     for (bit, a) in &a.buttons {
         if held(a) {
             buttons |= *bit;
+        }
+    }
+    let utility_press =
+        buttons & (button::START | button::TRIANGLE) | if hand.firing { button::CIRCLE } else { 0 };
+    let utility_edge = utility_press & !*utility_down != 0;
+    *utility_down = utility_press;
+    let puzzle = play
+        .as_ref()
+        .is_some_and(|p| p.game.hero.items.slot.id == 26 && p.game.hero.state == 0x72);
+    if puzzle {
+        // Sticks operate the native rings. Y, stick click and a fresh trigger press withdraw.
+        // The trigger used to plug in must be released before it can cancel.
+        let cancel = utility_edge && !*utility_consumed;
+        hand.utility_cancel |= cancel;
+        *utility_consumed |= cancel;
+        hand.menu_click = false;
+        hand.trigger = None;
+        hand.pack_jump = false;
+        *selection = HandSelect::default();
+        rig.snap(0.0);
+        out.pad = encode(
+            Vec2::ZERO,
+            Vec2::ZERO,
+            if hand.utility_cancel {
+                button::TRIANGLE
+            } else {
+                menu_directions(movement.unwrap_or_default(), camera.unwrap_or_default())
+            },
+        );
+        return;
+    }
+    if *utility_consumed {
+        buttons &= !(button::START | button::TRIANGLE);
+        hand.trigger = None;
+        hand.menu_click = false;
+        jump.trigger_consumed = hand.firing;
+        if utility_press == 0 {
+            *utility_consumed = false;
         }
     }
     let media = matches!(
@@ -685,6 +730,35 @@ pub(super) fn sample(
             .is_some_and(|p| matches!(p.game.hero.state, 0x18..=0x1b))
     {
         movement = Vec2::ZERO;
+    }
+    if gameplay {
+        if let Some(p) = play.as_ref() {
+            if let Some((bolt, view)) = p
+                .game
+                .hero
+                .tracked
+                .crank_target
+                .and_then(|id| p.game.mobys.mobys.get(id))
+                .zip(p.game.hero.tracked.navigation)
+            {
+                let body = p.game.hero.position();
+                let radial = Vec2::new(body[0] - bolt.position[0], body[1] - bolt.position[1]);
+                let distance = radial.length();
+                if distance > 0.1 {
+                    let r = radial / distance;
+                    let tangent = Vec2::new(-r.y, r.x);
+                    let correction =
+                        (p.game.hero.tracked.crank_radius - distance).clamp(-0.25, 0.25) * 1.3;
+                    let desired = tangent * (movement.y + movement.x * 0.7) + r * correction;
+                    let f = rc_game::hero::physics::to_f32x3(view.rows[0]);
+                    let l = rc_game::hero::physics::to_f32x3(view.rows[1]);
+                    movement = Vec2::new(
+                        -desired.dot(Vec2::new(l[0], l[1])),
+                        desired.dot(Vec2::new(f[0], f[1])),
+                    );
+                }
+            }
+        }
     }
     out.pad = encode(movement, camera, buttons);
     if buttons != *previous {
