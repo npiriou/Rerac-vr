@@ -42,6 +42,9 @@ pub(super) const PANEL_LAYER: usize = 62;
 /// The original first-person eye heights above the feet of Clank and Giant Clank (Ratchet's is 1.6).
 pub(super) const CLANK_EYE: f32 = 0.9;
 pub(super) const GIANT_CLANK_EYE: f32 = 9.5;
+/// Clank's ledge climb jumps 1.55 from the hang, its apex 0.85 above the lip (Ratchet's: 0.6): the eye rises at most
+/// this far above the lip while the body keeps the native arc.
+const CLANK_CLIMB_RISE: f32 = 0.3;
 #[derive(Component, Clone, ExtractComponent)]
 pub struct GameEye;
 #[derive(Component, Clone, ExtractComponent)]
@@ -62,6 +65,8 @@ pub(super) struct Rig {
     pub(super) revision: u64,
     reset_held: bool,
     eye_height: Option<f32>,
+    /// How far the eye stays below the body during Clank's ledge climb (metres, see [`CLANK_CLIMB_RISE`]).
+    climb_drop: f32,
     /// The hero's body (`Hero::mode`: 0 Ratchet, 1 Clank, 2 Giant Clank) the eye and scale were set for.
     body: u8,
     gravity_frame: Quat,
@@ -77,6 +82,9 @@ pub(super) struct Rig {
     rail_time: Option<f64>,
     rail_position: Option<Vec3>,
     rail_samples: Option<(u64, Vec3, Vec3)>,
+    /// The hero's group and, on the hoverboard, his position of the last frame (its start and respawns teleport him).
+    hero_group: i32,
+    board_pos: Option<Vec3>,
 }
 pub(crate) fn native_panel(play: &crate::gameplay::Play) -> bool {
     let gold_bolt = play
@@ -130,11 +138,10 @@ impl Rig {
         let body_eye = self
             .rail_position
             .unwrap_or_else(|| crate::tfrag_render::game_to_bevy(game.hero.position()))
-            + self.gravity_frame * Vec3::Y * self.eye_height.unwrap_or(1.6);
+            + self.gravity_frame * Vec3::Y * (self.eye_height.unwrap_or(1.6) - self.climb_drop);
         // Death scripts can park the swallowed body far outside the level. Keep the
         // last living viewpoint, with normal head tracking, until the respawn.
-        let eye = if (game.hero.health <= 0 || game.hero.group == 0x14 || game.hero.state == 0x78)
-            && self.eye_level == crate::level_load::level_index()
+        let eye = if eye_parked(game) && self.eye_level == crate::level_load::level_index()
         {
             self.last_live_eye.unwrap_or(body_eye)
         } else {
@@ -147,6 +154,15 @@ impl Rig {
             scale: Vec3::splat(scale),
         })
     }
+}
+/// The body no longer carries the eye: dead, eaten (group 0x14, 0x78), or held hidden by a Rilgar lurker (class 35 in
+/// its grab state 3, which carries the body 20 above itself until he drowns).
+fn eye_parked(game: &rc_game::tick::Game) -> bool {
+    let h = &game.hero;
+    h.health <= 0
+        || h.group == 0x14
+        || h.state == 0x78
+        || (h.state == 0x72 && h.f13f5 != 0 && game.mobys.mobys.iter().any(|m| m.o_class == 35 && m.state == 3))
 }
 #[derive(Resource, Clone, Default)]
 struct Rendered(Arc<AtomicU64>);
@@ -919,6 +935,20 @@ fn follow_game_camera(
         rig.rail_heading = None;
         rig.rail_center = None;
     }
+    // The board steers toward the gaze (`env.cam_yaw`): its start and its respawns place it along the course, so the
+    // current gaze becomes the board's heading, as a recentre does.
+    let group = play.game.hero.group;
+    let board = Vec3::from_array(play.game.hero.position());
+    let placed = rig.board_pos.is_some_and(|old| old.distance(board) > 3.0);
+    if group == rc_game::hero::hoverboard::GROUP && (rig.hero_group != group || placed) {
+        rig.world_yaw = play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2;
+        rig.yaw = heading(head.rotation);
+        rig.turn = 0.0;
+        rig.revision = rig.revision.wrapping_add(1);
+        println!("VR_GAME board_heading yaw={:.3} placed={placed}", play.game.hero.rot[2].to_f32());
+    }
+    rig.hero_group = group;
+    rig.board_pos = (group == rc_game::hero::hoverboard::GROUP).then_some(board);
     let pitch_error = target_pitch - rig.rail_pitch;
     rig.rail_pitch += (pitch_error * (1.0 - (-dt / 0.62).exp())).clamp(-dt * 0.30, dt * 0.30);
     let position = crate::tfrag_render::game_to_bevy(play.game.hero.position());
@@ -973,7 +1003,12 @@ fn follow_game_camera(
     // Surface swimming uses the native horizontal swimmer's eye height. Blend the posture change;
     // head rotation always remains physically tracked.
     let target_height = if body == 1 {
-        CLANK_EYE
+        if rc_game::hero::tracked::ledge_hold(play.game.hero.state) {
+            // Hanging, the eyes sit below the lip as Ratchet's do (about 0.33 above Clank's feet).
+            (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(0.25, CLANK_EYE)
+        } else {
+            CLANK_EYE
+        }
     } else if body == 2 {
         GIANT_CLANK_EYE
     } else if matches!(play.game.hero.state, 0x18..=0x1b) {
@@ -995,9 +1030,17 @@ fn follow_game_camera(
     rig.eye_height = Some(
         height + (target_height - height).clamp(-time.delta_secs() * 2.0, time.delta_secs() * 2.0),
     );
-    if play.game.hero.health > 0
-        && play.game.hero.group != 0x14
-        && play.game.hero.state != 0x78
+    let hero = &play.game.hero;
+    rig.climb_drop = if body == 1
+        && hero.state == 0x4c
+        && rc_game::hero::tracked::ledge_hold(hero.prev_state)
+    {
+        (hero.position()[2] - hero.ledge_blk.top_z - CLANK_CLIMB_RISE).max(0.0)
+    } else {
+        // A climb ending above the clamp (a higher ledge caught) rejoins the body smoothly.
+        (rig.climb_drop - time.delta_secs() * 2.0).max(0.0)
+    };
+    if !eye_parked(&play.game)
         && !play.death_pending
         && !scene.running
         && pilot.is_none()

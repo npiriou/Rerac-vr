@@ -1,11 +1,11 @@
 {
-  "checked_utc": "2026-10-24T10:00:02.001872+00:00",
+  "checked_utc": "2026-10-24T11:48:13.839197+00:00",
   "implementation": "Original VR game with native headset heading, local-surface locomotion, physical spatial listener and rail-following camera",
-  "status": "bodies_ledges_loading_build_ready",
+  "status": "cutscenes_rilgar_mines_build_ready",
   "build": {
     "profile": "debug",
-    "executable_sha256": "2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA",
-    "completed_utc": "2026-10-24T09:58:37.6060240Z",
+    "executable_sha256": "B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84",
+    "completed_utc": "2026-10-24T11:47:49.2591365Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1184,5 +1184,53 @@
     "remaining_confirmation": "Transition stall on a first visit, ship opening on all ships, ledges/rungs on Aridia, Clank (Blarg, Orxon) and Giant Clank (Quartu, Veldin 2) sections, the caught-wrench grip, a capture of the wrench duplicate.",
     "binary_sha256": "2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-165439.log"
+  },
+  "clank_wrench_pivot": {
+    "reported_behavior": "Clank sections: no Clank hands; the player flies about ten metres up every few seconds. Wrench: a few giant frames, most visible when thrown straight up while looking up.",
+    "changes": [
+      "Clank / Giant Clank room-scale walking ran the capsule resolver with Ratchet's hidden moby as the ignored hero moby, so the body collided with its own moby and was pushed up repeatedly. It now ignores the body, as the native tick does.",
+      "Clank / Giant Clank hands are placed after the item pass, which hid every hand-slot item it was not given.",
+      "The thrown wrench spins about its middle (the original spin pose is centred), instead of the ready mesh's grip origin, whose head swept a metre-wide circle past the eyes. The flight carries the middle from where it was in the hand; the return path ends at the held middle.",
+      "The first tick back no longer adds the spin step twice."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Clank hands and stable height on Blarg/Orxon, Giant Clank on Quartu/Veldin 2, the thrown wrench close to the eyes.",
+    "recorded_utc": "2026-10-24T10:23:54.858337+00:00",
+    "binary_sha256": "F4D8D32257A47684C188891D681EEAC2790CB1857321E23F545F770E393931C5",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-172001.log",
+    "headset_tested": false
+  },
+  "clank_fists_ledges": {
+    "reported_behavior": "Clank works but needs polish: punches must be fully physical like Ratchet's wrench, for both fists; Clank's ledge grabs must work exactly like Ratchet's (grip to hang, pull-up to jump, hands hooked on the edge, moving along by moving the hands); hands should respond to buttons, starting with a fist closing on grip.",
+    "changes": [
+      "Clank / Giant Clank punches: each tracked hand is a fist detected like the wrench (2 m/s, 12 cm stroke, extending only), striking where the hand is with the body's native sphere (Clank: radius 0.25, damage 1; Giant Clank: fist radius 2.0, damage 4) for a few ticks; no native punch animation, B no longer punches; per-hand haptics on strike and on an actual hit (the native sphere returns the mobys hit).",
+      "Fists: free hands of Ratchet and Clank close with the analog grip (finger joints curled about their measured local axes, thumb folded across); hands holding a weapon or a ledge keep their pose.",
+      "Clank ledges: Ratchet's VR ledge system for Clank's states 0x4a/0x4b/0x4d/0x4e (a gripping hand near the edge is required to grab, hands anchored on the edge move him along it through the native probes, stick disabled, A or the two-arm shove climbs as a buffered native \u2715, releasing both grips drops); anchor from the body's ledge dimensions; dense hand-height probes for Clank's 25 mm window; eye below the lip while hanging; hands drawn hooked on the edge in his native hang pose."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Clank punches on Blarg/Orxon enemies (both fists, thresholds), Giant Clank fists, the grip fist pose on both bodies, Clank ledge grab / move / climb / drop and the hooked hands.",
+    "recorded_utc": "2026-10-24T10:50:04.307400+00:00",
+    "binary_sha256": "C2129830169A41A33F61D91453FADFF3B6B4D760818411CEE056DE0CE78775FD",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-174511.log",
+    "headset_tested": false
+  },
+  "cutscenes_rilgar_mines": {
+    "reported_behavior": "Clank pulls up a bit too high on ledges (native: less than Ratchet); Clank-only cutscenes should be seen from Clank's eyes (e.g. the Hydrodisplacer pickup at Blarg station); the thrown wrench makes a white horizontal plane flash for a few frames at max range; the cutscene camera sits too low, closer to the ground than in gameplay; on Rilgar, a fish swallowing Ratchet throws the camera into the air; the Rilgar hoverboard race sometimes starts backwards; Ratchet gets ejected from taxis (Rilgar, Kerwan, ...); the wrench passes through the Umbris giant mines without destroying them.",
+    "changes": [
+      "Clank's ledge climb: the body keeps the native arc (1.55 from the hang, about 0.85 above the lip, higher than Ratchet's 0.6), the VR eye rises at most 0.3 above the lip during it and rejoins the body smoothly if the climb catches a higher ledge.",
+      "Cutscene eye: Ratchet's head attach plus 0.68 (the eye and the lift to the gameplay eye 1.6; the attach sits about 0.92 above his feet) instead of plus 0.15, which was about 0.53 lower than in gameplay.",
+      "Scenes without Ratchet are seen through Clank (scene classes 10 / 0x555, his noggin joint list 2): the eye is lifted once per scene to Clank's gameplay eye 0.9, his scene body and antenna glow are hidden; before, the eye stayed frozen at the last gameplay viewpoint.",
+      "Thrown wrench: the tracked spin angle is wrapped to \u00b1\u03c0 (out and back). It grew to 12-16 rad on long throws and the game's VU0 sin/cos, which folds only once, diverged: the wrench rows became a huge flat matrix, drawn as a white horizontal plane, and the thrown wrench's hit sphere left the wrench.",
+      "Umbris floating and chain mines (classes 1110 / 1112): the explode check reads the hit's attacker class through HitRecord::attacker_class, so a wrench hit (which names no moby, class 0x47) detonates them. Upstream port bug: the non-VR swing and throw could not detonate them either.",
+      "Rilgar lurker (class 35, grab state 3, Ratchet held hidden in 0x72 and carried 20 above it): the VR eye stays at the last living viewpoint, as for the other deaths, instead of following the raised body.",
+      "Hoverboard: on mounting and on each teleport of the board (start, crash and wrong-way respawns), the current gaze becomes the board's heading, as a recentre does; the board steers toward the gaze, so a player who walked up from the far side rode backwards.",
+      "Taxis and carriers (Rilgar's hover cars, Kerwan's transports, ferries, path platforms): no room-scale step while the carrier's edge brake or jump lockout is set; the car's wall only exists inside the tick, so a physical step pushed Ratchet over the edge."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Clank's climb height, cutscene eye height, Clank-only cutscenes (Blarg Hydrodisplacer pickup), long wrench throws (no white plane), Umbris mines destroyed by the wrench, the Rilgar lurker death view, the hoverboard race start, riding Rilgar and Kerwan taxis.",
+    "recorded_utc": "2026-10-24T11:48:13.839197+00:00",
+    "binary_sha256": "B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-184404.log",
+    "headset_tested": false
   }
 }

@@ -165,6 +165,8 @@ struct Snapshot {
     hero_state: i32,
     walloper_until: u64,
     walloper_hits: u32,
+    fist_strikes: [u64; 2],
+    fist_hits: [u64; 2],
     morphs: usize,
     hydro_full: bool,
     hooked: bool,
@@ -573,6 +575,8 @@ pub(super) fn update(
             hero_state: h.state,
             walloper_until: h.walloper.tracked_until,
             walloper_hits: h.walloper.stats[3],
+            fist_strikes: h.tracked.fist_strikes,
+            fist_hits: h.tracked.fist_hits,
             morphs: h.weapons.reactive.morph.morphs.len(),
             hydro_full: h.gadgets.hydro_full,
             hooked: h.swing.hooked,
@@ -667,6 +671,14 @@ pub(super) fn update(
             }
             if n.blaster > o.blaster {
                 state.right(now, 0.35, 25, 160.0, 15);
+            }
+            for side in 0..2 {
+                if n.fist_hits[side] > o.fist_hits[side] {
+                    state.pulse(side, now, 0.92, 85, 75.0, 10, 8);
+                    state.pulse(side, now + 0.09, 0.32, 30, 135.0, 10, 8);
+                } else if n.fist_strikes[side] > o.fist_strikes[side] {
+                    state.pulse(side, now, 0.22, 25, 160.0, 4, 8);
+                }
             }
             // Ammo-used is the native committed-use statistic; pickups/refills and cancelled throws do not increase it.
             for (id, (&used, &before)) in n.used.iter().zip(&o.used).enumerate() {

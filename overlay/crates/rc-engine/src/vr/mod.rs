@@ -1,6 +1,6 @@
 //! OpenXR integration into the original game. Calibration is an explicit diagnostic mode.
 mod blaster;
-mod body_punch;
+mod body_fists;
 mod bomb_glove;
 mod embodied;
 mod gadget_socket;

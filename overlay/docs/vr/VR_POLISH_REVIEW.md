@@ -90,3 +90,28 @@ During the canopy-opening landing shot the authored actor sinks Ratchet 2.5 unit
 Clank and Giant Clank are first person: native eye heights 0.9 and 9.5, Giant Clank's tracking space scaled ×5.9, the body, rotor and antenna glow not drawn, their own hands on the controllers, physical punches pressing the native □ attack, the trigger holding Giant Clank's missiles, free facing and room-scale walking.
 
 The reported wrench duplicate at maximum range is not explained: per-frame diagnostics show one smooth model without pose change or teleport. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Clank fixes and the wrench's spin centre
+
+Clank's repeated launches came from room-scale walking: the capsule resolver ignored Ratchet's hidden moby instead of the body, so Clank collided with his own moby and was pushed up. It now ignores the body, as the native tick does. Clank's and Giant Clank's hands are placed after the item pass that hid them.
+
+The thrown wrench now spins about its middle, like the original's centred spin pose, instead of the ready mesh's grip origin, whose head swept a metre-wide circle through the eyes when thrown upward. The flight carries the middle from its place in the hand, and the return ends at the held middle; the first tick back no longer doubles the spin step. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Clank's physical fists, his VR ledges and closing hands
+
+Clank's and Giant Clank's punches are physical, like Ratchet's wrench. Each tracked hand is a fist: a deliberate stroke (2 m/s, 12 cm, extending) strikes where that hand is, for a few ticks, with the body's original sphere: Clank's (radius 0.25, damage 1) or Giant Clank's fist (radius 2.0, damage 4). The native punch animation no longer plays and B no longer punches. The striking hand gets a light pulse, and a strong one only when the native sphere reports a hit.
+
+Clank's ledges use Ratchet's VR ledge system on his own states and dimensions: a gripping hand near the edge is needed to grab, the anchored hands move him along the edge through the native probes (the stick is ignored), A or the two-arm shove climbs as a buffered native ✕, releasing both grips drops. His hands are drawn hooked on the edge in his native hang pose, and the eye drops below the lip while hanging.
+
+Ratchet's and Clank's free hands close into a fist with the analog grip: the finger joints curl about their measured local axes toward the palm and the thumb folds across. A hand holding a weapon or a ledge keeps its pose. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Cutscene eye, Clank's scenes and climb, the wrench's spin, Umbris mines and Rilgar
+
+Cutscenes are seen at the gameplay eye height: the eye sits 0.68 above Ratchet's head attach, where it used to be about 0.53 m lower than in play. A scene without Ratchet is seen through Clank's eyes (his scene body and antenna glow hidden), instead of a viewpoint frozen where gameplay stopped. Clank's ledge climb keeps its native arc, but the eye rises at most 0.3 above the lip.
+
+The thrown wrench's tracked spin is wrapped to ±π: on long throws it grew past the range of the game's VU0 sin/cos, which turned the wrench into a huge white horizontal plane and moved its hit sphere away. The Umbris floating and chain mines read the attacker's class through `attacker_class`, so wrench hits detonate them (an upstream port bug, also without VR).
+
+On Rilgar, a lurker holding the hidden Ratchet 20 above itself parks the eye at the last living viewpoint. The hoverboard turns the current gaze to the board's heading at its start and at each respawn, so the race no longer starts backwards. Room-scale steps stop while a carrier (hover car, Kerwan transports, ferries, path platforms) holds Ratchet with its edge brake, so physical steps no longer push him off a taxi. These changes require headset confirmation; no tests or gameplay scripts were run.

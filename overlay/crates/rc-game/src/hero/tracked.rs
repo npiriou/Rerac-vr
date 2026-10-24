@@ -36,6 +36,11 @@ pub struct Tracked {
     pub ledge_grabs: [u64; 2],
     pub ledge_climbs: u64,
     pub wrench_hits: u64,
+    /// Physical fist strikes of Clank / Giant Clank this tick (hand, centre, direction (x, y, 1)), delivered with the
+    /// body's native attack spheres (super::bodies); the strikes made and those that landed, per hand (haptics).
+    pub fists: Vec<(usize, [f32; 3], [f32; 3])>,
+    pub fist_strikes: [u64; 2],
+    pub fist_hits: [u64; 2],
     /// The thrown wrench's way back to the tracked hand (planned when it turns back).
     pub wrench_return: Option<WrenchReturn>,
 }
@@ -100,7 +105,18 @@ impl WrenchReturn {
     }
 }
 
+/// Hanging from a ledge with the hands: Ratchet's grab / hang / shimmies, Clank's (not his climb 0x4c, which lies
+/// between them).
+pub fn ledge_hold(state: i32) -> bool {
+    matches!(state, 0x18..=0x1b | 0x4a | 0x4b | 0x4d | 0x4e)
+}
+
 impl Hero {
+    /// The body's hang, fall and ledge-climb states (Clank's in body 1).
+    fn ledge_ids(&self) -> (i32, i32, i32) {
+        if self.mode == 1 { (0x4b, 0x45, 0x4c) } else { (0x19, 6, 0x1c) }
+    }
+
     pub(super) fn tracked_free_facing(&self) -> bool {
         self.tracked.enabled
             && self.tracked.navigation.is_some()
@@ -158,16 +174,17 @@ impl Hero {
 
     /// Run after damage/water checks, before ordinary button transitions.
     pub(super) fn tracked_transitions(&mut self, c: &mut Ctx) -> bool {
-        if !self.tracked.enabled || self.mode != 0 || self.health <= 0 || self.frozen != 0 {
+        if !self.tracked.enabled || !matches!(self.mode, 0 | 1) || self.health <= 0 || self.frozen != 0 {
             return false;
         }
-        if !matches!(self.state, 0x18..=0x1c)
-            && matches!(self.prev_state, 0x18..=0x1b)
+        let (hang, fall, _) = self.ledge_ids();
+        if !matches!(self.state, 0x18..=0x1c | 0x4a..=0x4e)
+            && ledge_hold(self.prev_state)
             && (0..2).any(|s| self.tracked.grabbed[s] && self.tracked.grips[s])
         {
-            self.set_state(c, 0x19, false);
+            self.set_state(c, hang, false);
         }
-        if matches!(self.state, 0x18..=0x1b) {
+        if ledge_hold(self.state) {
             let anchor = self.tracked_ledge_anchor();
             for side in 0..2 {
                 // A pull moves the controller away from the lip; only grip release unbinds it.
@@ -204,7 +221,7 @@ impl Hero {
                 }
             }
             if !self.tracked.grabbed.iter().any(|&g| g) {
-                self.set_state(c, 6, true);
+                self.set_state(c, fall, true);
                 self.f500 = ticks(20) as i16;
                 return true;
             }
@@ -235,6 +252,10 @@ impl Hero {
                     self.f838 = 0;
                 }
             }
+        }
+        // The rest (Walloper, Hyper Strike, packs) is Ratchet's.
+        if self.mode != 0 {
+            return false;
         }
         if super::walloper::tracked_fire(self, c) {
             return true;
@@ -269,9 +290,11 @@ impl Hero {
 
     pub fn tracked_ledge_anchor(&self) -> [f32; 3] {
         let l = &self.ledge_blk;
+        // The hang point lies `out − 0.015` back from the lip (0.435 for Ratchet, 0.305 for Clank).
+        let back = super::ledge::dims(self).out - 0.015;
         [
-            l.point[0] - l.yaw.cos() * 0.435,
-            l.point[1] - l.yaw.sin() * 0.435,
+            l.point[0] - l.yaw.cos() * back,
+            l.point[1] - l.yaw.sin() * back,
             l.top_z,
         ]
     }
@@ -288,6 +311,10 @@ impl Hero {
         let pos = self.pos;
         let old = self.ledge_blk;
         let old_found = self.f838;
+        // Clank's probe accepts a top within 25 mm: probe from the hang height, not from where the grab's pull is.
+        if self.mode == 1 {
+            self.pos[2] = crate::ps2v::Pf::f(old.point[2]);
+        }
         self.pos[0] = self.pos[0] + crate::ps2v::Pf::f(tangent[0] * along);
         self.pos[1] = self.pos[1] + crate::ps2v::Pf::f(tangent[1] * along);
         let there = to_f32x3(self.pos);

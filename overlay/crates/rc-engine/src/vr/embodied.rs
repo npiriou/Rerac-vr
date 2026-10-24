@@ -29,6 +29,7 @@ impl Plugin for EmbodiedPlugin {
             .init_resource::<Melee>()
             .add_plugins((
                 super::solid_contact::SolidContactPlugin,
+                super::body_fists::BodyFistsPlugin,
                 super::bomb_glove::BombGlovePlugin,
                 super::blaster::BlasterPlugin,
                 super::gadget_socket::GadgetSocketPlugin,
@@ -1267,6 +1268,17 @@ fn crank_wrench(
     true
 }
 
+/// The middle of the ready-pose wrench (sequence 1 frame 0, raw model units: its bounds' centre, on the shaft line). The
+/// thrown wrench's flight position is this point: the original spin pose is centred on its origin, while the rigid
+/// ready mesh's origin is at the grip, which swept the head through a metre-wide circle past the eyes.
+const WRENCH_MIDDLE: Vec3 = Vec3::new(1513.0, -1200.0, -350.0);
+fn wrench_middle(item: &HandItem, rows: Mat3) -> Vec3 {
+    rows * WRENCH_MIDDLE * (item.scale / 1024.0)
+}
+fn item_axes(item: &HandItem) -> Mat3 {
+    Mat3::from_cols_array_2d(&item.rows.map(|r| [f32::from_bits(r[0]), f32::from_bits(r[1]), f32::from_bits(r[2])]))
+}
+
 fn launch_wrench(game: &mut rc_game::tick::Game, hand: Transform, velocity: Vec3) {
     let h = &mut game.hero;
     if h.items.slot.state != 2 {
@@ -1276,6 +1288,8 @@ fn launch_wrench(game: &mut rc_game::tick::Game, hand: Transform, velocity: Vec3
         return;
     };
     place(it, hand, game.item_data.as_ref(), 1.0);
+    // The flight carries the wrench's middle, from where it is in the hand.
+    it.position = (Vec3::from_array(it.position) + wrench_middle(it, item_axes(it))).to_array();
     let dir = game_point(velocity.normalize_or_zero());
     it.mstate = rc_game::hero::comet::OUT;
     it.flight = rc_game::hero::comet::Flight {
@@ -1348,7 +1362,7 @@ fn present(
     support: Res<super::blaster::SupportGrip>,
     level: Res<crate::Level>,
     melee: Res<Melee>,
-    (time, fixed, mut trace): (Res<Time<Real>>, Res<Time<Fixed>>, Local<WrenchTrace>),
+    (time, fixed, mut trace, input): (Res<Time<Real>>, Res<Time<Fixed>>, Local<WrenchTrace>, Res<HandInput>),
     mut flight_report: Local<Option<u8>>,
 ) {
     for e in &body {
@@ -1392,17 +1406,10 @@ fn present(
     if let (Some(play), Some(root), Some(attach)) = (play, root, attach.as_mut()) {
         if !gameplay(&mode) {
             attach.tracked_items(&[]);
-            attach.tracked_hands([None; 2], &play, None, false);
-            attach.tracked_body_hands([None; 2], 0);
+            attach.tracked_hands([None; 2], &play, None, false, [0.0; 2]);
+            attach.tracked_body_hands([None; 2], 0, [0.0; 2], &play.game.hero);
             return;
         }
-        // Clank / Giant Clank in first person: his own hands on the controllers (his body is not drawn).
-        let body = play.game.hero.mode;
-        let first_person = matches!(body, 1 | 2) && !play.death_pending;
-        attach.tracked_body_hands(
-            [0, 1].map(|side| motion.hands[side].filter(|_| first_person).map(|h| root.mul_transform(h))),
-            body,
-        );
         let mut item = play.game.hero.items.slot.item.clone();
         let holding_wrench = motion.wrench_held();
         if let Some(it) = item.as_mut() {
@@ -1437,19 +1444,23 @@ fn present(
                 );
                 // The game's planned path, sampled between its 60 Hz ticks and aimed at the hand as it is now.
                 let p = (back.progress + back.step * fixed.overstep_fraction()).min(1.0);
-                let (at, spin) = back.at(p, caught.position);
-                it.position = at;
+                let held = item_axes(&caught);
+                let target = Vec3::from_array(caught.position) + wrench_middle(&caught, held);
+                let (at, spin) = back.at(p, target.to_array());
                 // The spin is phased onto the held heading; the last fifth only settles the hand's tilt,
                 // so the blend never chases a fast spin through the opposite orientation.
                 let settle = ((p - 0.8) / 0.2).clamp(0.0, 1.0);
                 let settle = settle * settle * (3.0 - 2.0 * settle);
-                let held = Mat3::from_cols_array_2d(&caught.rows.map(|r| {
-                    [f32::from_bits(r[0]), f32::from_bits(r[1]), f32::from_bits(r[2])]
-                }));
                 let rotation = Quat::from_rotation_z(spin)
                     .slerp(Quat::from_mat3(&held).normalize(), settle);
-                let rows = Mat3::from_quat(rotation).to_cols_array_2d();
+                let rows = Mat3::from_quat(rotation);
+                // The path carries the middle; the model's origin is the grip end.
+                it.position = (Vec3::from(at) - wrench_middle(it, rows)).to_array();
+                let rows = rows.to_cols_array_2d();
                 it.rows = rows.map(|r| [r[0].to_bits(), r[1].to_bits(), r[2].to_bits(), 0]);
+            } else if it.o_class == rc_game::hero::melee::WRENCH_CLASS && it.mstate != 0 {
+                // Outbound (and the turnaround tick before the return is planned): the flight carries the middle.
+                it.position = (Vec3::from_array(it.position) - wrench_middle(it, item_axes(it))).to_array();
             }
             trace.frame(it, &play.game, time.elapsed_secs_f64(), fixed.overstep_fraction());
             if super::blaster::supported(play.game.hero.items.slot.id)
@@ -1536,6 +1547,7 @@ fn present(
                 }
             }
         }
+        let grips = [input.left_grip, input.grip].map(|g| g.unwrap_or(0.0));
         let docked = super::gadget_socket::docked(&play, attach);
         let plugged = docked.is_some();
         if let Some(docked) = docked {
@@ -1607,6 +1619,17 @@ fn present(
             &play,
             item.as_ref().filter(|_| holding_weapon),
             support.held || plugged,
+            grips,
+        );
+        // Clank / Giant Clank in first person: his own hands on the controllers (his body is not drawn). After the
+        // item pass, which hides every hand-slot item it is not given.
+        let body = play.game.hero.mode;
+        let first_person = matches!(body, 1 | 2) && !play.death_pending;
+        attach.tracked_body_hands(
+            [0, 1].map(|side| motion.hands[side].filter(|_| first_person).map(|h| root.mul_transform(h))),
+            body,
+            grips,
+            &play.game.hero,
         );
     }
 }
