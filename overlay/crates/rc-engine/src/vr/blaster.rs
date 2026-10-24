@@ -150,22 +150,16 @@ fn grant(
     {
         return;
     }
-    let root = crate::level_load::extracted_root();
-    let load = || -> anyhow::Result<rc_formats::save_game::ItemTables> {
-        let elf = crate::disc_source::read_path(&root, &root.join("boot/SCUS_971.99"))?;
-        let overlay =
-            crate::disc_source::level_file(&root, crate::level_load::level_index(), "overlay.bin")?;
-        Ok(rc_formats::save_game::ItemTables::load(&elf, &overlay)?)
-    };
-    match load() {
-        Ok(tables) => {
+    // The level's item tables, read once per level (crate::gameplay).
+    match crate::gameplay::item_tables_for(crate::level_load::level_index()) {
+        Some(tables) => {
             for id in gold {
                 saved.0.global.gold_weapons[id as usize] =
                     (settings.mode == super::LaunchMode::DebugGold) as u8;
             }
             for id in weapons {
                 if saved.0.global.owned[id] == 0 {
-                    saved.0.give_item(id, false, &tables, &mut session.0);
+                    saved.0.give_item(id, false, tables, &mut session.0);
                 }
             }
             if !*filled {
@@ -199,9 +193,9 @@ fn grant(
                 );
             }
         }
-        Err(e) => {
+        None => {
             *failed = true;
-            error!("VR_GAME could not prepare starting weapons/ammo: {e:#}");
+            error!("VR_GAME could not prepare starting weapons/ammo: no item tables for this level");
         }
     }
 }
@@ -425,7 +419,7 @@ fn aim(
     let Some(mut muzzle) = place(&mut item, hand, data, support.primary) else {
         return;
     };
-    let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + rig.surface_up() * 1.6;
+    let eye = rig.body_eye(&p.game);
     if let Some(attach) = attach.as_ref() {
         let mut probes = attach.tracked_item_shape(&item);
         probes.push((hand.translation, 0.11 * settings.units_per_metre));

@@ -39,7 +39,7 @@ pub(super) fn docked(
     if !active || (id == 22 && sucking(p)) {
         return None;
     }
-    attach.socket_item(p, p.game.hero.items.slot.item.as_ref()?, target, !active)
+    attach.socket_item(p, p.game.hero.items.slot.item.as_ref()?, target, false)
 }
 /// The Hydrodisplacer use is a suck (Ratchet's 0x46..0x48), or about to be one; `hydro_full` flips mid-use.
 fn sucking(p: &crate::gameplay::Play) -> bool {
@@ -317,7 +317,7 @@ fn engage(
     insertion.previous = Some((now, local_hand));
     let forward = *hand.forward();
     let units = settings.units_per_metre;
-    let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + Vec3::Y * 1.6;
+    let eye = rig.body_eye(&p.game);
     if !unobstructed(p, coll, eye, hand.translation) {
         insertion.contact = None;
         return;

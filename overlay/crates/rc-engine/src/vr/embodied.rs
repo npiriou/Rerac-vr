@@ -125,6 +125,13 @@ impl Melee {
         self.safe_head = None;
         self.wall_armed = false;
     }
+    /// Forget the stroke in progress: its contact, the last sample, and where the swing and the Hyper Strike started.
+    fn reset_stroke(&mut self) {
+        self.clear_contact();
+        self.previous = None;
+        self.swing_from = None;
+        self.down_from = None;
+    }
 }
 // Presentation only: a short displacement opposite the incoming physical stroke.
 // Physics history never includes this offset, so the animation cannot manufacture another hit.
@@ -220,8 +227,6 @@ pub(super) fn capture(
         return;
     };
     let now = time.elapsed_secs_f64();
-    // A caught wrench is held only while the grip is squeezed (`held` latched by the press); otherwise it is
-    // put away, as after a slow release.
     if motion.release.is_some_and(|(_, _, t)| now - t > 0.12) {
         motion.release = None;
     }
@@ -270,15 +275,18 @@ pub(super) fn capture(
         motion.release = None;
     }
     let value = grip.unwrap_or(0.0);
-    let right_ledge = play.as_ref().is_some_and(|p| {
-        p.game.hero.tracked.grabbed[1] || matches!(p.game.hero.state, 0x18..=0x1b)
+    // Another body (Clank's fists) or a right hand on a ledge: the right grip does not take the wrench.
+    let no_wrench = play.as_ref().is_some_and(|p| {
+        p.game.hero.mode != 0 || p.game.hero.tracked.grabbed[1] || matches!(p.game.hero.state, 0x18..=0x1b)
     });
-    let reserved = right_ledge
+    let reserved = no_wrench
         || input
             .as_ref()
             .and_then(|i| i.left_grip)
             .is_some_and(|v| v > 0.5)
         || play.as_ref().is_some_and(|p| p.game.hero.f838 != 0);
+    // The wrench (a caught one too) is held only while the grip is squeezed (`held` latched by the press);
+    // otherwise it is put away, as after a slow release.
     if value > 0.6 {
         if !motion.grip_down {
             motion.grip_suppressed = reserved;
@@ -288,7 +296,7 @@ pub(super) fn capture(
         }
         motion.grip_down = true;
     }
-    if right_ledge {
+    if no_wrench {
         motion.grip_suppressed = true;
         motion.held = false;
         motion.equip_wrench = false;
@@ -296,8 +304,14 @@ pub(super) fn capture(
         motion.release = None;
     }
     if value < 0.35 && motion.grip_down {
-        if motion.held && !motion.grip_suppressed && motion.velocity.length() >= 1.0 {
+        // A throw is a deliberate fling (2.5 m/s over the last 80 ms, about 20 cm): a grip loosened while the hand
+        // drifts or follows through puts the wrench away instead.
+        let speed = motion.velocity.length();
+        if motion.held && !motion.grip_suppressed && speed >= WRENCH_THROW_SPEED {
             motion.release = Some((hand, motion.velocity, now));
+        }
+        if motion.held && !motion.grip_suppressed && speed >= 1.0 {
+            println!("VR_GAME wrench_release speed={speed:.2} thrown={}", speed >= WRENCH_THROW_SPEED);
         }
         motion.held = false;
         motion.grip_down = false;
@@ -375,7 +389,7 @@ fn rigid_wrench_pose(item: &mut HandItem, data: Option<&ItemData>) {
 fn place(item: &mut HandItem, transform: Transform, data: Option<&ItemData>, stretch: f32) {
     rigid_wrench_pose(item, data);
     if let Some(class) = data.and_then(|d| d.class(item.o_class)) {
-        item.scale = class.scale * 1.20;
+        item.scale = class.scale * WRENCH_SCALE;
     }
     // The authored grip frame points the shaft up; turn it forward along the controller (-Z).
     // Rotate about the palm, then compensate the authored anchor so the handle stays in the hand.
@@ -453,7 +467,15 @@ fn obstruction(
         Some(p.game.hero_moby),
     )
 }
-fn crate_class(class: i16) -> bool {
+/// The held wrench's size against the native model.
+const WRENCH_SCALE: f32 = 1.20;
+
+/// A fast swing lengthens the drawn wrench a little (up to 15 % from 0.6 to 3.6 m/s).
+fn swing_stretch(velocity: Vec3) -> f32 {
+    1.0 + ((velocity.length() - 0.6) / 3.0).clamp(0.0, 1.0) * 0.15
+}
+
+pub(super) fn crate_class(class: i16) -> bool {
     (500..=540).contains(&class)
 }
 
@@ -679,10 +701,10 @@ fn interact(
         gameplay(&mode) && p.game.hero.mode == 0 && !p.death_pending && p.game.hero.health > 0;
     if !ready {
         motion.release = None;
-        melee.clear_contact();
-        melee.previous = None;
-        melee.swing_from = None;
-        melee.down_from = None;
+        melee.reset_stroke();
+        melee.crank = None;
+        melee.crank_previous = None;
+        melee.crank_far_since = None;
         p.game.hero.items.tracked_hand = None;
         return;
     }
@@ -719,18 +741,14 @@ fn interact(
     }
     let Some(hand) = motion.hands[1] else {
         p.game.hero.items.tracked_hand = None;
-        melee.clear_contact();
-        melee.previous = None;
-        melee.swing_from = None;
-        melee.down_from = None;
+        melee.reset_stroke();
         return;
     };
     let world_hand = root.mul_transform(hand);
     let Some(coll) = level.0.collision.as_ref() else {
         return;
     };
-    let eye =
-        crate::tfrag_render::game_to_bevy(p.game.hero.position()) + root.rotation * Vec3::Y * 1.6;
+    let eye = rig.body_eye(&p.game);
     let clear = unobstructed(p, coll, eye, world_hand.translation);
     let Some(mut item) = p
         .game
@@ -743,32 +761,28 @@ fn interact(
         .cloned()
     else {
         p.game.hero.items.tracked_hand = None;
-        melee.clear_contact();
-        melee.previous = None;
+        melee.reset_stroke();
         return;
     };
     if melee.revision != rig.revision
         || melee.level != crate::level_load::level_index()
         || p.game.counter < melee.last_tick
     {
-        // A snap turn changes the view, not the wrench's attachment to the bolt.
-        let crank = (melee.level == crate::level_load::level_index()
-            && p.game.counter >= melee.last_tick)
-            .then_some(melee.crank)
-            .flatten();
+        // A snap turn changes the view, not the wrench's attachment to the bolt nor the hit cooldowns.
+        let same = melee.level == crate::level_load::level_index() && p.game.counter >= melee.last_tick;
+        let crank = same.then_some(melee.crank).flatten();
+        let (hits, slam_until) = if same { (std::mem::take(&mut melee.hits), melee.slam_until) } else { default() };
         *melee = Melee {
             revision: rig.revision,
             level: crate::level_load::level_index(),
             crank,
+            hits,
+            slam_until,
             ..default()
         };
     }
     melee.last_tick = p.game.counter;
-    let stretch = if item.mstate == 0 {
-        1.0 + ((motion.velocity.length() - 0.6) / 3.0).clamp(0.0, 1.0) * 0.15
-    } else {
-        1.0
-    };
+    let stretch = if item.mstate == 0 { swing_stretch(motion.velocity) } else { 1.0 };
     place(&mut item, world_hand, p.game.item_data.as_ref(), stretch);
     if crank_wrench(
         p,
@@ -782,10 +796,7 @@ fn interact(
     ) {
         p.game.hero.items.tracked_hand = Some((item.position, item.rows));
         p.game.hero.items.tracked_class = item.o_class;
-        melee.clear_contact();
-        melee.previous = None;
-        melee.swing_from = None;
-        melee.down_from = None;
+        melee.reset_stroke();
         return;
     }
     let old_safe = melee.safe_head.map(|v| root.transform_point(v));
@@ -807,19 +818,13 @@ fn interact(
         native.scale = item.scale;
     }
     if bomb.id.is_some() || using_hands {
-        melee.clear_contact();
-        melee.previous = None;
-        melee.swing_from = None;
-        melee.down_from = None;
+        melee.reset_stroke();
         motion.release = None;
         return;
     }
     let release = motion.release.take();
     if item.mstate != 0 || !motion.wrench_held() {
-        melee.clear_contact();
-        melee.previous = None;
-        melee.swing_from = None;
-        melee.down_from = None;
+        melee.reset_stroke();
         if item.mstate == 0 && clear {
             if let Some((pose, velocity, _)) = release {
                 let launch = root.mul_transform(pose);
@@ -1147,7 +1152,7 @@ fn seat_wrench(item: &mut HandItem, data: &ItemData, socket: CrankSocket, hand: 
         item.anim.t = 0.0;
         item.snapshot = None;
     }
-    item.scale = class.scale * 1.20;
+    item.scale = class.scale * WRENCH_SCALE;
     let k = item.scale / 1024.0;
     let nut = Vec3::from_array(game_point(socket.nut));
     let palm = Vec3::from_array(game_point(hand.translation));
@@ -1279,6 +1284,9 @@ fn item_axes(item: &HandItem) -> Mat3 {
     Mat3::from_cols_array_2d(&item.rows.map(|r| [f32::from_bits(r[0]), f32::from_bits(r[1]), f32::from_bits(r[2])]))
 }
 
+/// The hand speed at the grip's release that throws the wrench (metres / second).
+const WRENCH_THROW_SPEED: f32 = 2.5;
+
 fn launch_wrench(game: &mut rc_game::tick::Game, hand: Transform, velocity: Vec3) {
     let h = &mut game.hero;
     if h.items.slot.state != 2 {
@@ -1315,6 +1323,8 @@ fn launch_wrench(game: &mut rc_game::tick::Game, hand: Transform, velocity: Vec3
 /// Diagnostics of the thrown wrench around its turnaround: what each rendered frame draws against the 60 Hz game.
 #[derive(Default)]
 struct WrenchTrace {
+    /// `RC_VR_WRENCH_TRACE=1` (read once).
+    enabled: Option<bool>,
     stage: u8,
     since: f64,
     frames: u32,
@@ -1322,7 +1332,8 @@ struct WrenchTrace {
 }
 impl WrenchTrace {
     fn frame(&mut self, it: &HandItem, game: &rc_game::tick::Game, now: f64, overstep: f32) {
-        if it.o_class != rc_game::hero::melee::WRENCH_CLASS {
+        let enabled = *self.enabled.get_or_insert_with(|| std::env::var("RC_VR_WRENCH_TRACE").is_ok_and(|v| v == "1"));
+        if !enabled || it.o_class != rc_game::hero::melee::WRENCH_CLASS {
             return;
         }
         if it.mstate != self.stage {
@@ -1483,7 +1494,7 @@ fn present(
                     it,
                     root.mul_transform(hand),
                     play.game.item_data.as_ref(),
-                    1.0 + ((motion.velocity.length() - 0.6) / 3.0).clamp(0.0, 1.0) * 0.15,
+                    swing_stretch(motion.velocity),
                 );
                 if let Some((data, socket)) = play
                     .game
@@ -1494,8 +1505,7 @@ fn present(
                     seat_wrench(it, data, socket, root.mul_transform(hand));
                 } else if holding_wrench && active {
                     if let Some(coll) = level.0.collision.as_ref() {
-                        let eye = crate::tfrag_render::game_to_bevy(play.game.hero.position())
-                            + root.rotation * Vec3::Y * 1.6;
+                        let eye = rig.body_eye(&play.game);
                         let previous = (melee.revision == rig.revision
                             && melee.level == crate::level_load::level_index())
                         .then_some(melee.safe_head)
@@ -1547,6 +1557,12 @@ fn present(
                 }
             }
         }
+        // The right controller untracked: a thrown wrench flies on along the game's own path.
+        if motion.hands[1].is_none() {
+            if let Some(it) = item.as_mut().filter(|i| i.o_class == rc_game::hero::melee::WRENCH_CLASS && i.mstate != 0) {
+                it.position = (Vec3::from_array(it.position) - wrench_middle(it, item_axes(it))).to_array();
+            }
+        }
         let grips = [input.left_grip, input.grip].map(|g| g.unwrap_or(0.0));
         let docked = super::gadget_socket::docked(&play, attach);
         let plugged = docked.is_some();
@@ -1562,11 +1578,14 @@ fn present(
             .as_ref()
             .is_some_and(|i| i.o_class == rc_game::hero::melee::WRENCH_CLASS && i.mstate != 0);
         let mut shown = Vec::with_capacity(2);
-        if active && motion.hands[1].is_some() {
-            if let Some(glove) = bomb_glove.as_ref() {
+        if active {
+            let tracked = motion.hands[1].is_some();
+            if let Some(glove) = bomb_glove.as_ref().filter(|_| tracked) {
                 shown.push(glove);
             }
-            if (!play.game.hero.hand_hidden() || plugged)
+            // A thrown wrench flies on while the right controller is not tracked.
+            if (tracked || flying)
+                && (!play.game.hero.hand_hidden() || plugged)
                 && (flying || !play.game.hero.tracked.grabbed[1])
                 && (blaster
                     || flying

@@ -104,10 +104,7 @@ fn update(
     }
     let distance = punch.rest.map_or(0.0, |p| hand.translation.distance(p));
     let outward = (hand.translation
-        - root.compute_affine().inverse().transform_point3(
-            crate::tfrag_render::game_to_bevy(p.game.hero.position())
-                + root.rotation * Vec3::Y * 1.1,
-        ))
+        - root.compute_affine().inverse().transform_point3(rig.body_eye(&p.game)))
     .normalize_or_zero();
     let velocity = motion.velocity();
     let extending =

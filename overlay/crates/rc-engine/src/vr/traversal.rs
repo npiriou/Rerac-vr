@@ -135,8 +135,7 @@ fn drive(
                 if let (Some(anchor), Some(actual)) = (t.anchors[side], t.hands[side]) {
                     // Absolute anchor error closes after the body moves. Integrating controller
                     // deltas alone never notices an automatic native hang correction or drift.
-                    ledge_motion += crate::tfrag_render::game_to_bevy(anchor)
-                        - crate::tfrag_render::game_to_bevy(actual);
+                    ledge_motion += Vec3::from_array(anchor) - Vec3::from_array(actual);
                     grips += 1;
                 }
                 if start.y - hand.translation.y > 0.12 && gestures.velocity[side].y < -0.9 {
@@ -165,17 +164,14 @@ fn drive(
         let drag = velocity.normalize_or_zero().dot(normal).abs();
         force -= root.rotation * velocity * drag * 0.65 * settings.units_per_metre;
     }
-    t.ledge_delta = game_point(if grips > 0 {
-        ledge_motion / grips as f32
-    } else {
-        Vec3::ZERO
+    t.ledge_delta = if grips > 0 { (ledge_motion / grips as f32).to_array() } else { [0.0; 3] };
+    // Both hands shove down together (a small window accommodates the two independently sampled hands): a pull-up
+    // takes both arms.
+    let shoved = (0..2).all(|s| {
+        hanging && t.grips[s] && motion.hands[s].is_some() && gestures.shove_at[s].is_some_and(|a| now - a < 0.18)
     });
-    // Every gripping hand shoves down together (a small window accommodates the two independently sampled hands).
-    let gripping: Vec<usize> = (0..2).filter(|&s| hanging && t.grips[s] && motion.hands[s].is_some()).collect();
-    let times: Vec<f64> = gripping.iter().filter_map(|&s| gestures.shove_at[s]).filter(|&a| now - a < 0.18).collect();
-    let (first, last) = times.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &a| (lo.min(a), hi.max(a)));
-    if !gripping.is_empty() && times.len() == gripping.len() && last - first <= 0.18 {
-        println!("VR_GAME ledge_shove hands={}", gripping.len());
+    if shoved {
+        println!("VR_GAME ledge_shove hands=2");
         t.ledge_jump = true;
         gestures.shove_at = [None; 2];
     }

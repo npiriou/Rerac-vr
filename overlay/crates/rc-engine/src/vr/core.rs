@@ -202,7 +202,7 @@ impl Bvh {
                 let d=e2.dot(r)*inv;
                 if d>=0.001 && d<=best {
                     let mut normal=t.cross().normalized()?;
-                    if normal.dot(dir)>0.0 { normal=-normal; }
+                    if normal.dot(dir)>0.0 { normal = -normal; }
                     best=d; result=Some(Hit {distance:d,point:origin+dir*d,normal});
                 }
             }

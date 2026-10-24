@@ -59,7 +59,7 @@ fn clear_aim(data:&SceneData,head:V3,hand:V3)->bool {
 fn align_to_spawn(s:&mut InteractionState,head:&Transform,spawn:V3) {
     let forward=head.rotation*Vec3::NEG_Z;
     let yaw=(-forward.x).atan2(-forward.z);
-    s.rig.yaw=-yaw;
+    s.rig.yaw = -yaw;
     s.rig.teleport(spawn,to_v3(head.translation));
     s.calibrated=true;
     s.fire.cancel();s.teleport.cancel();s.recenter.cancel();s.snap=SnapGate::default();

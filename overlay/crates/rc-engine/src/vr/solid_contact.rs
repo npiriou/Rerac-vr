@@ -54,7 +54,7 @@ impl MobySource for Solids<'_> {
         let mut m = self.0.moby(id)?;
         // Preserve native destroyed/disabled collision flags. Enemies remain damage targets,
         // while crate primitive-only colliders must participate in the flagged-only pass.
-        if !m.collision || (m.mode & 0x4000 != 0 && !(500..=540).contains(&m.o_class)) {
+        if !m.collision || (m.mode & 0x4000 != 0 && !super::embodied::crate_class(m.o_class)) {
             return None;
         }
         m.mode |= 0x4000;
@@ -229,7 +229,7 @@ fn present(
     let Some(root) = rig.root_for(&p.game, settings.units_per_metre) else {
         return;
     };
-    let eye = bevy_point(p.game.hero.position()) + rig.surface_up() * 1.6;
+    let eye = rig.body_eye(&p.game);
     let shapes = a.tracked_contact_shapes();
     let flying = p
         .game

@@ -26,6 +26,8 @@ pub struct Tracked {
     pub ledge_jump: bool,
     /// The shove as a pressed ✕ (ticks left of its 17-tick window), honoured by the hang (super::ledge).
     pub ledge_jump_buffer: i32,
+    /// Ticks the hands have held the current ledge (a pull-up waits for [`LEDGE_SETTLE`]).
+    pub ledge_held: i32,
     pub ledge_delta: [f32; 3],
     pub anchors: [Option<[f32; 3]>; 2],
     /// World velocity requested by submerged hand strokes, units / second.
@@ -105,6 +107,15 @@ impl WrenchReturn {
     }
 }
 
+/// The VR eye heights above the feet: Ratchet's and Clank's eyes (their models' eye vertices in the idle pose; the
+/// native first-person camera sits about 1.45 times higher, 1.6 and 0.9).
+pub const RATCHET_EYE: f32 = 1.1;
+pub const CLANK_EYE: f32 = 0.63;
+
+/// The grab settles into the hang before a pull-up counts, as the native grab animation (0.4 s) must end before ✕
+/// climbs; shoves made while grabbing are dropped, not buffered.
+const LEDGE_SETTLE: i32 = 30;
+
 /// Hanging from a ledge with the hands: Ratchet's grab / hang / shimmies, Clank's (not his climb 0x4c, which lies
 /// between them).
 pub fn ledge_hold(state: i32) -> bool {
@@ -112,9 +123,14 @@ pub fn ledge_hold(state: i32) -> bool {
 }
 
 impl Hero {
-    /// The body's hang, fall and ledge-climb states (Clank's in body 1).
-    fn ledge_ids(&self) -> (i32, i32, i32) {
-        if self.mode == 1 { (0x4b, 0x45, 0x4c) } else { (0x19, 6, 0x1c) }
+    /// A VR pull-up (A or the shove) needs both hands on the ledge and a settled hang ([`LEDGE_SETTLE`]).
+    pub fn ledge_climb_ready(&self) -> bool {
+        self.tracked.grabbed == [true; 2] && self.tracked.ledge_held >= ticks(LEDGE_SETTLE)
+    }
+
+    /// The body's hang and fall states (Clank's in body 1).
+    fn ledge_ids(&self) -> (i32, i32) {
+        if self.mode == 1 { (0x4b, 0x45) } else { (0x19, 6) }
     }
 
     pub(super) fn tracked_free_facing(&self) -> bool {
@@ -177,7 +193,7 @@ impl Hero {
         if !self.tracked.enabled || !matches!(self.mode, 0 | 1) || self.health <= 0 || self.frozen != 0 {
             return false;
         }
-        let (hang, fall, _) = self.ledge_ids();
+        let (hang, fall) = self.ledge_ids();
         if !matches!(self.state, 0x18..=0x1c | 0x4a..=0x4e)
             && ledge_hold(self.prev_state)
             && (0..2).any(|s| self.tracked.grabbed[s] && self.tracked.grips[s])
@@ -225,8 +241,16 @@ impl Hero {
                 self.f500 = ticks(20) as i16;
                 return true;
             }
+            self.tracked.ledge_held += 1;
             if std::mem::take(&mut self.tracked.ledge_jump) {
-                self.tracked.ledge_jump_buffer = ticks(17);
+                if self.ledge_climb_ready() {
+                    self.tracked.ledge_jump_buffer = ticks(17);
+                } else {
+                    println!(
+                        "VR_GAME ledge_shove dropped held={} grabbed={:?}",
+                        self.tracked.ledge_held, self.tracked.grabbed
+                    );
+                }
             } else {
                 self.tracked.ledge_jump_buffer = (self.tracked.ledge_jump_buffer - 1).max(0);
             }
@@ -236,6 +260,7 @@ impl Hero {
             self.tracked.ledge_delta = [0.0; 3];
             self.tracked.ledge_jump = false;
             self.tracked.ledge_jump_buffer = 0;
+            self.tracked.ledge_held = 0;
             if self.f838 != 0 {
                 let anchor = self.tracked_ledge_anchor();
                 for side in 0..2 {

@@ -89,7 +89,6 @@ pub(crate) fn before_level_swap(world: &mut World) -> bool {
         // The destination starts building DURING the animated flight. Keep the departure actor
         // simulation separate while the new planet's lazy setup and GPU resources are prepared.
         // The caller selects this path only after the flight has started presenting.
-        drop(h);
         let flight = world.resource::<crate::travel_render::Travel>().space_loading();
         let mut h = world.resource_mut::<Hold>();
         if flight {

@@ -616,3 +616,28 @@ The thrown wrench's tracked spin is wrapped to ±π: on long throws it grew past
 On Rilgar, a lurker holding the hidden Ratchet 20 above itself parks the eye at the last living viewpoint. The hoverboard turns the current gaze to the board's heading at its start and at each respawn, so the race no longer starts backwards. Room-scale steps stop while a carrier (hover car, Kerwan transports, ferries, path platforms) holds Ratchet with its edge brake, so physical steps no longer push him off a taxi. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-184404.log`. SHA-256: `B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84`.
+
+
+## Ratchet's eye at 1.1 m
+
+Ratchet's VR eye sits 1.1 above his feet, his own eye height, instead of the 1.6 of the native first-person camera, in gameplay and in cutscenes (0.18 above his head attach). The hanging and cable eyes are capped at it, the crouched eye is 0.6, and the line-of-sight checks from the eye to the hands use the same height. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-185513.log`. SHA-256: `839AE147FEEB1579632EBF0C4142C6CA0A1C049B6D8F47C6351F086ED2F346C8`.
+
+
+## Clank's eye height, the two-hand pull-up, a firmer wrench throw and the taxis
+
+Clank's VR eye sits 0.63 above his feet, where his model's eyes are in the idle pose (measured the same way, Ratchet's are at 1.09-1.10), in gameplay and in his scenes. A ledge pull-up, for Ratchet and for Clank, needs both hands on the ledge and a settled hang (30 ticks, as the native grab animation must end before ✕ climbs); shoves made earlier are dropped. The wrench is thrown only by a release at 2.5 m/s or more.
+
+Carriers no longer eject Ratchet: the VR thin-floor sweep is skipped on the ticks a carrier moves him. It swept from the carrier's old floor and left him a few centimetres above the carried one on descents, an airborne tick that detached the carry. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-192636.log`. SHA-256: `C2B6D5DFBE6F7866A586AA0349F00C70BFC84A6E0305EE3109777EA253117B8A`.
+
+
+## Review fixes and cleanup
+
+A review of the VR layer fixed what was wrong without a headset session. The eye-height blend ran twice per frame and now uses the frame's dt; a sloped rail pitches about its own side axis instead of rolling the horizon for a player recentred facing elsewhere; leaving a rail turns the lean into a room-scale step instead of a jump of the view. One body-eye helper now serves the root, the death and cinematic fallbacks and every eye-to-hand line-of-sight test. A snap turn no longer fires when a stick still pushed leaves quick select, the shop or a menu.
+
+Clank's grip no longer arms Ratchet's wrench, death releases the bolt crank, a thrown wrench keeps flying while the right controller is untracked, the Visibomb monitor hides when its pose is missing, and the gold Decoy Glove throws gold decoys. Native-path exactness was restored for the Walloper's glow point and the flight sky. 137 comment lines corrupted by a cp1252 re-save were restored, and duplicated constants and dead code were removed. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-195121.log`. SHA-256: `895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7`.

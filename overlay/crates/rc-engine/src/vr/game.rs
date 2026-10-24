@@ -39,12 +39,14 @@ use std::sync::{
 };
 
 pub(super) const PANEL_LAYER: usize = 62;
-/// The original first-person eye heights above the feet of Clank and Giant Clank (Ratchet's is 1.6).
-pub(super) const CLANK_EYE: f32 = 0.9;
+/// The eye heights above the feet (rc_game::hero::tracked), and Giant Clank's original first-person eye.
+pub(super) use rc_game::hero::tracked::{CLANK_EYE, RATCHET_EYE};
 pub(super) const GIANT_CLANK_EYE: f32 = 9.5;
 /// Clank's ledge climb jumps 1.55 from the hang, its apex 0.85 above the lip (Ratchet's: 0.6): the eye rises at most
 /// this far above the lip while the body keeps the native arc.
 const CLANK_CLIMB_RISE: f32 = 0.3;
+/// How fast the eye height follows a posture change (metres per second).
+const EYE_BLEND: f32 = 4.0;
 #[derive(Component, Clone, ExtractComponent)]
 pub struct GameEye;
 #[derive(Component, Clone, ExtractComponent)]
@@ -74,7 +76,6 @@ pub(super) struct Rig {
     cinematic_root: Option<Transform>,
     last_live_eye: Option<Vec3>,
     eye_level: u32,
-    pilot_heading: Option<f32>,
     pilot_rotation: Option<Quat>,
     rail_heading: Option<f32>,
     rail_center: Option<Vec3>,
@@ -105,6 +106,11 @@ impl Rig {
     pub(super) fn surface_up(&self) -> Vec3 {
         self.gravity_frame * Vec3::Y
     }
+    /// While snap turning is blocked, follow the stick without turning: a stick still pushed when it unblocks (quick
+    /// select paging, the shop, a menu) must return to centre before it turns.
+    pub(super) fn hold_snap(&mut self, x: f32) {
+        self.snap_held = x.abs() >= 0.25;
+    }
     pub(super) fn snap(&mut self, x: f32) {
         if x.abs() < 0.25 {
             self.snap_held = false;
@@ -114,6 +120,12 @@ impl Rig {
             self.snap_held = true;
             self.revision = self.revision.wrapping_add(1);
         }
+    }
+    /// The eye the body carries: above the (rail-smoothed) feet by the posture's eye height, less Clank's climb clamp.
+    pub(super) fn body_eye(&self, game: &rc_game::tick::Game) -> Vec3 {
+        self.rail_position
+            .unwrap_or_else(|| crate::tfrag_render::game_to_bevy(game.hero.position()))
+            + self.surface_up() * (self.eye_height.unwrap_or(RATCHET_EYE) - self.climb_drop)
     }
     /// Giant Clank's tracking space is his size: the head, hands and room-scale steps grow with his eye height.
     pub(super) fn body_scale(&self) -> f32 {
@@ -132,13 +144,14 @@ impl Rig {
             center.x = head.x;
             center.z = head.z;
         }
+        // The rail's slope pitches about the rail's side axis in the world (the tracking space's own X axis is only
+        // that axis when the player faced the recentre direction).
+        let heading = self.world_yaw + self.turn;
+        let side = Quat::from_rotation_y(self.rail_heading.unwrap_or(heading)) * Vec3::X;
         let rotation = self.gravity_frame
-            * Quat::from_rotation_y(self.world_yaw + self.turn - self.yaw)
-            * Quat::from_rotation_x(self.rail_pitch);
-        let body_eye = self
-            .rail_position
-            .unwrap_or_else(|| crate::tfrag_render::game_to_bevy(game.hero.position()))
-            + self.gravity_frame * Vec3::Y * (self.eye_height.unwrap_or(1.6) - self.climb_drop);
+            * Quat::from_axis_angle(side, self.rail_pitch)
+            * Quat::from_rotation_y(heading - self.yaw);
+        let body_eye = self.body_eye(game);
         // Death scripts can park the swallowed body far outside the level. Keep the
         // last living viewpoint, with normal head tracking, until the respawn.
         let eye = if eye_parked(game) && self.eye_level == crate::level_load::level_index()
@@ -183,7 +196,6 @@ struct Audit {
     start: std::time::Instant,
     last: std::time::Instant,
     first_tick: Option<u64>,
-    last_tick: u64,
 }
 
 pub fn prepare_game() -> anyhow::Result<()> {
@@ -342,7 +354,6 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
             start: now,
             last: now,
             first_tick: None,
-            last_tick: 0,
         })
         .add_systems(
             RunFixedMainLoop,
@@ -430,7 +441,7 @@ fn warm_destination(
     if !warm.is_empty() { return; }
     let Some(play) = play else { return };
     let Some((target, projection, msaa)) = eyes.iter().next() else { return };
-    let view = Transform::from_translation(crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y * 1.6)
+    let view = Transform::from_translation(crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y * RATCHET_EYE)
         .with_rotation(Quat::from_rotation_y(play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2));
     super::loading::set_destination_view(view);
     // Prepare the destination's visible material pipelines using the real eye target/format.
@@ -476,7 +487,7 @@ fn pace_monitor_cameras(
         || play
             .as_deref()
             .is_some_and(|p| native_panel(p) || crate::visibomb_view::missile_view(Some(p)))
-        || (cadence.every > 0 && cadence.frame % cadence.every == 0)
+        || (cadence.every > 0 && cadence.frame.is_multiple_of(cadence.every))
     {
         return;
     }
@@ -521,7 +532,9 @@ fn reset_session(mut commands: Commands, panels: Query<Entity, With<Panel>>, mut
     for e in &panels {
         commands.entity(e).despawn();
     }
-    *rig = Rig::default();
+    // Keep the revision moving forward: tracking-space caches keyed by it must not match a recycled number.
+    let revision = rig.revision.wrapping_add(1);
+    *rig = Rig { revision, ..default() };
 }
 fn mirror_pass<T: Component + Clone + PartialEq>(
     mut commands: Commands,
@@ -755,7 +768,7 @@ fn align_body(
     let previous = rig
         .previous_head
         .replace(head.translation)
-        .or(rig.rail_center);
+        .or(rig.rail_center.take());
     let Some(previous) = previous else {
         // Rebase after focus/menu changes instead of moving the avatar from an old desk/room pose.
         if let Some(center) = rig.center.as_mut() {
@@ -884,9 +897,7 @@ fn follow_game_camera(
     let cinematic_eye = pilot.map(|(eye, _)| eye).or(actor_eye).or_else(|| {
         // A streamed scene may have no valid Ratchet key on its first frame.
         (scene.running && rig.cinematic_root.is_none()).then(|| {
-            rig.last_live_eye.unwrap_or_else(|| {
-                crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y * 1.6
-            })
+            rig.last_live_eye.unwrap_or_else(|| rig.body_eye(&play.game))
         })
     });
     if let Some(eye) = cinematic_eye {
@@ -896,7 +907,6 @@ fn follow_game_camera(
             rig.pilot_rotation = Some(next);
             next
         } else {
-            rig.pilot_heading = None;
             rig.pilot_rotation = None;
             Quat::from_rotation_y(rig.world_yaw + rig.turn)
         };
@@ -909,7 +919,6 @@ fn follow_game_camera(
         });
     } else if !scene.running {
         rig.cinematic_root = None;
-        rig.pilot_heading = None;
         rig.pilot_rotation = None;
     }
     let boots = &play.game.hero.boots;
@@ -932,8 +941,8 @@ fn follow_game_camera(
             rig.rail_center = Some(head.translation);
         }
     } else {
+        // `rail_center` stays until `align_body` turns the lean around the rail into a room-scale step.
         rig.rail_heading = None;
-        rig.rail_center = None;
     }
     // The board steers toward the gaze (`env.cam_yaw`): its start and its respawns place it along the course, so the
     // current gaze becomes the board's heading, as a recentre does.
@@ -994,7 +1003,7 @@ fn follow_game_camera(
         rig.gravity_frame = (Quat::from_rotation_arc(old_up, up) * rig.gravity_frame).normalize();
     }
     // Switching body (Clank, Giant Clank) takes his eye at once, without the posture blend.
-    let body = play.game.hero.mode.clamp(0, 2) as u8;
+    let body = play.game.hero.mode.clamp(0, 2);
     if rig.body != body {
         rig.body = body;
         rig.eye_height = None;
@@ -1002,33 +1011,36 @@ fn follow_game_camera(
     }
     // Surface swimming uses the native horizontal swimmer's eye height. Blend the posture change;
     // head rotation always remains physically tracked.
+    // Hanging with extended arms puts the eyes below the ledge, not alongside the palms.
+    let hang = |low: f32, high: f32| {
+        (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(low, high)
+    };
     let target_height = if body == 1 {
         if rc_game::hero::tracked::ledge_hold(play.game.hero.state) {
-            // Hanging, the eyes sit below the lip as Ratchet's do (about 0.33 above Clank's feet).
-            (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(0.25, CLANK_EYE)
+            hang(0.25, CLANK_EYE)
         } else {
             CLANK_EYE
         }
     } else if body == 2 {
         GIANT_CLANK_EYE
     } else if matches!(play.game.hero.state, 0x18..=0x1b) {
-        // Hanging with extended arms puts the eyes below the ledge, not alongside the palms.
-        (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(0.45, 1.35)
+        hang(0.45, RATCHET_EYE)
     } else if play.game.hero.state == 0x74 {
         // Leave at least 55 cm above the eyes for the cable and the overhead wrench.
-        (play.game.hero.boots.cable_pt[2] - play.game.hero.position()[2] - 0.55).clamp(0.55, 1.15)
+        (play.game.hero.boots.cable_pt[2] - play.game.hero.position()[2] - 0.55).clamp(0.55, RATCHET_EYE)
     } else if matches!(play.game.hero.group, 0x11 | 0x12) {
         0.45
     } else if play.game.hero.state == 4
         || (play.game.hero.state == 0x73 && play.game.pad.held & rc_game::pad::button::CROUCH != 0)
     {
-        0.85
+        // Crouched: about half the standing eye.
+        0.6
     } else {
-        1.6
+        RATCHET_EYE
     };
     let height = rig.eye_height.unwrap_or(target_height);
     rig.eye_height = Some(
-        height + (target_height - height).clamp(-time.delta_secs() * 2.0, time.delta_secs() * 2.0),
+        height + (target_height - height).clamp(-dt * EYE_BLEND, dt * EYE_BLEND),
     );
     let hero = &play.game.hero;
     rig.climb_drop = if body == 1
@@ -1038,15 +1050,14 @@ fn follow_game_camera(
         (hero.position()[2] - hero.ledge_blk.top_z - CLANK_CLIMB_RISE).max(0.0)
     } else {
         // A climb ending above the clamp (a higher ledge caught) rejoins the body smoothly.
-        (rig.climb_drop - time.delta_secs() * 2.0).max(0.0)
+        (rig.climb_drop - dt * EYE_BLEND).max(0.0)
     };
     if !eye_parked(&play.game)
         && !play.death_pending
         && !scene.running
         && pilot.is_none()
     {
-        rig.last_live_eye =
-            Some(position + rig.gravity_frame * Vec3::Y * rig.eye_height.unwrap_or(1.6));
+        rig.last_live_eye = Some(rig.body_eye(&play.game));
     }
     // The flight is drawn on a separate world layer, about its authored camera, not about the
     // hero left on the departure planet. Keep head-driven pitch/roll and show the actual voyage.
@@ -1131,7 +1142,7 @@ fn sky_policy(
     let (world_clear, world_layers) = main
         .iter()
         .next()
-        .map(|(c, layers)| (c.clear_color.clone(), layers.cloned().unwrap_or_default()))
+        .map(|(c, layers)| (c.clear_color, layers.cloned().unwrap_or_default()))
         .unwrap_or((ClearColorConfig::Default, RenderLayers::default()));
     for (mut c, mut d, mut layers, sky) in &mut cams {
         if sky {
@@ -1158,7 +1169,7 @@ fn sky_policy(
                 world_layers.clone().with(PANEL_LAYER)
             };
             c.order = 11;
-            c.clear_color = if cinema { ClearColorConfig::None } else { world_clear.clone() };
+            c.clear_color = if cinema { ClearColorConfig::None } else { world_clear };
             c.output_mode = CameraOutputMode::Write {
                 blend_state: Some(BlendState::REPLACE),
                 clear_color: ClearColorConfig::None,
@@ -1192,13 +1203,10 @@ fn update_panels(
     mut cinema_anchor: Local<Option<(u64, Transform)>>,
 ) {
     use rc_game::menus::mode::Mode;
-    // Ship/engine movies already exist in the stereo world. Only actual menus, flat video and
-    // gameplay gadget views need the composed frame; a cinematic camera class must not enable it.
-    let menu = match mode.state.mode {
-        Mode::Gameplay => play.as_deref().is_some_and(native_panel),
-        Mode::Menu | Mode::Freeze | Mode::Vendor | Mode::Movie | Mode::Slideshow => true,
-        _ => false,
-    };
+    // Ship/engine movies already exist in the stereo world. Only actual menus and flat video need the composed
+    // frame (gadget views have their own panel, super::spatial_menu); a cinematic camera class must not enable it.
+    let menu = matches!(mode.state.mode, Mode::Menu | Mode::Freeze | Mode::Vendor | Mode::Movie | Mode::Slideshow);
+    let gadget_panel = play.as_deref().is_some_and(native_panel);
     let head = pose(views.as_deref()).unwrap_or_else(|| Transform::from_xyz(0.0, 1.6, 0.0));
     let cinema = matches!(mode.state.mode, Mode::Movie | Mode::Slideshow);
     if cinema {
@@ -1214,7 +1222,7 @@ fn update_panels(
     for (panel, mut t, mut visibility, material) in &mut panels {
         if spatial_pause
             || missile
-            || play.as_deref().is_some_and(native_panel)
+            || gadget_panel
             || (mode.spatial_vendor && mode.state.mode == Mode::Vendor)
         {
             *visibility = Visibility::Hidden;
@@ -1326,7 +1334,6 @@ fn audit(
         }
         audit.last = now;
     }
-    audit.last_tick = tick;
     if let Some(seconds) = settings.preview_seconds {
         if elapsed >= seconds
             && rendered.0.load(Ordering::Relaxed) >= 30

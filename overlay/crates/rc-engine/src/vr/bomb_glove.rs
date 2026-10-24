@@ -61,7 +61,7 @@ fn solid_point(
     let mut pose = point(hand, root, scale);
     let palm = root.mul_transform(hand).translation;
     let eye =
-        crate::tfrag_render::game_to_bevy(p.game.hero.position()) + root.rotation * Vec3::Y * 1.6;
+        crate::tfrag_render::game_to_bevy(p.game.hero.position()) + root.rotation * Vec3::Y * super::game::RATCHET_EYE;
     let probes = [(palm, 0.13 * scale), (pose.translation, 0.15 * scale)];
     pose.translation += super::solid_contact::constrain(p, coll, &probes, eye, history);
     pose
@@ -138,13 +138,18 @@ pub(super) fn glove_class(item: i32) -> i16 {
         17 => mine::GLOVE_CLASS,
         20 => doom_canister::GLOVE_CLASS,
         25 => decoy::GLOVE_CLASS,
-        _ => bomb::GLOVE_CLASS as i16,
+        _ => bomb::GLOVE_CLASS,
     }
 }
-fn object_class(item: i32) -> i16 {
+/// The gold Decoy Glove's decoys are their own class (0x76c), as the native glove's.
+fn gold_decoy(p: &crate::gameplay::Play) -> bool {
+    p.game.hero.weapons.gold.get(decoy::DECOY_GLOVE as usize).is_some_and(|&g| g != 0)
+}
+fn object_class(item: i32, gold: bool) -> i16 {
     match item {
         17 => mine::CLASS,
         20 => doom_canister::CLASS,
+        25 if gold => decoy::GOLD_CLASS,
         25 => decoy::CLASS,
         _ => bomb::BOMB_CLASS,
     }
@@ -168,7 +173,8 @@ fn initialise(p: &mut crate::gameplay::Play, id: usize, item: i32, point: [f32; 
             p.game.mobys.mobys[id].scale = scale * 0.25;
         }
         25 => {
-            decoy::init_held(&mut p.game.mobys, id, &mut p.game.rng, point, false, false);
+            let gold = gold_decoy(p);
+            decoy::init_held(&mut p.game.mobys, id, &mut p.game.rng, point, gold, false);
             decoy::cap_count(&mut p.game.mobys, id);
         }
         _ => bomb::init_held(
@@ -316,7 +322,7 @@ fn update(
         settings.units_per_metre,
         &mut recall.contact,
     );
-    let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + Vec3::Y * 1.6;
+    let eye = rig.body_eye(&p.game);
     if !unobstructed(p, coll, eye, pose.translation) {
         cancel(p, &mut held);
         motion.bomb.press = None;
@@ -335,7 +341,7 @@ fn update(
         return;
     };
     let item = item_id as usize;
-    let object_class = object_class(item_id);
+    let object_class = object_class(item_id, gold_decoy(p));
     if held.id.is_none() && press.is_some() && (motion.bomb.held || release.is_some()) {
         if saved.0.global.owned[item] == 0 || saved.0.global.ammo[item] <= 0 {
             empty(p, game_point(pose.translation));
@@ -487,7 +493,7 @@ pub(super) fn follow_held(
     let Some(coll) = level.0.collision.as_ref() else {
         return;
     };
-    let eye = crate::tfrag_render::game_to_bevy(p.game.hero.position()) + Vec3::Y * 1.6;
+    let eye = rig.body_eye(&p.game);
     if unobstructed(&p, coll, eye, pose.translation) {
         p.tracked_bomb_pose(id, game_point(pose.translation), rotation(&pose));
     }

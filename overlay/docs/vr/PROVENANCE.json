@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_cutscenes_rilgar_mines_build_ready",
+  "status": "native_windows_review_cleanup_build_ready",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84",
+  "latest_build_sha256": "895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Clank's climb height, cutscene eye height, Clank-only cutscenes (Blarg Hydrodisplacer pickup), long wrench throws (no white plane), Umbris mines destroyed by the wrench, the Rilgar lurker death view, the hoverboard race start, riding Rilgar and Kerwan taxis.",
+  "latest_build_physical_validation": "Rail grinding (pitch, leaving a rail), posture eye blends, snap turns after quick select and the shop, Clank's punches, wrench throws with tracking loss, gold decoys, the Visibomb monitor.",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",
@@ -319,6 +319,58 @@
     "recorded_utc": "2026-10-24T11:48:13.839197+00:00",
     "binary_sha256": "B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-184404.log",
+    "headset_tested": false
+  },
+  "ratchet_eye": {
+    "reported_behavior": "The camera sits at 1.6 m while Ratchet's eyes should be at 1.1 m: put the camera at the right height in gameplay and in cutscenes.",
+    "changes": [
+      "Ratchet's VR eye is 1.1 above his feet (RATCHET_EYE) instead of 1.6, in gameplay and as the fallback eye; the hanging and cable eyes are capped at it and the crouched eye is 0.6 (about half, as before).",
+      "Cutscenes: the eye is 0.18 above Ratchet's head attach (about 0.92 above his feet), so a standing actor sees from 1.1.",
+      "The line-of-sight checks from the eye to the hands (blaster, Bomb Glove, wrench, gadget socket, solid contact) and the loading destination view use the same eye height."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Ratchet's eye height on foot, hanging, crouched, on cables and in cutscenes; reach of the floor and of low objects with the hands.",
+    "recorded_utc": "2026-10-24T11:57:30.950297+00:00",
+    "binary_sha256": "839AE147FEEB1579632EBF0C4142C6CA0A1C049B6D8F47C6351F086ED2F346C8",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-185513.log",
+    "headset_tested": false
+  },
+  "clank_eye_ledges_taxis": {
+    "reported_behavior": "Clank's eyes should be at their real height (measured 0.63 m on his model); a ledge pull-up should wait as in the real game and need both hands (Ratchet and Clank); the wrench is thrown too easily, often by accident; Ratchet is still ejected from taxis (Rilgar, Kerwan), even standing still.",
+    "changes": [
+      "Clank's VR eye is 0.63 above his feet (his model's eye vertices in the idle pose; Ratchet's measure 1.09-1.10 the same way) instead of the native first-person camera's 0.9, in gameplay and in Clank's scenes.",
+      "Ledge pull-up (Ratchet and Clank): only after the hands have held the ledge for 30 ticks (the native grab animation must end before \u2715 climbs) and only with both hands on it; shoves made earlier are dropped, not buffered; the shove needs both arms.",
+      "Wrench throw: the grip's release throws only at 2.5 m/s of hand speed (was 1.0); slower releases put it away. Each release is logged with its speed.",
+      "Taxis and carriers: the VR thin-floor sweep is skipped on the ticks a carrier moves the hero. It swept from where the carrier's floor was and set him a few centimetres above the carried floor on descents: an airborne tick detached the carry and he slid off. A log marks any airborne tick while carried."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Clank's eye height, the pull-up delay and two-hand rule on both bodies, deliberate and accidental wrench throws, Rilgar and Kerwan taxi rides (no VR_GAME carried_airborne lines while riding).",
+    "recorded_utc": "2026-10-24T12:30:42.655383+00:00",
+    "binary_sha256": "C2B6D5DFBE6F7866A586AA0349F00C70BFC84A6E0305EE3109777EA253117B8A",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-192636.log",
+    "headset_tested": false
+  },
+  "review_cleanup": {
+    "reported_behavior": "No headset available: review the VR code for bugs and sloppy code, fix them and clean up.",
+    "changes": [
+      "Rig: the eye-height blend and Clank's climb clamp decay ran twice per frame (the camera system runs in PreUpdate and after the fixed loop); they now use the frame's own dt, at the 4 m/s the double run gave.",
+      "Rig: the rail's slope pitches about the rail's side axis in the world, not about the tracking space's X axis (a player recentred facing elsewhere got a horizon roll on sloped rails).",
+      "Rig: leaving a rail turns the lean around it into a room-scale step instead of jumping the view; the body eye (rail-smoothed feet, posture eye height, climb clamp) is one helper used by the root, the parked death eye, the cinematic fallback and every eye-to-hand line-of-sight test (wrench, Walloper, Blaster, Bomb Glove, gadget socket, solid contact).",
+      "Rig: a recreated XR session keeps revisions increasing (caches keyed by them); the native-panel moby scan runs once per frame; unused fields removed.",
+      "Input: snap turning blocked (quick select, shop, puzzle, menus) follows the stick without turning, so a stick still pushed when it unblocks no longer turns 30 degrees; Giant Clank's missiles ignore a trigger press already used by a menu; the shop's dead trigger-CROSS path and stale comments removed.",
+      "Wrench: Clank's and Giant Clank's right grip no longer arms the wrench (a punch could print releases, pulse, or force the wrench on return to Ratchet); death or another body lets go of the bolt crank; another item in hand forgets the stroke in progress; a snap turn keeps the hit cooldowns; the thrown wrench keeps flying while the right controller is untracked; the per-frame wrench trace only with RC_VR_WRENCH_TRACE=1.",
+      "Visibomb monitor: hidden whenever its pose cannot be built instead of staying frozen in the world.",
+      "Gold Decoy Glove: VR throws spawn gold decoys (class 0x76c) as the native glove does.",
+      "Native exactness: the Walloper's glow point is the native one without a tracked fist; the flight sky rebind only for VR's preloaded destination.",
+      "Eye heights live in rc_game::hero::tracked (RATCHET_EYE 1.1, CLANK_EYE 0.63), shared by the rig, the scenes and the wrench sparkle clearance.",
+      "137 comment lines corrupted by a cp1252 re-save (hero/fx.rs, ledge.rs, platform.rs, moby_attach.rs, particle.wgsl) restored to their original text.",
+      "Smaller cleanups: shared stroke reset, swing stretch and wrench scale, crate class test, ledge ids, named haptic pack owners, item tables read once per level, clippy notes."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check, clippy on the VR files and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Rail grinding (pitch, leaving a rail), posture eye blends, snap turns after quick select and the shop, Clank's punches, wrench throws with tracking loss, gold decoys, the Visibomb monitor.",
+    "recorded_utc": "2026-10-24T12:54:59.264432+00:00",
+    "binary_sha256": "895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-195121.log",
     "headset_tested": false
   }
 }

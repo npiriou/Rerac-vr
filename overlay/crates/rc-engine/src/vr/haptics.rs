@@ -41,12 +41,16 @@ enum PackUse {
     HydroCruise,
     HydroBoost,
 }
+/// The pulse owners of the packs' continuous rumble (one per pack; negative, apart from item ids).
+const HELI_OWNER: i32 = -102;
+const THRUSTER_OWNER: i32 = -103;
+const HYDRO_OWNER: i32 = -104;
 impl PackUse {
     fn owner(self) -> i32 {
         match self {
-            Self::HeliLift | Self::HeliGlide => -102,
-            Self::HydroCruise | Self::HydroBoost => -104,
-            _ => -103,
+            Self::HeliLift | Self::HeliGlide => HELI_OWNER,
+            Self::HydroCruise | Self::HydroBoost => HYDRO_OWNER,
+            _ => THRUSTER_OWNER,
         }
     }
     fn start(self) -> (f32, u32, f32) {
@@ -141,7 +145,7 @@ fn pack_sample(h: &rc_game::hero::Hero, pad: u32) -> PackSample {
     }
 }
 fn pack_owner(owner: i32) -> bool {
-    matches!(owner, -102 | -103 | -104)
+    matches!(owner, HYDRO_OWNER..=HELI_OWNER)
 }
 struct Snapshot {
     level: u32,
@@ -332,10 +336,10 @@ impl State {
                 }
             }
         }
-        if n.module == 3 && n.stomp_ground > 0 && o.stomp_ground == 0 {
+        if n.module == rc_game::hero::packs::item::THRUSTER_PACK && n.stomp_ground > 0 && o.stomp_ground == 0 {
             for side in 0..2 {
-                self.pulse(side, now, 0.92, 105, 50.0, 8, -103);
-                self.pulse(side, now + 0.13, 0.32, 45, 85.0, 8, -103);
+                self.pulse(side, now, 0.92, 105, 50.0, 8, THRUSTER_OWNER);
+                self.pulse(side, now + 0.13, 0.32, 45, 85.0, 8, THRUSTER_OWNER);
             }
         }
         let Some(phase) = n.phase else { return };
@@ -733,8 +737,8 @@ pub(super) fn update(
             if o.visibomb.is_some() && n.visibomb.is_none() && n.item == 13 {
                 state.right(now, 0.65, 85, 50.0, 13);
             }
-            if n.bomb != o.bomb && n.bomb.is_some() {
-                state.right(now, 0.20, 22, 150.0, n.bomb.unwrap().1);
+            if let Some((_, item)) = n.bomb.filter(|_| n.bomb != o.bomb) {
+                state.right(now, 0.20, 22, 150.0, item);
             }
             if (n.walloper_until > o.walloper_until)
                 || (n.hero_state == 0x20 && o.hero_state != 0x20)

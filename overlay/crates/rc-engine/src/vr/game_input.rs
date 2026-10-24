@@ -114,7 +114,6 @@ pub(super) struct JumpInput {
     pressed: bool,
     trigger_consumed: bool,
     shopping: bool,
-    shop_ready: bool,
 }
 #[derive(Resource)]
 pub(super) struct Actions {
@@ -550,7 +549,7 @@ pub(super) fn sample(
         hand.trigger = None;
         hand.pack_jump = false;
         *selection = HandSelect::default();
-        rig.snap(0.0);
+        rig.hold_snap(camera.unwrap_or_default().x);
         out.pad = encode(
             Vec2::ZERO,
             Vec2::ZERO,
@@ -606,16 +605,8 @@ pub(super) fn sample(
             buttons |= button::R1;
         }
         if shopping {
-            if !jump.shopping {
-                jump.shop_ready = false;
-            }
-            if !hand.firing {
-                jump.shop_ready = true;
-            }
+            // Purchases are the pointer's click (super::vendor); the stick pages.
             let mut shop_buttons = buttons & button::TRIANGLE;
-            if hand.firing && jump.shop_ready {
-                shop_buttons |= button::CROSS;
-            }
             if camera.x > 0.7 {
                 shop_buttons |= button::RIGHT;
             }
@@ -647,11 +638,12 @@ pub(super) fn sample(
         }
         jump.pressed = down;
         // Cross always follows A immediately, including held-A jump height and glide.
-        // Only shopping reserves the right trigger; left-trigger pack/flip input leaves weapons independent.
+        // A trigger press already used (the shop, a menu, a utility cancel) fires nothing until released;
+        // left-trigger pack/flip input leaves weapons independent.
         if jump.trigger_consumed {
             hand.trigger = None;
         }
-        // Circle is exclusively the trigger while the native Blaster is equipped; X remains a menu key.
+        // Circle comes only from the trigger (the trigger-fired weapons, Giant Clank's missiles); X remains a menu key.
         buttons &= !button::CIRCLE;
         if hand.firing
             && !shopping
@@ -669,12 +661,16 @@ pub(super) fn sample(
             buttons |= button::CIRCLE;
         }
         // Giant Clank's missiles (○ held) on the trigger.
-        if hand.firing && !shopping && play.as_ref().is_some_and(|p| p.game.hero.mode == 2) {
+        if hand.firing
+            && !shopping
+            && !jump.trigger_consumed
+            && play.as_ref().is_some_and(|p| p.game.hero.mode == 2)
+        {
             buttons |= button::CIRCLE;
         }
         let selecting = buttons & button::TRIANGLE != 0;
         if selecting {
-            rig.snap(0.0);
+            rig.hold_snap(camera.x);
             selection.held = true;
             if camera.x.abs() < 0.25 {
                 selection.page_held = false;
@@ -694,11 +690,9 @@ pub(super) fn sample(
             // Release confirms the last hand-selected sector without leaking the locomotion stick.
             movement = Vec2::ZERO;
             *selection = HandSelect::default();
-            rig.snap(if shopping { 0.0 } else { camera.x });
+            if shopping { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
         } else {
-            rig.snap(if shopping { 0.0 } else { camera.x });
-            // Native hero input now reads the levelled headset frame directly.
-            // Keep rail lean/switch and R1 flip controls in their original stick axes.
+            if shopping { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.
@@ -716,7 +710,7 @@ pub(super) fn sample(
         *jump = JumpInput::default();
         hand.pack_jump = false;
         hand.quick_page = 0;
-        rig.snap(0.0);
+        rig.hold_snap(camera.x);
         if matches!(
             mode.state.mode,
             rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
