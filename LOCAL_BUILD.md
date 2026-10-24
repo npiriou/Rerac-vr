@@ -641,3 +641,42 @@ A review of the VR layer fixed what was wrong without a headset session. The eye
 Clank's grip no longer arms Ratchet's wrench, death releases the bolt crank, a thrown wrench keeps flying while the right controller is untracked, the Visibomb monitor hides when its pose is missing, and the gold Decoy Glove throws gold decoys. Native-path exactness was restored for the Walloper's glow point and the flight sky. 137 comment lines corrupted by a cp1252 re-save were restored, and duplicated constants and dead code were removed. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-195121.log`. SHA-256: `895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7`.
+
+
+## The cutscene anchor and a first-person Hologuise
+
+Cutscene and pilot views map the head's room position at the start of the view to the actor's eye, instead of the recentre point: walking around the room since the recentre no longer shifts the cutscene view.
+
+The Hologuise disguise is first person: the rig no longer treats it as Giant Clank, it sees from Ratchet's eye height, turns with the head and walks with the room. Its body and head glow are hidden and its own forearms and hands are drawn on the controllers, closing with the grip. A fresh trigger press or a right-hand salute at the brow makes it salute; B or A returns to Ratchet. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-213838.log`. SHA-256: `B8CA98C2286315AF516E37751F1D3548A4E5A2E7EC42773BE9F5DF4ED3DB113C`.
+
+
+## Turrets and flown ships fire on the trigger
+
+Mounted in a turret (Gaspar's cannons, Hoven's and Batalia's turrets), the trigger holds ○, their fire key; flying a ship (Pokitaru's jet, Gemlik's ship, the fleet's ship), it holds □, the lasers, while X and the left trigger keep ○ / R1 for the missiles. Mounted, Y leaves the turret or the ship natively instead of opening the hand's quick select. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-231458.log`. SHA-256: `6CAA687134FDFC75E5FFDD36B10DAED47AEAC761DD8442F7AB1D270B933DC78C`.
+
+
+## A cockpit view for the flown ships
+
+Flying Pokitaru's jet, Gemlik's ship or the fleet's ship, the VR view rides the ship: the eye sits in the fighter model's own canopy (measured on its glass texels), the view follows the ship's heading and pitch with smoothing while its roll is left to the head, and the tracking space takes the ship's quarter flight scale so the head moves inside the cockpit at Ratchet's size. Ratchet's hands and wrench, hidden natively in the ship, are not drawn. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-232308.log`. SHA-256: `73AA5DEF64BCC0F25EE12D800C874F835C994CB6E18CF60B555F89743F939DAF`.
+
+
+## The HUD along the aim, the ship's eye above its canopy
+
+Mounted in a turret or flying a ship, the HUD panel hangs along the aim (the turret's script camera behind its barrels, the ship's nose) instead of following the gaze, so the reticles the game draws at its screen centre mark where the guns point. The flown fighter's canopy is opaque and its hull two-sided, so the eye rides just above the canopy rather than inside it. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-234217.log`. SHA-256: `2B8038A502A1A22B166F47A6E75455D420AC848890330B0FED2B971719CA06F0`.
+
+
+## Culling for the headset, VR turrets and spectator scenes
+
+Level content is culled for the headset's eye in every mode: in-level movies, ship sequences and the Visibomb view used the native camera (an authored shot elsewhere), which left holes in view; the native image shown on the Visibomb's monitor still gets what it sees, and gameplay's "drawn last frame" keeps the native culls. Cutscenes start facing where Ratchet's head looks, and scenes with no one to see through (the infobot's messages) are watched from their camera as a spectator, instead of reusing the previous scene's eye, which showed Hoven's arrival from far away.
+
+The manned turrets put the eye at their seat with a fixed view and turn toward where the right controller points, at their own speeds, the trigger firing. The ship no longer vanishes after the inter-planet loading: the new level's setup hid it along with its own instance 0. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-010105.log`. SHA-256: `D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083`.

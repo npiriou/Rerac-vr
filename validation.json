@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-24T12:54:59.264432+00:00",
-  "delivery_status": "review_cleanup_build_ready",
+  "updated_utc": "2026-10-24T18:06:05.875649+00:00",
+  "delivery_status": "culling_turrets_scenes_build_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -24,8 +24,8 @@
   },
   "native_windows_build": {
     "profile": "debug",
-    "executable_sha256": "895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7",
-    "completed_utc": "2026-10-24T12:54:36.9859417Z",
+    "executable_sha256": "D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083",
+    "completed_utc": "2026-10-24T18:05:45.1152931Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1275,6 +1275,78 @@
     "recorded_utc": "2026-10-24T12:54:59.264432+00:00",
     "binary_sha256": "895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-195121.log",
+    "headset_tested": false
+  },
+  "hologuise_cutscene_anchor": {
+    "reported_behavior": "In cutscenes the camera sits about 1 m behind where Ratchet should be. The Hologuise is broken: not first person, no hands; Circle should salute and Square or Cross return to Ratchet, and none of it works. A fresh trigger press while disguised should salute, and so should a right-hand salute without the trigger.",
+    "changes": [
+      "Cutscene and pilot views: the tracking origin maps the head's room position at the start of the view to the actor's eye, not the recentre point; room-scale walking since the recentre had shifted the view by that distance.",
+      "Hologuise (body 3): the rig no longer clamps it to Giant Clank (eye 9.5 and a 5.9x tracking scale); it sees from Ratchet's eye height (the disguise, class 634, is Ratchet's rig), turns with the head and walks with the room.",
+      "Hologuise body: hidden in first person with its head glow; its forearms, palms and fingers (joints 28-43 / 47-62, palms 29 / 48) are cut from the body mesh and drawn on the controllers, the fingers closing with the grip.",
+      "Hologuise input: a fresh trigger press salutes (Circle held while the pose lasts; the trigger that put the disguise on must be released first); the right hand raised to the brow, open, palm forward or down for 8 frames salutes too; B (Square) and A leave the disguise (A is turned into Square, since the native disguise ignores Cross)."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Cutscene eye position after walking around the room; the Hologuise view height, hands and forearms, trigger and gesture salutes (VR_GAME salute lines), A and B exits.",
+    "recorded_utc": "2026-10-24T14:42:39.162024+00:00",
+    "binary_sha256": "B8CA98C2286315AF516E37751F1D3548A4E5A2E7EC42773BE9F5DF4ED3DB113C",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-213838.log",
+    "headset_tested": false
+  },
+  "turrets": {
+    "reported_behavior": "Gaspar's turrets do not fire; the trigger should fire them; check the game's other turrets.",
+    "changes": [
+      "Mounted (hero state 0x32) in a turret (Gaspar's cannons 1201, Hoven's turret 1267, Batalia's turret 440: all fire with Circle held), the trigger holds Circle; before, Circle was stripped from gameplay input except for trigger-fired weapons and Clank's bodies.",
+      "Flying a ship (the vehicle record names its moby: Pokitaru's jet 1242, Gemlik's ship 69, the fleet's ship 1379), the trigger holds Square (the lasers, Square / L1); X keeps Circle and the left trigger R1 (the missiles, Circle / R1); B (Square) also fires.",
+      "Mounted, Y passes Triangle to the native turret or ship (it leaves them) instead of opening the hand's quick select."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Gaspar's cannons, Hoven's and Batalia's turrets firing on the trigger and leaving with Y; Pokitaru's jet, Gemlik's ship and the fleet's ship: lasers on the trigger, missiles on X or the left trigger.",
+    "recorded_utc": "2026-10-24T16:16:05.878194+00:00",
+    "binary_sha256": "6CAA687134FDFC75E5FFDD36B10DAED47AEAC761DD8442F7AB1D270B933DC78C",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-231458.log",
+    "headset_tested": false
+  },
+  "ship_cockpit": {
+    "reported_behavior": "The ship battles (Pokitaru's jet, Gemlik's ship, the fleet's ship) had no VR view of their own: the eye sat above the ship's origin, did not follow its heading and could be inside the model. Make a real cockpit view, from the game's own data only.",
+    "changes": [
+      "Flying a ship (hero state 0x32, the vehicle record naming class 1242, 69 or 1379: one fighter model), the VR view takes the ship as its origin, as the planet-side voyage does: the eye sits in the model's canopy, measured on its own texels (the dark glass of material 170 spans 0.08 back to 1.83 forward and 0.48 to 0.96 up at the class scale; the eye at its rear third, 0.78 up), and the view follows the ship's heading and pitch, smoothed, its roll left to the head.",
+      "The tracking space takes the ship's flight scale (the ships fly at a quarter of their class scale), so the head moves inside the cockpit at Ratchet's size.",
+      "Ratchet, hidden in the ship natively, has no tracked hands or wrench while flying."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The three ship missions: the seat in the canopy, the view following the ship, the cockpit scale, comfort in turns, lasers on the trigger and missiles on X / the left trigger.",
+    "recorded_utc": "2026-10-24T16:25:44.950658+00:00",
+    "binary_sha256": "73AA5DEF64BCC0F25EE12D800C874F835C994CB6E18CF60B555F89743F939DAF",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-232308.log",
+    "headset_tested": false
+  },
+  "aim_hud": {
+    "reported_behavior": "Gaspar's turrets: the big red aiming circle sits at the centre of the view instead of showing where the turret aims. The fighter jet is unusable: the eye is inside the hull and sees nothing (the controls work).",
+    "changes": [
+      "Mounted in a turret or flying a ship, the HUD panel hangs along the aim instead of the gaze: the turret's script camera behind its barrels (Gaspar's cannons, Hoven's and Batalia's turrets), the ship's nose. The reticles, drawn by the game at the screen centre (Gaspar's marker FX 0xd, Hoven's and Batalia's HUD reticles), mark where the guns point.",
+      "Flown ships: the fighter model's canopy is opaque and its hull two-sided, so the eye now rides just above the canopy (0.34 above its top at the class scale, over its rear third, clear of the tail fins) instead of inside it."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The reticle following the aim on Gaspar's, Hoven's and Batalia's turrets; the ships' view from above the canopy and their HUD along the nose.",
+    "recorded_utc": "2026-10-24T16:44:26.641630+00:00",
+    "binary_sha256": "2B8038A502A1A22B166F47A6E75455D420AC848890330B0FED2B971719CA06F0",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-234217.log",
+    "headset_tested": false
+  },
+  "culling_turrets_scenes": {
+    "reported_behavior": "The Hoven arrival cutscene overlooks the level from far away; cutscenes should start facing where Ratchet looks; turret fights (Hoven especially) are unpleasant, often not at the turret's centre, worse than on PS2; the ship disappears right after the inter-planet loading lag until the next screen; scenery outside the camera is missing in VR in in-level movies, ship take-offs / landings / boarding and the Visibomb view.",
+    "changes": [
+      "Culling for the headset: tfrags, ties, shrubs and mobys are culled and LOD-picked for the headset's eye in every mode (the native camera, an authored shot in movies, ship sequences and the Visibomb view, was used there); while the native image is shown too (the Visibomb's monitor, a gadget's panel) anything either view draws is drawn; the Visibomb's short draw-distance caps no longer apply to the headset's view. The game's 'drawn last frame' (+0x31) that gameplay reads keeps the native camera's culls.",
+      "Cutscenes start facing where their actor looks: the head's heading at the scene's start becomes the direction of Ratchet's (or Clank's) head joint.",
+      "Scenes with no one to see through (the infobot's messages, flyovers): a spectator view at the scene's camera, its heading taken at the start and at each cut, the head free. A scene no longer reuses the previous scene's eye (Hoven's arrival was seen from Orxon's last eye position), and a pilot view hands over its anchor.",
+      "Turrets (Gaspar's cannons, Hoven's and Batalia's turrets): the eye sits at the turret's seat (Gaspar's camera pivot, 3 up on Hoven's axis, above Batalia's barrels), anchored when mounting, the view fixed while the turret turns beneath it and set facing its aim; the turret turns toward where the right controller points (the gaze without it, the stick while pushed) at its own speeds without overshooting (Batalia's yaw acceleration and pitch speed raised for a pointing hand); the trigger fires; no wrench while manned.",
+      "The ship after an inter-planet loading: the new level's setup no longer hides the flight's kept actors (their mesh tag 0 matched the hero's instance), so the ship stays visible through the swap."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "In-level movies, ship take-offs / landings / boarding and the Visibomb view with nothing missing (and the frame rate there); cutscene start orientation; Hoven's arrival scene as a spectator; the three turrets (seat, aiming with the controller, firing); the ship through the inter-planet loading.",
+    "recorded_utc": "2026-10-24T18:06:05.875649+00:00",
+    "binary_sha256": "D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-010105.log",
     "headset_tested": false
   }
 }

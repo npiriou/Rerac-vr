@@ -13,6 +13,7 @@ mod orientation;
 mod solid_contact;
 pub(crate) mod spatial_menu;
 mod traversal;
+mod turret;
 mod vendor;
 mod walloper;
 mod weapon_screen;

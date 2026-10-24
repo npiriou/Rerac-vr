@@ -5,6 +5,8 @@ use crate::ps2v::Pf;
 #[derive(Clone, Debug, Default)]
 pub struct Tracked {
     pub enabled: bool,
+    /// The direction a manned turret turns toward (world yaw, pitch up; radians): where the right controller points.
+    pub turret_aim: Option<[f32; 2]>,
     /// Physical wrench socket and the native capsule's angular travel around the bolt this tick.
     pub crank_target: Option<usize>,
     pub crank_turn: f32,
@@ -143,6 +145,8 @@ impl Hero {
                 // Clank idle, walk, fall, jump and 0x50; Giant Clank idle, walk, fall.
                 1 => matches!(self.state, 0x43..=0x45 | 0x49 | 0x50),
                 2 => matches!(self.state, 0x5a..=0x5c),
+                // The Hologuise disguise idle, walk, fall and salute.
+                3 => matches!(self.state, 0x53..=0x55 | 0x59),
                 _ => false,
             }
     }

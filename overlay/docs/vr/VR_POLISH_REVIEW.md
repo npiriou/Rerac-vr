@@ -134,3 +134,32 @@ Carriers no longer eject Ratchet: the VR thin-floor sweep is skipped on the tick
 A review of the VR layer fixed what was wrong without a headset session. The eye-height blend ran twice per frame and now uses the frame's dt; a sloped rail pitches about its own side axis instead of rolling the horizon for a player recentred facing elsewhere; leaving a rail turns the lean into a room-scale step instead of a jump of the view. One body-eye helper now serves the root, the death and cinematic fallbacks and every eye-to-hand line-of-sight test. A snap turn no longer fires when a stick still pushed leaves quick select, the shop or a menu.
 
 Clank's grip no longer arms Ratchet's wrench, death releases the bolt crank, a thrown wrench keeps flying while the right controller is untracked, the Visibomb monitor hides when its pose is missing, and the gold Decoy Glove throws gold decoys. Native-path exactness was restored for the Walloper's glow point and the flight sky. 137 comment lines corrupted by a cp1252 re-save were restored, and duplicated constants and dead code were removed. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## The cutscene anchor and a first-person Hologuise
+
+Cutscene and pilot views map the head's room position at the start of the view to the actor's eye, instead of the recentre point: walking around the room since the recentre no longer shifts the cutscene view.
+
+The Hologuise disguise is first person: the rig no longer treats it as Giant Clank, it sees from Ratchet's eye height, turns with the head and walks with the room. Its body and head glow are hidden and its own forearms and hands are drawn on the controllers, closing with the grip. A fresh trigger press or a right-hand salute at the brow makes it salute; B or A returns to Ratchet. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Turrets and flown ships fire on the trigger
+
+Mounted in a turret (Gaspar's cannons, Hoven's and Batalia's turrets), the trigger holds ○, their fire key; flying a ship (Pokitaru's jet, Gemlik's ship, the fleet's ship), it holds □, the lasers, while X and the left trigger keep ○ / R1 for the missiles. Mounted, Y leaves the turret or the ship natively instead of opening the hand's quick select. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## A cockpit view for the flown ships
+
+Flying Pokitaru's jet, Gemlik's ship or the fleet's ship, the VR view rides the ship: the eye sits in the fighter model's own canopy (measured on its glass texels), the view follows the ship's heading and pitch with smoothing while its roll is left to the head, and the tracking space takes the ship's quarter flight scale so the head moves inside the cockpit at Ratchet's size. Ratchet's hands and wrench, hidden natively in the ship, are not drawn. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## The HUD along the aim, the ship's eye above its canopy
+
+Mounted in a turret or flying a ship, the HUD panel hangs along the aim (the turret's script camera behind its barrels, the ship's nose) instead of following the gaze, so the reticles the game draws at its screen centre mark where the guns point. The flown fighter's canopy is opaque and its hull two-sided, so the eye rides just above the canopy rather than inside it. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Culling for the headset, VR turrets and spectator scenes
+
+Level content is culled for the headset's eye in every mode: in-level movies, ship sequences and the Visibomb view used the native camera (an authored shot elsewhere), which left holes in view; the native image shown on the Visibomb's monitor still gets what it sees, and gameplay's "drawn last frame" keeps the native culls. Cutscenes start facing where Ratchet's head looks, and scenes with no one to see through (the infobot's messages) are watched from their camera as a spectator, instead of reusing the previous scene's eye, which showed Hoven's arrival from far away.
+
+The manned turrets put the eye at their seat with a fixed view and turn toward where the right controller points, at their own speeds, the trigger firing. The ship no longer vanishes after the inter-planet loading: the new level's setup hid it along with its own instance 0. These changes require headset confirmation; no tests or gameplay scripts were run.

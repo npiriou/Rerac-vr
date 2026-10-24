@@ -32,6 +32,27 @@ pub(crate) fn culling_camera(native: Transform) -> Transform {
     DESTINATION_VIEW.lock().unwrap_or_else(|e| e.into_inner()).unwrap_or(native)
 }
 
+static RENDER_EYE: Mutex<Option<Transform>> = Mutex::new(None);
+static RENDER_NATIVE_TOO: AtomicBool = AtomicBool::new(false);
+/// The headset's eye in the world this frame (None outside the game's views), and whether the native camera's image
+/// is shown too (the Visibomb's monitor, a gadget's panel).
+pub(super) fn set_render_eye(eye: Option<Transform>, native_too: bool) {
+    *RENDER_EYE.lock().unwrap_or_else(|e| e.into_inner()) = eye;
+    RENDER_NATIVE_TOO.store(native_too && eye.is_some(), Ordering::Release);
+}
+/// The views level content is culled and LOD-picked for, for drawing only: the headset's eye in every mode (in movies,
+/// ship sequences and the Visibomb's view the native camera, which game logic keeps reading, is elsewhere), plus the
+/// native camera while its image is shown too; the destination's eye while a flight streams it.
+pub(crate) fn render_cameras(native: Transform) -> (Transform, Option<Transform>) {
+    if streaming() {
+        return (culling_camera(native), None);
+    }
+    match *RENDER_EYE.lock().unwrap_or_else(|e| e.into_inner()) {
+        Some(eye) => (eye, (RENDER_NATIVE_TOO.load(Ordering::Acquire) && eye != native).then_some(native)),
+        None => (native, None),
+    }
+}
+
 /// The flight's native actor IDs belong to the departure simulation, not the new planet's table.
 #[derive(Resource)]
 pub(crate) struct FlightWorld {

@@ -45,6 +45,41 @@ pub(super) const GIANT_CLANK_EYE: f32 = 9.5;
 /// Clank's ledge climb jumps 1.55 from the hang, its apex 0.85 above the lip (Ratchet's: 0.6): the eye rises at most
 /// this far above the lip while the body keeps the native arc.
 const CLANK_CLIMB_RISE: f32 = 0.3;
+/// The flown ships (Pokitaru's jet, Gemlik's ship, the fleet's ship: one fighter model) carry the eye just above the
+/// model's canopy, at the class scale: its glass texels (opaque, the hull drawn two-sided around them) span 0.08 back
+/// to 1.83 forward and 0.48 to 0.96 up; the eye over its rear third, 0.34 above its top, clear of the tail fins (1.18
+/// high, 1.5 back).
+const SHIP_SEAT: [f32; 3] = [0.8, 0.0, 1.3];
+
+/// Ratchet flying a ship (hero state 0x32, the vehicle record naming one of the flown ships): the eye in its canopy,
+/// the view along its heading and pitch (its roll is left to the head), and the tracking scale of its flight size
+/// (the ships fly at a quarter of their class scale).
+pub(super) fn ship_view(p: &crate::gameplay::Play) -> Option<(Vec3, Quat, f32)> {
+    use rc_game::moby_update::{
+        ClassData,
+        classes::units::{fleet_ship, gemlik_ship, pokitaru_jet},
+    };
+    let h = &p.game.hero;
+    if h.mode != 0 || h.state != 0x32 {
+        return None;
+    }
+    let m = p.game.mobys.mobys.get(p.svc.vehicle.moby?)?;
+    if ![pokitaru_jet::CLASS, gemlik_ship::CLASS, fleet_ship::CLASS].contains(&m.o_class) {
+        return None;
+    }
+    let class_scale = p.classes.info(m.o_class).map(|c| c.scale).filter(|s| *s > 0.0)?;
+    let ratio = m.scale / class_scale;
+    let axis = |i: usize| Vec3::new(m.rows[i][0], m.rows[i][1], m.rows[i][2]).normalize_or_zero();
+    let (forward, left, up) = (axis(0), axis(1), axis(2));
+    let seat = forward * SHIP_SEAT[0] + left * SHIP_SEAT[1] + up * SHIP_SEAT[2];
+    let eye = Vec3::new(m.position[0], m.position[1], m.position[2]) + seat * ratio;
+    let forward = crate::tfrag_render::game_to_bevy(forward.to_array());
+    (forward.length_squared() > 0.5 && ratio.is_finite() && ratio > 0.0).then(|| {
+        let rotation = Transform::IDENTITY.looking_to(forward, Vec3::Y).rotation;
+        (crate::tfrag_render::game_to_bevy(eye.to_array()), rotation, ratio)
+    })
+}
+
 /// How fast the eye height follows a posture change (metres per second).
 const EYE_BLEND: f32 = 4.0;
 #[derive(Component, Clone, ExtractComponent)]
@@ -69,11 +104,16 @@ pub(super) struct Rig {
     eye_height: Option<f32>,
     /// How far the eye stays below the body during Clank's ledge climb (metres, see [`CLANK_CLIMB_RISE`]).
     climb_drop: f32,
-    /// The hero's body (`Hero::mode`: 0 Ratchet, 1 Clank, 2 Giant Clank) the eye and scale were set for.
+    /// The hero's body (`Hero::mode`: 0 Ratchet, 1 Clank, 2 Giant Clank, 3 the Hologuise disguise) the eye and scale
+    /// were set for.
     body: u8,
     gravity_frame: Quat,
     front_root: Option<Transform>,
     cinematic_root: Option<Transform>,
+    /// Where the head was in the room when the cinematic (or pilot) view began: it sees from the actor's eye there.
+    cinematic_head: Option<Vec3>,
+    /// The scene's view heading, set when it starts: the head's heading then becomes the actor's gaze.
+    cinematic_yaw: Option<f32>,
     last_live_eye: Option<Vec3>,
     eye_level: u32,
     pilot_rotation: Option<Quat>,
@@ -829,6 +869,8 @@ fn follow_game_camera(
     scene_runtime: Res<crate::scene_render::SceneRuntime>,
     fixed: Res<Time<Fixed>>,
 ) {
+    // Until this frame's eye is known, culling uses the native camera (the title, a lost focus).
+    super::loading::set_render_eye(None, false);
     let Some(play) = play else { return };
     // Startup poses while the headset is on the desk are not the player's neutral pose.
     if !settings.desktop_preview && !focus.as_ref().is_some_and(|f| f.0) {
@@ -882,19 +924,50 @@ fn follow_game_camera(
         rig.eye_level = level_id;
         rig.last_live_eye = None;
         rig.cinematic_root = None;
+        rig.cinematic_head = None;
+        rig.cinematic_yaw = None;
     }
     let now = time.elapsed_secs_f64();
     let dt = rig
         .rail_time
         .replace(now)
         .map_or(0.0, |old| (now - old).clamp(0.0, 0.05) as f32);
-    let pilot = travel.pilot_view(&play);
+    // The planet-side voyage, or a flown ship's cockpit (at the ship's flight scale).
+    let ship = ship_view(&play);
+    let pilot = travel.pilot_view(&play).or(ship.map(|(eye, rotation, _)| (eye, rotation)));
+    let view_scale = settings.units_per_metre * ship.map_or(1.0, |(_, _, scale)| scale);
     let actor_eye = scene
         .running
         .then(|| crate::scene_render::ratchet_eye(&scene_runtime))
         .flatten()
         .map(crate::tfrag_render::game_to_bevy);
-    let cinematic_eye = pilot.map(|(eye, _)| eye).or(actor_eye).or_else(|| {
+    let actor_gaze = scene
+        .running
+        .then(|| crate::scene_render::actor_gaze(&scene_runtime))
+        .flatten();
+    // A manned turret: the eye at its seat, the view fixed while the turret turns beneath it (super::turret).
+    let turret = if scene.running { None } else { super::turret::seat(&play) };
+    // A scene with no one to see through (a flyover, the infobot's message): a spectator at the scene's camera, its
+    // heading taken at the scene's start and at each cut, the head free.
+    let spectator = scene
+        .camera
+        .as_ref()
+        .filter(|_| scene.running && pilot.is_none() && !crate::scene_render::has_view_actor(&scene_runtime))
+        .map(|c| {
+            let forward = crate::tfrag_render::game_to_bevy(c.rows[0]);
+            (crate::tfrag_render::game_to_bevy(c.eye), (-forward.x).atan2(-forward.z), c.cut)
+        });
+    // A pilot view (or a cut) hands over: the next view takes its own anchor and heading.
+    if (pilot.is_none() && rig.pilot_rotation.is_some()) || spectator.is_some_and(|(_, _, cut)| cut) {
+        rig.cinematic_head = None;
+        rig.cinematic_yaw = None;
+    }
+    let cinematic_eye = pilot
+        .map(|(eye, _)| eye)
+        .or(actor_eye)
+        .or(spectator.map(|(eye, _, _)| eye))
+        .or(turret.map(|(eye, _)| eye))
+        .or_else(|| {
         // A streamed scene may have no valid Ratchet key on its first frame.
         (scene.running && rig.cinematic_root.is_none()).then(|| {
             rig.last_live_eye.unwrap_or_else(|| rig.body_eye(&play.game))
@@ -908,17 +981,41 @@ fn follow_game_camera(
             next
         } else {
             rig.pilot_rotation = None;
-            Quat::from_rotation_y(rig.world_yaw + rig.turn)
+            // A scene starts looking where its actor looks, a turret where it aims: the head's heading at that moment
+            // becomes that heading.
+            if rig.cinematic_yaw.is_none() {
+                let start = turret.map(|(_, aim)| aim).or(spectator.map(|(_, heading, _)| heading)).or_else(|| {
+                    actor_gaze.map(|[x, y]| {
+                        let gaze = crate::tfrag_render::game_to_bevy([x, y, 0.0]);
+                        (-gaze.x).atan2(-gaze.z)
+                    })
+                });
+                if let Some(start) = start {
+                    rig.cinematic_yaw = Some(start - heading(head.rotation) + rig.yaw);
+                }
+            }
+            Quat::from_rotation_y(rig.cinematic_yaw.unwrap_or(rig.world_yaw + rig.turn))
         };
         let rotation = frame * Quat::from_rotation_y(-rig.yaw);
+        // The room position the head had when the view began, not the recentre point: room-scale walking since the
+        // recentre would otherwise put the view that far from the actor's eye.
+        let anchor = *rig.cinematic_head.get_or_insert(head.translation);
+        let mut center = rig.center.unwrap_or(head.translation);
+        center.x = anchor.x;
+        center.z = anchor.z;
+        // At a turret's seat the head's height when mounting sits at the seat too.
+        if turret.is_some() && pilot.is_none() && actor_eye.is_none() {
+            center.y = anchor.y;
+        }
         rig.cinematic_root = Some(Transform {
-            translation: eye
-                - rotation * (rig.center.unwrap_or(head.translation) * settings.units_per_metre),
+            translation: eye - rotation * (center * view_scale),
             rotation,
-            scale: Vec3::splat(settings.units_per_metre),
+            scale: Vec3::splat(view_scale),
         });
     } else if !scene.running {
         rig.cinematic_root = None;
+        rig.cinematic_head = None;
+        rig.cinematic_yaw = None;
         rig.pilot_rotation = None;
     }
     let boots = &play.game.hero.boots;
@@ -1002,8 +1099,8 @@ fn follow_game_camera(
         let old_up = rig.gravity_frame * Vec3::Y;
         rig.gravity_frame = (Quat::from_rotation_arc(old_up, up) * rig.gravity_frame).normalize();
     }
-    // Switching body (Clank, Giant Clank) takes his eye at once, without the posture blend.
-    let body = play.game.hero.mode.clamp(0, 2);
+    // Switching body (Clank, Giant Clank, the Hologuise disguise) takes its eye at once, without the posture blend.
+    let body = play.game.hero.mode.min(3);
     if rig.body != body {
         rig.body = body;
         rig.eye_height = None;
@@ -1023,6 +1120,9 @@ fn follow_game_camera(
         }
     } else if body == 2 {
         GIANT_CLANK_EYE
+    } else if body == 3 {
+        // The disguise (class 634) is Ratchet's rig at Ratchet's height.
+        RATCHET_EYE
     } else if matches!(play.game.hero.state, 0x18..=0x1b) {
         hang(0.45, RATCHET_EYE)
     } else if play.game.hero.state == 0x74 {
@@ -1082,6 +1182,11 @@ fn follow_game_camera(
         *r = root;
     }
     let center = root.mul_transform(head);
+    // Level content is culled for the headset's eye, whatever the native camera shows (crate::vr::loading).
+    super::loading::set_render_eye(
+        Some(center),
+        native_panel(&play) || crate::visibomb_view::missile_view(Some(&play)),
+    );
     if mode.free_movement()
         && !native_panel(&play)
         && !crate::visibomb_view::missile_view(Some(&play))
@@ -1208,6 +1313,20 @@ fn update_panels(
     let menu = matches!(mode.state.mode, Mode::Menu | Mode::Freeze | Mode::Vendor | Mode::Movie | Mode::Slideshow);
     let gadget_panel = play.as_deref().is_some_and(native_panel);
     let head = pose(views.as_deref()).unwrap_or_else(|| Transform::from_xyz(0.0, 1.6, 0.0));
+    // Mounted in a turret or flying a ship, the HUD hangs along the aim (the turret's script camera behind its barrels,
+    // the ship's nose) instead of the gaze: its reticle, drawn at the screen centre, marks where the guns point.
+    let aim = play
+        .as_deref()
+        .filter(|p| p.game.hero.mode == 0 && p.game.hero.state == 0x32)
+        .and_then(|p| {
+            let root = rig.root_for(&p.game, settings.units_per_metre)?;
+            let forward = ship_view(p).map_or_else(
+                || crate::tfrag_render::game_to_bevy(p.game.camera.out.rows_f32()[0]),
+                |(_, rotation, _)| rotation * Vec3::NEG_Z,
+            );
+            let forward = (root.rotation.inverse() * forward).normalize_or_zero();
+            (forward.length_squared() > 0.5).then_some(forward)
+        });
     let cinema = matches!(mode.state.mode, Mode::Movie | Mode::Slideshow);
     if cinema {
         if cinema_anchor.as_ref().is_none_or(|(revision, _)| *revision != rig.revision) {
@@ -1259,6 +1378,9 @@ fn update_panels(
             let anchor = cinema_anchor.as_ref().map_or(head, |(_, anchor)| *anchor);
             *t = anchor.mul_transform(Transform::from_xyz(0.0, 0.0, -3.0));
             t.scale = Vec3::new(1.8, 3.6 * frame.size.y as f32 / frame.size.x.max(1) as f32 / 1.5, 1.0);
+        } else if let Some(forward) = aim.filter(|_| panel.0 != 0) {
+            *t = Transform::from_translation(head.translation + forward * (2.0 - panel.0 as f32 * 0.002))
+                .looking_to(forward, Vec3::Y);
         } else {
             *t = head.mul_transform(Transform::from_xyz(0.0, 0.0, -2.0 + panel.0 as f32 * 0.002));
         }

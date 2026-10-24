@@ -36,6 +36,7 @@ impl Plugin for EmbodiedPlugin {
                 super::traversal::TraversalPlugin,
                 super::orientation::OrientationPlugin,
                 super::walloper::WalloperPlugin,
+                super::turret::TurretPlugin,
             ))
             .add_systems(
                 PreUpdate,
@@ -698,7 +699,12 @@ fn interact(
         return;
     };
     let ready =
-        gameplay(&mode) && p.game.hero.mode == 0 && !p.death_pending && p.game.hero.health > 0;
+        gameplay(&mode)
+            && p.game.hero.mode == 0
+            && !p.death_pending
+            && p.game.hero.health > 0
+            && super::game::ship_view(p).is_none()
+            && super::turret::manned(p).is_none();
     if !ready {
         motion.release = None;
         melee.reset_stroke();
@@ -1385,7 +1391,12 @@ fn present(
     let active = gameplay(&mode)
         && play
             .as_ref()
-            .is_some_and(|p| p.game.hero.mode == 0 && p.game.hero.health > 0 && !p.death_pending);
+            .is_some_and(|p| {
+                p.game.hero.mode == 0
+                    && p.game.hero.health > 0
+                    && !p.death_pending
+                    && super::game::ship_view(p).is_none()
+            });
     let bomb_glove = play.as_ref().and_then(|p| {
         let selected = rc_game::hero::items::is_glove(p.game.hero.items.slot.id);
         if !active
@@ -1640,10 +1651,10 @@ fn present(
             support.held || plugged,
             grips,
         );
-        // Clank / Giant Clank in first person: his own hands on the controllers (his body is not drawn). After the
-        // item pass, which hides every hand-slot item it is not given.
+        // Clank, Giant Clank or the disguise in first person: the body's own hands on the controllers (the body is not
+        // drawn). After the item pass, which hides every hand-slot item it is not given.
         let body = play.game.hero.mode;
-        let first_person = matches!(body, 1 | 2) && !play.death_pending;
+        let first_person = matches!(body, 1..=3) && !play.death_pending;
         attach.tracked_body_hands(
             [0, 1].map(|side| motion.hands[side].filter(|_| first_person).map(|h| root.mul_transform(h))),
             body,

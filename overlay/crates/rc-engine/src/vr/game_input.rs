@@ -114,7 +114,53 @@ pub(super) struct JumpInput {
     pressed: bool,
     trigger_consumed: bool,
     shopping: bool,
+    /// The hero was the Hologuise disguise last frame, and the right hand's salute gesture.
+    disguised: bool,
+    salute: Salute,
 }
+/// The right hand's salute (the Hologuise's ○): the controller beside the right brow, the hand open, the palm facing
+/// forward or down, held 8 frames; it lets go with some slack.
+#[derive(Default)]
+pub(super) struct Salute {
+    frames: u8,
+    active: bool,
+}
+impl Salute {
+    /// `head` and `hand` in tracking space. Head-local metres: +x right, +y up, −z forward. The OpenXR right grip's
+    /// −X leaves the palm and −Z runs along the fist.
+    fn update(&mut self, head: Option<Transform>, hand: Option<Transform>, grip: f32) -> bool {
+        let (Some(head), Some(hand)) = (head, hand) else {
+            *self = Salute::default();
+            return false;
+        };
+        let inv = head.rotation.inverse();
+        let p = inv * (hand.translation - head.translation);
+        let palm = inv * (hand.rotation * Vec3::NEG_X);
+        let fist = inv * (hand.rotation * Vec3::NEG_Z);
+        let pose = |m: f32, k: f32| {
+            grip < 0.5
+                && (0.04 - m..=0.24 + m).contains(&p.x)
+                && (-0.04 - m..=0.18 + m).contains(&p.y)
+                && (-0.08 - m..=0.20 + m).contains(&-p.z)
+                && p.length() < 0.28 + m
+                && (-palm.z).max(-palm.y) > 0.35 - k
+                && -fist.x > -k
+        };
+        if self.active {
+            self.active = pose(0.05, 0.25);
+        } else if pose(0.0, 0.0) {
+            self.frames = self.frames.saturating_add(1);
+            self.active = self.frames >= 8;
+            if self.active {
+                println!("VR_GAME salute at={p:?} palm={palm:?}");
+            }
+        } else {
+            self.frames = 0;
+        }
+        self.active
+    }
+}
+
 #[derive(Resource)]
 pub(super) struct Actions {
     set: ActionSet,
@@ -626,6 +672,12 @@ pub(super) fn sample(
         if !hand.firing {
             jump.trigger_consumed = false;
         }
+        let disguised = play.as_ref().is_some_and(|p| p.game.hero.mode == 3 && p.game.hero.health > 0);
+        // The trigger that put the disguise on may still be held: only a fresh press salutes.
+        if disguised && !jump.disguised && hand.firing {
+            jump.trigger_consumed = true;
+        }
+        jump.disguised = disguised;
         if down && !jump.pressed && hand.pack_modifier {
             let pack_ready = play.as_ref().is_some_and(|p| {
                 let h = &p.game.hero;
@@ -643,8 +695,17 @@ pub(super) fn sample(
         if jump.trigger_consumed {
             hand.trigger = None;
         }
-        // Circle comes only from the trigger (the trigger-fired weapons, Giant Clank's missiles); X remains a menu key.
-        buttons &= !button::CIRCLE;
+        // Mounted (hero state 0x32): a turret (Gaspar's cannons, Hoven's and Batalia's turrets fire with ○ held) or a
+        // flown ship (the vehicle record: Pokitaru's jet, Gemlik's ship and the fleet's fire their lasers with □ / L1
+        // and their missiles with ○ / R1).
+        let mounted = play.as_ref().filter(|p| p.game.hero.mode == 0 && p.game.hero.state == 0x32);
+        let flying = mounted.is_some_and(|p| p.svc.vehicle.moby.is_some());
+        let turret = mounted.is_some() && !flying;
+        // Circle comes only from the trigger (the trigger-fired weapons, Giant Clank's missiles, turrets); X remains a
+        // menu key, and the missile key while mounted.
+        if mounted.is_none() {
+            buttons &= !button::CIRCLE;
+        }
         if hand.firing
             && !shopping
             && !jump.trigger_consumed
@@ -660,15 +721,33 @@ pub(super) fn sample(
         {
             buttons |= button::CIRCLE;
         }
-        // Giant Clank's missiles (○ held) on the trigger.
+        // The trigger fires a turret (○ held) and a flown ship's lasers (□ held).
+        if hand.firing && !shopping && !jump.trigger_consumed {
+            if turret {
+                buttons |= button::CIRCLE;
+            } else if flying {
+                buttons |= button::SQUARE;
+            }
+        }
+        // Giant Clank's missiles (○ held) and the disguise's salute (○, held while the pose lasts) on the trigger.
         if hand.firing
             && !shopping
             && !jump.trigger_consumed
-            && play.as_ref().is_some_and(|p| p.game.hero.mode == 2)
+            && play.as_ref().is_some_and(|p| matches!(p.game.hero.mode, 2 | 3))
         {
             buttons |= button::CIRCLE;
         }
-        let selecting = buttons & button::TRIANGLE != 0;
+        // The disguise also salutes when the right hand does: raised to the brow, open, palm out.
+        let right = tracked.iter().find_map(|(h, pose, f)| {
+            (h.0 == 1 && f.pos_valid() && f.pos_tracked() && f.rot_valid() && f.rot_tracked()).then_some(*pose)
+        });
+        if !disguised || buttons & button::TRIANGLE != 0 {
+            jump.salute = Salute::default();
+        } else if jump.salute.update(super::game::pose(views.as_deref()), right, hand.grip.unwrap_or(0.0)) {
+            buttons |= button::CIRCLE;
+        }
+        // Mounted, △ leaves the turret or the ship (natively), it does not open the hand's quick select.
+        let selecting = buttons & button::TRIANGLE != 0 && mounted.is_none();
         if selecting {
             rig.hold_snap(camera.x);
             selection.held = true;
@@ -696,8 +775,12 @@ pub(super) fn sample(
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.
-        // □ is the Hologuise's exit. Clank's and Giant Clank's punches are physical (super::body_fists).
-        let square = if play.as_ref().is_some_and(|p| p.game.hero.mode == 3) { button::SQUARE } else { 0 };
+        // □ (B) leaves the Hologuise disguise, and so does A (its states ignore ✕; ✕ stays held, so Ratchet does not
+        // jump on his return). Clank's and Giant Clank's punches are physical (super::body_fists).
+        let square = if disguised || mounted.is_some() { button::SQUARE } else { 0 };
+        if disguised && buttons & button::CROSS != 0 {
+            buttons |= button::SQUARE;
+        }
         buttons &= button::CROSS
             | button::R1
             | button::CIRCLE
