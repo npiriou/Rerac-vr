@@ -39,6 +39,9 @@ use std::sync::{
 };
 
 pub(super) const PANEL_LAYER: usize = 62;
+/// The original first-person eye heights above the feet of Clank and Giant Clank (Ratchet's is 1.6).
+pub(super) const CLANK_EYE: f32 = 0.9;
+pub(super) const GIANT_CLANK_EYE: f32 = 9.5;
 #[derive(Component, Clone, ExtractComponent)]
 pub struct GameEye;
 #[derive(Component, Clone, ExtractComponent)]
@@ -59,6 +62,8 @@ pub(super) struct Rig {
     pub(super) revision: u64,
     reset_held: bool,
     eye_height: Option<f32>,
+    /// The hero's body (`Hero::mode`: 0 Ratchet, 1 Clank, 2 Giant Clank) the eye and scale were set for.
+    body: u8,
     gravity_frame: Quat,
     front_root: Option<Transform>,
     cinematic_root: Option<Transform>,
@@ -102,6 +107,10 @@ impl Rig {
             self.revision = self.revision.wrapping_add(1);
         }
     }
+    /// Giant Clank's tracking space is his size: the head, hands and room-scale steps grow with his eye height.
+    pub(super) fn body_scale(&self) -> f32 {
+        if self.body == 2 { GIANT_CLANK_EYE / 1.6 } else { 1.0 }
+    }
     pub(super) fn root_for(&self, game: &rc_game::tick::Game, scale: f32) -> Option<Transform> {
         if crate::saves::front_end_active() {
             return self.front_root;
@@ -109,6 +118,7 @@ impl Rig {
         if let Some(root) = self.cinematic_root {
             return Some(root);
         }
+        let scale = scale * self.body_scale();
         let mut center = self.center?;
         if let Some(head) = self.rail_center.or(self.head) {
             center.x = head.x;
@@ -754,7 +764,7 @@ fn align_body(
         return;
     }
     let rotation = rig.gravity_frame * Quat::from_rotation_y(rig.world_yaw + rig.turn - rig.yaw);
-    let delta = rotation * delta * settings.units_per_metre;
+    let delta = rotation * delta * settings.units_per_metre * rig.body_scale();
     play.roomscale_move(coll, super::embodied::game_point(delta));
 }
 
@@ -953,9 +963,20 @@ fn follow_game_camera(
         let old_up = rig.gravity_frame * Vec3::Y;
         rig.gravity_frame = (Quat::from_rotation_arc(old_up, up) * rig.gravity_frame).normalize();
     }
+    // Switching body (Clank, Giant Clank) takes his eye at once, without the posture blend.
+    let body = play.game.hero.mode.clamp(0, 2) as u8;
+    if rig.body != body {
+        rig.body = body;
+        rig.eye_height = None;
+        rig.revision = rig.revision.wrapping_add(1);
+    }
     // Surface swimming uses the native horizontal swimmer's eye height. Blend the posture change;
     // head rotation always remains physically tracked.
-    let target_height = if matches!(play.game.hero.state, 0x18..=0x1b) {
+    let target_height = if body == 1 {
+        CLANK_EYE
+    } else if body == 2 {
+        GIANT_CLANK_EYE
+    } else if matches!(play.game.hero.state, 0x18..=0x1b) {
         // Hanging with extended arms puts the eyes below the ledge, not alongside the palms.
         (play.game.hero.ledge_blk.top_z - play.game.hero.position()[2] - 0.38).clamp(0.45, 1.35)
     } else if play.game.hero.state == 0x74 {

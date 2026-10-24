@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_gadget_pause_fixes_build_ready",
+  "status": "native_windows_bodies_ledges_loading_build_ready",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F",
+  "latest_build_sha256": "2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Trespasser panel visibility and distance, Hydrodisplacer fill/empty without camera change, insertion into the retracted tap, absence of the menu button bar, wrench_frame log of a maximum-range throw.",
+  "latest_build_physical_validation": "Transition stall on a first visit, ship opening on all ships, ledges/rungs on Aridia, Clank (Blarg, Orxon) and Giant Clank (Quartu, Veldin 2) sections, the caught-wrench grip, a capture of the wrench duplicate.",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",
@@ -254,5 +254,23 @@
     "remaining_confirmation": "Trespasser panel visibility and distance, Hydrodisplacer fill/empty without camera change, insertion into the retracted tap, absence of the menu button bar, wrench_frame log of a maximum-range throw.",
     "binary_sha256": "DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-153506.log"
+  },
+  "bodies_ledges_loading": {
+    "recorded_utc": "2026-10-24T10:00:02.001872+00:00",
+    "requested_behavior": "Wrench duplicate at maximum range; caught wrench should need the grip; ledge climb (shove and A) failing below higher ledges/rungs; first-person Clank and Giant Clank; level loading freeze during the space flight; camera under the platform when the ship opens.",
+    "changes": [
+      "Caught wrench: held only while the grip is squeezed, otherwise put away.",
+      "Wrench: per-frame turnaround diagnostics show a smooth single model (no pose change or teleport); after-images hidden, no item shadows, PICO ASW and SteamVR motion smoothing off. Cause of the reported duplicate still unknown.",
+      "Ledges: A and the two-arm shove act as native \u2715 from a hang (the VR-only blocked-top gate is removed); the shove is a buffered \u2715, measured from each hand's recent top, tolerant of brief tracking loss, 0.9 m/s; grab/shove/climb logs.",
+      "Loading: per-level overlay tables (class ports, camera ports, reactions, thruster flames, relocated menus overlay, item tables, help log ids) are built by the loader during the flight for the destination level instead of on the main thread after the swap; loader reads that used the departure level (spawn rules, emitters, moby GS maps) use the destination.",
+      "Ship landing: the eye keeps the native cockpit seat until the cut out of the canopy-opening shot (ticks(0x168)), where the authored actor sinks under the pad.",
+      "Clank / Giant Clank: native eye heights 0.9 / 9.5, Giant tracking scale \u00d75.9, body/rotor/glow not drawn, own hands on the controllers, physical punches press \u25a1, trigger = missiles, free facing and room-scale for bodies."
+    ],
+    "packaging": "particle.wgsl moved from the overlay payload to a guarded patch (Apply-Overlay refuses to overwrite upstream files); new patches for level_load.rs, moby_spawn.rs and thruster_render.rs.",
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "headset_tested": false,
+    "remaining_confirmation": "Transition stall on a first visit, ship opening on all ships, ledges/rungs on Aridia, Clank (Blarg, Orxon) and Giant Clank (Quartu, Veldin 2) sections, the caught-wrench grip, a capture of the wrench duplicate.",
+    "binary_sha256": "2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-165439.log"
   }
 }

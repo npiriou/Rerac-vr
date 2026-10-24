@@ -24,6 +24,8 @@ pub struct Tracked {
     pub hyper_strike: bool,
     pub hyper_buffer: i32,
     pub ledge_jump: bool,
+    /// The shove as a pressed ✕ (ticks left of its 17-tick window), honoured by the hang (super::ledge).
+    pub ledge_jump_buffer: i32,
     pub ledge_delta: [f32; 3],
     pub anchors: [Option<[f32; 3]>; 2],
     /// World velocity requested by submerged hand strokes, units / second.
@@ -102,10 +104,15 @@ impl Hero {
     pub(super) fn tracked_free_facing(&self) -> bool {
         self.tracked.enabled
             && self.tracked.navigation.is_some()
-            && self.mode == 0
             && self.health > 0
             && self.frozen == 0
-            && matches!(self.state, 0..=4 | 6..=0x12 | 0x2d | 0x3f | 0x70 | 0x71 | 0x73)
+            && match self.mode {
+                0 => matches!(self.state, 0..=4 | 6..=0x12 | 0x2d | 0x3f | 0x70 | 0x71 | 0x73),
+                // Clank idle, walk, fall, jump and 0x50; Giant Clank idle, walk, fall.
+                1 => matches!(self.state, 0x43..=0x45 | 0x49 | 0x50),
+                2 => matches!(self.state, 0x5a..=0x5c),
+                _ => false,
+            }
     }
 
     /// Keep physical heading on the native body, retaining its current surface normal.
@@ -180,6 +187,11 @@ impl Hero {
                             .clamp(-0.65, 0.65);
                         self.tracked.ledge_grabs[side] =
                             self.tracked.ledge_grabs[side].wrapping_add(1);
+                        println!(
+                            "VR_GAME ledge_grab side={side} top={:.2} top_blocked={}",
+                            anchor[2],
+                            self.ledge_blk.f844 & 1
+                        );
                         self.tracked.anchors[side] = Some([
                             anchor[0] + tangent[0] * along,
                             anchor[1] + tangent[1] * along,
@@ -196,16 +208,17 @@ impl Hero {
                 self.f500 = ticks(20) as i16;
                 return true;
             }
-            if std::mem::take(&mut self.tracked.ledge_jump) && self.ledge_blk.f844 & 1 == 0 {
-                self.tracked.grabbed = [false; 2];
-                self.set_state(c, 0x1c, true);
-                return true;
+            if std::mem::take(&mut self.tracked.ledge_jump) {
+                self.tracked.ledge_jump_buffer = ticks(17);
+            } else {
+                self.tracked.ledge_jump_buffer = (self.tracked.ledge_jump_buffer - 1).max(0);
             }
         } else {
             self.tracked.grabbed = [false; 2];
             self.tracked.anchors = [None; 2];
             self.tracked.ledge_delta = [0.0; 3];
             self.tracked.ledge_jump = false;
+            self.tracked.ledge_jump_buffer = 0;
             if self.f838 != 0 {
                 let anchor = self.tracked_ledge_anchor();
                 for side in 0..2 {

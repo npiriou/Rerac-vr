@@ -417,8 +417,8 @@ pub(super) fn sample(
     mut selection: Local<HandSelect>,
     mut jump: Local<JumpInput>,
     mut skip: Local<SkipInput>,
-    mut utility_down: Local<u32>,
-    mut utility_consumed: Local<bool>,
+    (mut utility_down, mut utility_consumed): (Local<u32>, Local<bool>),
+    (time, mut punch): (Res<Time<Real>>, Local<super::body_punch::BodyPunch>),
 ) {
     *out = GamePad::default();
     hand.grip = None;
@@ -669,6 +669,10 @@ pub(super) fn sample(
         {
             buttons |= button::CIRCLE;
         }
+        // Giant Clank's missiles (○ held) on the trigger.
+        if hand.firing && !shopping && play.as_ref().is_some_and(|p| p.game.hero.mode == 2) {
+            buttons |= button::CIRCLE;
+        }
         let selecting = buttons & button::TRIANGLE != 0;
         if selecting {
             rig.snap(0.0);
@@ -699,21 +703,31 @@ pub(super) fn sample(
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.
-        let disguise_exit = if play.as_ref().is_some_and(|p| p.game.hero.mode == 3) {
-            button::SQUARE
-        } else {
-            0
-        };
+        // □: the Hologuise's exit, and Clank's / Giant Clank's punch (B, or a physical punch of either hand).
+        let body = play.as_ref().map_or(0, |p| p.game.hero.mode);
+        let square = if matches!(body, 1..=3) { button::SQUARE } else { 0 };
         buttons &= button::CROSS
             | button::R1
             | button::CIRCLE
             | button::TRIANGLE
             | button::START
             | button::SELECT
-            | disguise_exit;
+            | square;
+        let hands = [0, 1].map(|side| {
+            tracked
+                .iter()
+                .find(|(h, _, f)| h.0 == side && f.pos_valid() && f.pos_tracked() && f.rot_valid())
+                .map(|(_, pose, _)| *pose)
+        });
+        let head = super::game::pose(views.as_deref()).map(|v| v.translation);
+        let fighting = matches!(body, 1 | 2) && play.as_ref().is_some_and(|p| !p.death_pending);
+        if punch.press(time.elapsed_secs_f64(), hands, head, fighting) {
+            buttons |= button::SQUARE;
+        }
     } else {
         *selection = HandSelect::default();
         *jump = JumpInput::default();
+        punch.press(time.elapsed_secs_f64(), [None; 2], None, false);
         hand.pack_jump = false;
         hand.quick_page = 0;
         rig.snap(0.0);

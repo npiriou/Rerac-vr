@@ -64,7 +64,6 @@ pub(super) struct Motion {
     pub hands: [Option<Transform>; 2],
     pub bomb: BombGesture,
     held: bool,
-    was_flying: bool,
     grip_down: bool,
     grip_suppressed: bool,
     equip_wrench: bool,
@@ -185,12 +184,10 @@ pub(super) fn capture(
         let grip_down = motion.grip_down;
         let grip_suppressed = motion.grip_suppressed;
         let bomb_held = motion.bomb.held;
-        let was_flying = motion.level == level && motion.was_flying;
         *motion = Motion {
             revision: rig.revision,
             level,
             held,
-            was_flying,
             grip_down,
             grip_suppressed,
             bomb: BombGesture {
@@ -222,16 +219,8 @@ pub(super) fn capture(
         return;
     };
     let now = time.elapsed_secs_f64();
-    let wrench = play.as_ref().and_then(|p| {
-        (p.game.hero.items.slot.id == 8 && p.game.hero.health > 0)
-            .then_some(p.game.hero.items.slot.item.as_ref())
-            .flatten()
-    });
-    if motion.was_flying && wrench.is_some_and(|i| i.mstate == 0) {
-        // The returning tool is caught and stays visible until the next grip release.
-        motion.held = true;
-    }
-    motion.was_flying = wrench.is_some_and(|i| i.mstate != 0);
+    // A caught wrench is held only while the grip is squeezed (`held` latched by the press); otherwise it is
+    // put away, as after a slow release.
     if motion.release.is_some_and(|(_, _, t)| now - t > 0.12) {
         motion.release = None;
     }
@@ -1404,16 +1393,18 @@ fn present(
         if !gameplay(&mode) {
             attach.tracked_items(&[]);
             attach.tracked_hands([None; 2], &play, None, false);
+            attach.tracked_body_hands([None; 2], 0);
             return;
         }
+        // Clank / Giant Clank in first person: his own hands on the controllers (his body is not drawn).
+        let body = play.game.hero.mode;
+        let first_person = matches!(body, 1 | 2) && !play.death_pending;
+        attach.tracked_body_hands(
+            [0, 1].map(|side| motion.hands[side].filter(|_| first_person).map(|h| root.mul_transform(h))),
+            body,
+        );
         let mut item = play.game.hero.items.slot.item.clone();
-        // A catch can occur in FixedUpdate after the controller sample. Keep that
-        // first ready-pose frame visible until capture latches the received tool.
-        let holding_wrench = motion.wrench_held()
-            || (motion.was_flying
-                && item.as_ref().is_some_and(|i| {
-                    i.o_class == rc_game::hero::melee::WRENCH_CLASS && i.mstate == 0
-                }));
+        let holding_wrench = motion.wrench_held();
         if let Some(it) = item.as_mut() {
             let native_anim = (it.anim.seq_a, it.anim.seq_b, it.anim.t);
             rigid_wrench_pose(it, play.game.item_data.as_ref());

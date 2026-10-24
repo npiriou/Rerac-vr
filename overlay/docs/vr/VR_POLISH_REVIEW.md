@@ -77,3 +77,16 @@ VR skips the Hydrodisplacer's native water cutaway: no fades and no camera chang
 The French VR button bar (Retour, arrows, Valider) drawn at the bottom of the pause and front-end menus is removed with its hit areas. Native pointing and the controller buttons remain.
 
 No second wrench model is drawn by the engine at the turnaround. Per-frame diagnostics (`VR_GAME wrench_frame`) now log what each rendered frame draws around it. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Ledges, loading, ship opening, caught wrench and the Clank bodies
+
+From a hang, A and the two-arm shove now act exactly as native ✕. A VR-only rule refused the climb whenever geometry stood above the lip, which blocked every rung and every higher ledge; natively the climb jump then catches the higher ledge, lands on an open top or regrabs the same one (reproduced with the native hero code at the logged Aridia hangs). The shove is a buffered ✕, measured from each hand's recent top rather than its grab point, keeps its reference through brief tracking loss and needs 0.9 m/s.
+
+The freeze during level changes came from per-level tables derived from the level overlay, built lazily on the main thread after the swap (about 7 s on a first visit, 1 s on a repeat). The loader now builds the destination's tables during the flight, and its spawn, emitter and GS-map reads use the destination level instead of the departing one.
+
+During the canopy-opening landing shot the authored actor sinks Ratchet 2.5 units under the pad; the eye keeps the native cockpit seat until the cut that ends that shot. A caught wrench is held only while the grip is squeezed.
+
+Clank and Giant Clank are first person: native eye heights 0.9 and 9.5, Giant Clank's tracking space scaled ×5.9, the body, rotor and antenna glow not drawn, their own hands on the controllers, physical punches pressing the native □ attack, the trigger holding Giant Clank's missiles, free facing and room-scale walking.
+
+The reported wrench duplicate at maximum range is not explained: per-frame diagnostics show one smooth model without pose change or teleport. These changes require headset confirmation; no tests or gameplay scripts were run.

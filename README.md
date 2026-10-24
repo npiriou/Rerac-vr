@@ -60,7 +60,7 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Right stick click | Triangle — contextual interactions; hold for quick select, move the right hand toward an icon, release to confirm |
 | Walloper selected: punch with the right hand | Original lunge and horizontal dash, with native windup, speed and broad damage window; no vertical punch propulsion |
 | Left grip near a heavy weapon's barrel | Hold the foregrip and guide the weapon with both hands; release to return to one hand |
-| Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove both arms down at least 12 cm at 1.15 m/s to climb/jump as A (left-stick movement disabled while hanging); release both grips to drop |
+| Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove the gripping hands down at least 12 cm at 0.9 m/s (from their recent top) to climb/jump exactly as A (left-stick movement disabled while hanging); release both grips to drop |
 | Submerged palm strokes | Push water opposite the motion of the hands; turn palms edge-on for recovery. Push up to dive |
 | Right stick click held + right stick left/right | Previous / next quick-select page (return the stick to centre between changes) |
 | B / X | Original menu controls; B also exits the Hologuise |
@@ -120,7 +120,7 @@ Compilation/startup evidence is recorded separately. Physical turning, stereo le
 
 Rail camera direction is sampled across 1.5 units behind and 2.5–5 units ahead of the native spline cursor, rather than copying a single segment tangent. Yaw uses a 350 ms exponential response, a 0.006-radian dead zone and a 1.05 rad/s turn limit. Pitch uses a 500 ms response, a 0.008-radian dead zone and a 0.35 rad/s limit. Translation has an 80 ms filter while riding, recovering on exit; large teleports rebase. Rail entry preserves the current gaze instead of forcing a turn. Physical headset rotation stays direct.
 
-Ledge hanging places the neutral eye about 38 cm below the ledge/palms, with the existing posture blend. Valid native ledges accept a hand within 80 cm horizontally and 50 cm vertically (48 cm into/across the wall for initial reach). Retention and native top/clearance checks remain. Pull-up needs a 12 cm downward stroke at 1.15 m/s from both gripped hands within 180 ms. Lateral anchor correction and its drift/validation limits are unchanged.
+Ledge hanging places the neutral eye about 38 cm below the ledge/palms, with the existing posture blend. Valid native ledges accept a hand within 80 cm horizontally and 50 cm vertically (48 cm into/across the wall for initial reach). Retention and native top/clearance checks remain. Pull-up needs a 12 cm downward stroke at 0.9 m/s, measured from each hand's recent top, from every gripping hand within 180 ms; it acts as a buffered native ✕. Lateral anchor correction and its drift/validation limits are unchanged.
 
 Gold Devastator support is anchored at the centre of the actual class-157 side handle, model coordinates (0.125, -0.415, -0.270). The support-grip capture/aim target and rendered left palm use the same point. The original layered finger/wrist pose is retained; the ordinary Devastator is unchanged.
 
@@ -181,3 +181,8 @@ Compilation is separate from headset validation. Conservative clearance, all wea
 ## VR interaction and presentation polish
 
 [Detailed VR polish review](overlay/docs/vr/VR_POLISH_REVIEW.md) records every requested change, compilation evidence and pending headset checks for this batch.
+
+
+## Clank and Giant Clank in first person
+
+Clank and Giant Clank sections are first person. The eye sits at the original first-person heights, 0.9 above Clank's feet and 9.5 above Giant Clank's, and Giant Clank's tracking space is scaled to his size (×5.9: head, hands and room-scale steps). In VR the body, Clank's rotor and his antenna glow are not drawn; his own hands follow the controllers, cut from his model in a rest pose. A physical punch with either hand (the Walloper's thresholds) presses the original □ attack: Clank's alternating punches and Giant Clank's fists, with their native hit spheres and damage in front of the body, which faces where you look. B remains □, the right trigger holds Giant Clank's missiles (○), the right-stick click is △ (Clank's commands, Giant Clank's beam). Room-scale walking moves the bodies too. Headset validation is pending.

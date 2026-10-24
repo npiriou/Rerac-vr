@@ -53,13 +53,12 @@ fn sample(
         strokes.velocity[side] = Vec3::ZERO;
         let Some(hand) = motion.hands[side] else {
             strokes.previous[side] = None;
-            strokes.pull_from[side] = None;
             continue;
         };
         if let Some((t, pos)) = strokes.previous[side] {
             let dt = (now - t) as f32;
             let delta = hand.translation - pos;
-            if dt >= 0.12 || delta.length() >= 0.3 {
+            if dt >= 0.3 || delta.length() >= 0.5 {
                 strokes.pull_from[side] = None;
             }
             if (0.002..0.12).contains(&dt) && delta.length() < 0.3 {
@@ -120,10 +119,19 @@ fn drive(
     let mut grips = 0;
     let now = time.elapsed_secs_f64();
     let mut force = Vec3::ZERO;
+    // Once one hand is latched, every gripping hand takes part in the shove.
+    let hanging = t.grabbed.iter().any(|&g| g);
     for side in 0..2 {
-        if t.grabbed[side] && t.grips[side] {
+        if hanging && t.grips[side] {
             if let Some(hand) = motion.hands[side] {
-                let start = *gestures.pull_from[side].get_or_insert(hand.translation);
+                // Measured from the hand's recent top, not from where it grabbed: the view drops onto the hang
+                // and players raise their hands toward the drawn ones. A slow sag is forgotten.
+                let top = gestures.pull_from[side].get_or_insert(hand.translation);
+                if hand.translation.y > top.y {
+                    *top = hand.translation;
+                }
+                top.y = top.y.min(hand.translation.y + 0.35);
+                let start = *top;
                 if let (Some(anchor), Some(actual)) = (t.anchors[side], t.hands[side]) {
                     // Absolute anchor error closes after the body moves. Integrating controller
                     // deltas alone never notices an automatic native hang correction or drift.
@@ -131,7 +139,7 @@ fn drive(
                         - crate::tfrag_render::game_to_bevy(actual);
                     grips += 1;
                 }
-                if start.y - hand.translation.y > 0.12 && gestures.velocity[side].y < -1.15 {
+                if start.y - hand.translation.y > 0.12 && gestures.velocity[side].y < -0.9 {
                     gestures.shove_at[side] = Some(now);
                 }
                 if start.y - hand.translation.y < 0.04 {
@@ -162,13 +170,13 @@ fn drive(
     } else {
         Vec3::ZERO
     });
-    t.ledge_jump |= gestures.shove_at[0]
-        .zip(gestures.shove_at[1])
-        .is_some_and(|(a, b)| {
-            // A small simultaneity window accommodates the two independently sampled hands.
-            (a - b).abs() <= 0.18 && now - a < 0.18 && now - b < 0.18
-        });
-    if t.ledge_jump {
+    // Every gripping hand shoves down together (a small window accommodates the two independently sampled hands).
+    let gripping: Vec<usize> = (0..2).filter(|&s| hanging && t.grips[s] && motion.hands[s].is_some()).collect();
+    let times: Vec<f64> = gripping.iter().filter_map(|&s| gestures.shove_at[s]).filter(|&a| now - a < 0.18).collect();
+    let (first, last) = times.iter().fold((f64::MAX, f64::MIN), |(lo, hi), &a| (lo.min(a), hi.max(a)));
+    if !gripping.is_empty() && times.len() == gripping.len() && last - first <= 0.18 {
+        println!("VR_GAME ledge_shove hands={}", gripping.len());
+        t.ledge_jump = true;
         gestures.shove_at = [None; 2];
     }
     if swimming {
