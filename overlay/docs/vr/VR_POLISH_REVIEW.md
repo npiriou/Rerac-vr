@@ -170,3 +170,10 @@ The manned turrets put the eye at their seat with a fixed view and turn toward w
 A VR Options page sits right below Port Options (only with a VR headset), with Helmet and Boots, both On by default and saved with the port settings. With Helmet on, the worn O2 Mask or Pilot's Helmet is drawn on the player's head, in play, in Ratchet's scenes and in the ship sequences, the eye behind its visor; the scene actor's own helmet, which followed Ratchet's animated head across the view, is hidden. With Boots on, the worn boots show at the feet as the game poses them.
 
 On Oltanis, and on any arrival without a landing after a flight streamed in VR, the hand items were hidden by the travel's hide flag that the preloaded switch never cleared; it is cleared now. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Rails, reach, Hyper Strike aim, a wider visor and the camera flip
+
+On rails the eye now predicts the body instead of trailing it, which had left the eye, the hands and the wrench's hits a metre behind at grind speed; the take-off keeps the eye in the ship's seat once Ratchet sits down; Clank's antenna dot is no longer drawn. The worn O2 Mask sits with the eye closer behind a taller visor whose glass is lighter.
+
+The wrench stretches up to 35 % on fast swings and its hits reach with it; the Hyper Strike carries the native aim assist (a drift toward a near target, a near miss pulled onto it), needs a real downward stroke, and the wrench hand no longer grabs crate tops. A Camera flip option (off by default) turns the view with Ratchet's flips, and two-handed weapons held in one hand are heavier. The loading hitch lost its main-thread table re-read and its departure free; the swap now logs its phases. These changes require headset confirmation; no tests or gameplay scripts were run.

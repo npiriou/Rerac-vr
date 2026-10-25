@@ -130,6 +130,20 @@ impl Hero {
         self.tracked.grabbed == [true; 2] && self.tracked.ledge_held >= ticks(LEDGE_SETTLE)
     }
 
+    /// The physical wrench is ready in the right controller.
+    pub(super) fn wrench_in_tracked_hand(&self) -> bool {
+        self.items.tracked_hand.is_some()
+            && self.items.slot.id == 8
+            && self.items.slot.state == 2
+            && self.items.slot.item.as_ref().is_some_and(|m| m.o_class == super::melee::WRENCH_CLASS && m.mstate == 0)
+    }
+
+    /// The ledge the probes found lies on a crate (classes 500..=540).
+    pub(super) fn ledge_on_crate(&self, env: &super::Env) -> bool {
+        self.ledge_blk.moby
+            .is_some_and(|id| env.mobys.and_then(|sc| sc.mobys.moby(id)).is_some_and(|m| (500..=540).contains(&m.o_class)))
+    }
+
     /// The body's hang and fall states (Clank's in body 1).
     fn ledge_ids(&self) -> (i32, i32) {
         if self.mode == 1 { (0x4b, 0x45) } else { (0x19, 6) }
@@ -267,8 +281,13 @@ impl Hero {
             self.tracked.ledge_held = 0;
             if self.f838 != 0 {
                 let anchor = self.tracked_ledge_anchor();
+                // A crate stack's top is a native ledge (crates flag it while nothing stands on them), but the hand
+                // swinging the wrench onto it means a Hyper Strike; a pending one keeps that hand off any ledge.
+                let wrench_busy = self.wrench_in_tracked_hand()
+                    && (self.tracked.hyper_strike || self.tracked.hyper_buffer > 0 || self.ledge_on_crate(c.env));
                 for side in 0..2 {
                     self.tracked.grabbed[side] = self.tracked.grips[side]
+                        && !(side == 1 && wrench_busy)
                         && self.tracked.hands[side].is_some_and(|hand| {
                             let d: [f32; 3] = std::array::from_fn(|k| hand[k] - anchor[k]);
                             // Reach along the edge is wider than reach into/across it.

@@ -479,9 +479,10 @@ fn obstruction(
 /// The held wrench's size against the native model.
 const WRENCH_SCALE: f32 = 1.20;
 
-/// A fast swing lengthens the drawn wrench a little (up to 15 % from 0.6 to 3.6 m/s).
+/// A fast swing lengthens the drawn wrench, as the native swing sequences stretch its head: up to 35 % from 1.0 to
+/// 3.5 m/s. `tip` reads the stretched rows, so the hit sweep reaches out with it.
 fn swing_stretch(velocity: Vec3) -> f32 {
-    1.0 + ((velocity.length() - 0.6) / 3.0).clamp(0.0, 1.0) * 0.15
+    1.0 + ((velocity.length() - 1.0) / 2.5).clamp(0.0, 1.0) * 0.35
 }
 
 pub(super) fn crate_class(class: i16) -> bool {
@@ -924,16 +925,22 @@ fn interact(
     if motion.slam_velocity.y > -0.25 {
         melee.down_from = Some(hand.translation);
     }
+    // A Hyper Strike: a mostly downward stroke of 8 cm at 1.6 m/s (lowering the arm after a jump is not one).
+    let down = -motion.slam_velocity.y;
     if !p.game.hero.grounded()
         && now >= melee.slam_until
-        && motion.slam_velocity.y < -1.2
+        && down > 1.6
+        && down > 0.8 * Vec2::new(motion.slam_velocity.x, motion.slam_velocity.z).length()
         && melee
             .down_from
-            .is_some_and(|v| v.y - hand.translation.y >= 0.05)
+            .is_some_and(|v| v.y - hand.translation.y >= 0.08)
     {
         p.game.hero.tracked.hyper_strike = true;
-        melee.slam_until = now + 0.5;
+        melee.slam_until = now + 0.3;
         melee.down_from = None;
+        // The strike hits through the native sphere; this frame's swing hit would land on top of it.
+        melee.previous = Some((hand, now));
+        return;
     }
     // Require a deliberate translating hand stroke; a high-speed tip from tiny wrist twitches is insufficient.
     if motion.velocity.length() < 0.65 || melee.swing_from.is_none() {
@@ -965,7 +972,7 @@ fn interact(
     };
     let extend = |item: &HandItem, palm: Vec3| {
         let head = tip(item, data);
-        head + (head - palm).normalize_or_zero() * 0.17
+        head + (head - palm).normalize_or_zero() * (0.17 * swing_stretch(motion.velocity))
     };
     let old_raw = tip(&previous_item, data);
     let old_palm = root.mul_transform(old).translation;
@@ -1389,9 +1396,7 @@ fn present_worn(
     let head = super::game::pose(views.as_deref())
         .or_else(|| settings.desktop_preview.then(|| Transform::from_xyz(0.0, 1.6, 0.0)));
     // The root is the cinematic one in scenes and ship sequences: the player's head in the world in every case.
-    let world = head
-        .zip(rig.root_for(&play.game, settings.units_per_metre))
-        .map(|(h, root)| root.mul_transform(h));
+    let world = head.and_then(|h| rig.view_root_for(&play.game, settings.units_per_metre, h).map(|root| root.mul_transform(h)));
     let class = if scene.running {
         crate::scene_render::worn_head_class(&scene_rt)
     } else if play.svc.game_mode == 6 {

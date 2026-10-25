@@ -1,11 +1,11 @@
 {
-  "checked_utc": "2026-10-25T03:44:23.477801+00:00",
+  "checked_utc": "2026-10-25T04:28:33.874702+00:00",
   "implementation": "Original VR game with native headset heading, local-surface locomotion, physical spatial listener and rail-following camera",
-  "status": "vr_options_helmet_build_ready",
+  "status": "reach_flip_visor_build_ready",
   "build": {
     "profile": "debug",
-    "executable_sha256": "C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B",
-    "completed_utc": "2026-10-25T03:44:16.3376865Z",
+    "executable_sha256": "B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA",
+    "completed_utc": "2026-10-25T04:28:09.5763962Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1370,6 +1370,27 @@
     "recorded_utc": "2026-10-25T03:44:23.477801+00:00",
     "binary_sha256": "C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-103944.log",
+    "headset_tested": false
+  },
+  "reach_flip_visor": {
+    "reported_behavior": "Clank's antenna halo is 20-30 cm off; boots about 1 m ahead on grind rails (mines hard to hit there); the take-off camera leaves the ship; the O2 Mask's view is narrow and its visor too opaque; the inter-planet loading hitch; the wrench should reach further as the native swing stretches it; the Hyper Strike's native aim assist; a Hyper Strike on a crate stack sometimes grabs its top; a 'Camera flip' VR option (off by default); two-handed weapons heavier in one hand.",
+    "changes": [
+      "Clank's antenna dot (drawn on the hidden body's back) is never drawn in VR.",
+      "Rails: the eye predicts the body (the last tick plus its velocity over the overstep) instead of trailing it with a smoothing lag: the eye, the hands and the wrench's hits were 1-1.5 m behind the body at grind speed; the prediction fades out after the rail.",
+      "Take-off: once Ratchet sits down, the eye is the ship's seat, from the pose the hull is drawn with (his own track is authored apart from the ship's and drifted out of it).",
+      "O2 Mask / Pilot's Helmet: the eye sits closer behind the visor (0.16 forward) and the helmet is 15 % taller about the eye, for a wider view through it; the visor glass (only the texels under the alpha test) is drawn at 60 % of its alpha (37.5 % opacity).",
+      "Wrench reach: a fast swing stretches the drawn wrench up to 35 % (1.0 to 3.5 m/s), as the native swing sequences stretch its head; the hit sweep reaches out with it.",
+      "Hyper Strike: the native aim assist's target carries to a physical wrench (the falling body drifts toward a target within 2.5, and a strike missing it by less than 0.75 is pulled onto it); the gesture needs a mostly downward stroke of 8 cm at 1.6 m/s, its cooldown is 0.3 s and the frame's swing hit no longer lands on top of it.",
+      "Crates: the hand holding the wrench does not grab a ledge on a crate (a crate stack's top), nor any ledge while a Hyper Strike is pending.",
+      "Camera flip (VR Options, off by default, saved as vr_camera_flip): the view turns with Ratchet's head joint during flips, double jumps, wall jumps and grind jumps (faded in and out, interpolated per tick); the aim, the hands and the walking direction keep the upright root.",
+      "Two-handed weapons held in one hand lag in turn (0.22 s) and position (0.12 s, at most 10 cm), droop 6 degrees and sag 1.5 cm; with the support grip they follow exactly (not the Hydrodisplacer).",
+      "Inter-planet loading: the destination's item tables come from the per-level cache (no boot ELF re-read on the main thread), the departure world is freed on a worker thread at the cut, and the swap logs its phases (VR_HITCH) for the next step."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "No antenna dot; boots under you and wrench hits on rails; the take-off view in the seat; the O2 Mask's view and tint; wrench reach; the Hyper Strike's aim and the crate stacks; the Camera flip option; one-handed two-handed weapons; the loading hitch (and the VR_HITCH timings).",
+    "recorded_utc": "2026-10-25T04:28:33.874702+00:00",
+    "binary_sha256": "B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-112430.log",
     "headset_tested": false
   }
 }

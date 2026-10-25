@@ -167,7 +167,12 @@ fn prepare(
         Phase::AwaitBlack if streaming() && h.black_frames.load(Ordering::Acquire) >= 3 => {
             // Only hand off simulations at the cut, after all destination setup happened in flight.
             STREAMING.store(false, Ordering::Release);
-            commands.remove_resource::<FlightWorld>();
+            // The departure world (a whole level and its simulation) is freed on a worker, not in this frame.
+            commands.queue(|w: &mut World| {
+                if let Some(departure) = w.remove_resource::<FlightWorld>() {
+                    let _ = std::thread::Builder::new().name("departure drop".into()).spawn(move || drop(departure));
+                }
+            });
             travel.enter_preloaded(&mut commands);
             flight.active = false;
             flight.draw = None;

@@ -122,7 +122,16 @@ pub(super) struct Rig {
     rail_pitch: f32,
     rail_time: Option<f64>,
     rail_position: Option<Vec3>,
-    rail_samples: Option<(u64, Vec3, Vec3)>,
+    /// The last two ticks' hero positions on a rail, and the eye's offset from the last one (the overstep's prediction,
+    /// fading out after the rail).
+    rail_samples: Option<[(u64, Vec3); 2]>,
+    rail_offset: Vec3,
+    /// The camera flip (VrOptions::camera_flip): Ratchet's head joint when the flip began, the last two ticks' turns
+    /// since then, the fade weight and this frame's turn of the view.
+    flip_start: Option<Quat>,
+    flip_samples: Option<(u64, Quat, Quat)>,
+    flip_weight: f32,
+    flip: Quat,
     /// The hero's group and, on the hoverboard, his position of the last frame (its start and respawns teleport him).
     hero_group: i32,
     board_pos: Option<Vec3>,
@@ -160,6 +169,16 @@ impl Rig {
             self.snap_held = true;
             self.revision = self.revision.wrapping_add(1);
         }
+    }
+    /// [`Self::root_for`] turned about the head by the camera flip: for drawing only (the aim, the hands and the
+    /// walking direction keep the upright root).
+    pub(super) fn view_root_for(&self, game: &rc_game::tick::Game, scale: f32, head: Transform) -> Option<Transform> {
+        let root = self.root_for(game, scale)?;
+        if self.cinematic_root.is_some() || crate::saves::front_end_active() || self.flip == Quat::IDENTITY {
+            return Some(root);
+        }
+        let eye = root.transform_point(head.translation);
+        Some(Transform { translation: eye + self.flip * (root.translation - eye), rotation: self.flip * root.rotation, scale: root.scale })
     }
     /// The eye the body carries: above the (rail-smoothed) feet by the posture's eye height, less Clank's climb clamp.
     pub(super) fn body_eye(&self, game: &rc_game::tick::Game) -> Vec3 {
@@ -217,6 +236,53 @@ fn eye_parked(game: &rc_game::tick::Game) -> bool {
         || h.state == 0x78
         || (h.state == 0x72 && h.f13f5 != 0 && game.mobys.mobys.iter().any(|m| m.o_class == 35 && m.state == 3))
 }
+/// The states the camera flip follows: the flip, the double jump, the wall jump and the grind jumps.
+const FLIP_STATES: [i32; 5] = [0x0b, 0x0e, 0x11, 0x29, 0x2a];
+/// The flip's fade in and out (seconds).
+const FLIP_FADE: f32 = 0.15;
+
+/// The camera flip's turn this frame: Ratchet's head joint's turn since the flip began (his animated body flips, his
+/// rotation does not), in the world, sampled per tick and interpolated by the overstep, faded in and out.
+fn update_flip(
+    rig: &mut Rig,
+    play: &crate::gameplay::Play,
+    attach: Option<&crate::moby_attach::MobyAttach>,
+    on: bool,
+    dt: f32,
+    overstep: f32,
+) {
+    let hero = &play.game.hero;
+    let body = on && hero.mode == 0 && !play.death_pending && !eye_parked(&play.game);
+    let flipping = body && FLIP_STATES.contains(&hero.state);
+    let head = attach.filter(|_| body).and_then(|a| a.hero_head_rotation(play));
+    if flipping && rig.flip_start.is_none() {
+        rig.flip_start = head;
+        rig.flip_samples = None;
+    }
+    let tick = play.game.counter;
+    if rig.flip_samples.is_none_or(|(t, _, _)| t != tick) {
+        let turn = rig.flip_start.zip(head).map_or(Quat::IDENTITY, |(start, now)| {
+            let r = hero.moby_rows;
+            let col = |i: usize| Vec3::new(r[i][0].to_f32(), r[i][1].to_f32(), r[i][2].to_f32()).normalize_or_zero();
+            let body = Quat::from_mat3(&Mat3::from_cols(col(0), col(1), col(2))).normalize();
+            let q = body * (now * start.inverse()) * body.inverse();
+            // Game (x, y, z) to Bevy (x, z, −y).
+            Quat::from_xyzw(q.x, q.z, -q.y, q.w).normalize()
+        });
+        let previous = rig.flip_samples.map_or(turn, |s| s.2);
+        rig.flip_samples = Some((tick, previous, turn));
+    }
+    let target = if flipping { 1.0 } else { 0.0 };
+    rig.flip_weight = (rig.flip_weight + (target - rig.flip_weight).clamp(-dt / FLIP_FADE, dt / FLIP_FADE)).clamp(0.0, 1.0);
+    if rig.flip_weight == 0.0 && !flipping {
+        (rig.flip_start, rig.flip_samples, rig.flip) = (None, None, Quat::IDENTITY);
+        return;
+    }
+    let Some((_, a, b)) = rig.flip_samples else { return };
+    let w = rig.flip_weight * rig.flip_weight * (3.0 - 2.0 * rig.flip_weight);
+    rig.flip = Quat::IDENTITY.slerp(a.slerp(b, overstep.clamp(0.0, 1.0)), w);
+}
+
 #[derive(Resource, Clone, Default)]
 struct Rendered(Arc<AtomicU64>);
 #[derive(Resource, Clone, Default)]
@@ -869,6 +935,7 @@ fn follow_game_camera(
     scene: Res<crate::scene_render::ActiveScene>,
     scene_runtime: Res<crate::scene_render::SceneRuntime>,
     fixed: Res<Time<Fixed>>,
+    (attach, vr_options): (Option<Res<crate::moby_attach::MobyAttach>>, Option<Res<crate::render_settings::VrOptions>>),
 ) {
     // Until this frame's eye is known, culling uses the native camera (the title, a lost focus).
     super::loading::set_render_eye(None, false);
@@ -1059,35 +1126,23 @@ fn follow_game_camera(
     let pitch_error = target_pitch - rig.rail_pitch;
     rig.rail_pitch += (pitch_error * (1.0 - (-dt / 0.62).exp())).clamp(-dt * 0.30, dt * 0.30);
     let position = crate::tfrag_render::game_to_bevy(play.game.hero.position());
-    let smooth_position = if on_rail {
-        let (tick, old, current) =
-            rig.rail_samples
-                .unwrap_or((play.game.counter, position, position));
-        let sample = if tick != play.game.counter {
-            (play.game.counter, current, position)
-        } else {
-            (tick, old, current)
-        };
-        rig.rail_samples = Some(sample);
-        sample
-            .1
-            .lerp(sample.2, fixed.overstep_fraction().clamp(0.0, 1.0))
+    // On a rail the eye is the body at this frame: the last tick plus its velocity over the overstep (at most a tick
+    // ahead), not a smoothed trail, which put the eye, the hands and the wrench's hits a metre behind at grind speed.
+    if on_rail {
+        let now = (play.game.counter, position);
+        let [last, prev] = rig.rail_samples.unwrap_or([now; 2]);
+        let samples = if last.0 != now.0 { [now, last] } else { [last, prev] };
+        rig.rail_samples = Some(samples);
+        let ticks = samples[0].0.saturating_sub(samples[1].0);
+        let step = if (1..=4).contains(&ticks) { (samples[0].1 - samples[1].1) / ticks as f32 } else { Vec3::ZERO };
+        let step = if step.length() < 1.0 { step } else { Vec3::ZERO };
+        rig.rail_offset = step * fixed.overstep_fraction().clamp(0.0, 1.0);
     } else {
         rig.rail_samples = None;
-        position
-    };
-    if on_rail || rig.rail_position.is_some() {
-        let old = rig.rail_position.unwrap_or(position);
-        let next = old.lerp(smooth_position, 1.0 - (-dt / 0.08).exp());
-        // Large teleports/reloads rebase immediately rather than dragging a camera across the level.
-        rig.rail_position = if old.distance(position) > 20.0 {
-            Some(position)
-        } else if !on_rail && next.distance(position) < 0.005 {
-            None
-        } else {
-            Some(next)
-        };
+        // Off the rail the prediction fades out (a smooth exit, no speed-dependent lag).
+        rig.rail_offset *= (-dt / 0.08).exp();
     }
+    rig.rail_position = (on_rail || rig.rail_offset.length() > 0.005).then(|| position + rig.rail_offset);
     let up = if play.game.hero.gravity_mode != 0 {
         crate::tfrag_render::game_to_bevy(
             [0, 1, 2].map(|i| play.game.hero.moby_rows[2][i].to_f32()),
@@ -1174,7 +1229,9 @@ fn follow_game_camera(
             )
         })
     } else {
-        rig.root_for(&play.game, settings.units_per_metre)
+        let flip_on = vr_options.as_ref().is_some_and(|o| o.camera_flip) && pilot.is_none();
+        update_flip(&mut rig, &play, attach.as_deref(), flip_on, dt, fixed.overstep_fraction());
+        rig.view_root_for(&play.game, settings.units_per_metre, head)
     };
     let Some(root) = root else {
         return;

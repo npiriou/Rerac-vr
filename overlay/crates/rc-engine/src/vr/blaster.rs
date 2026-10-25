@@ -26,9 +26,30 @@ pub(super) struct SupportGrip {
     pub primary: Option<Vec3>,
     offset: Option<Vec3>,
     rotation: Option<Quat>,
+    /// A two-handed weapon held in one hand: its lagging position and its offset from the controller (tracking space).
+    position: Option<Vec3>,
+    lag: Vec3,
     two_handed: bool,
     revision: u64,
 }
+impl SupportGrip {
+    /// Forget the one-handed weapon's inertia.
+    fn release(&mut self) {
+        self.rotation = None;
+        self.position = None;
+        self.lag = Vec3::ZERO;
+    }
+}
+
+/// A two-handed weapon held in one hand is heavy: its turn and position follow the controller with a lag (seconds),
+/// within limits (radians, metres), and it droops (radians of pitch down) and sags (metres).
+const TICK: f32 = 1.0 / 60.0;
+const HEAVY_TURN: f32 = 0.22;
+const HEAVY_FOLLOW: f32 = 0.12;
+const HEAVY_MAX_TURN: f32 = 0.70;
+const HEAVY_MAX_LAG: f32 = 0.10;
+const HEAVY_DROOP: f32 = 0.10;
+const HEAVY_SAG: f32 = 0.015;
 /// Authored model coordinates in game units, measured on the original held meshes.
 /// Local X is top, -Y is forward, Z is lateral for gun-shaped items.
 /// Handheld panels have their own orientation below. Grip placement never follows animated output joints.
@@ -98,6 +119,7 @@ pub(super) fn weapon_hand(
         if let Some(rotation) = support.rotation {
             pose.rotation = rotation;
         }
+        pose.translation += support.lag;
     }
     pose
 }
@@ -328,7 +350,7 @@ fn aim(
     let id = p.game.hero.items.slot.id;
     if !supported(id) || rc_game::hero::items::is_glove(id) {
         support.held = false;
-        support.rotation = None;
+        support.release();
         support.two_handed = false;
         return;
     }
@@ -357,7 +379,7 @@ fn aim(
         .and_then(|a| super::gadget_socket::docked(p, a))
     {
         support.held = false;
-        support.rotation = None;
+        support.release();
         p.game.hero.items.tracked_hand = Some((item.position, item.rows));
         p.game.hero.items.tracked_class = item.o_class;
         return;
@@ -378,7 +400,7 @@ fn aim(
     let grip = hand_input.as_ref().and_then(|i| i.left_grip).unwrap_or(0.0);
     if !two_handed || support.weapon != id || grip < 0.35 || left.is_none() {
         if support.weapon != id {
-            support.rotation = None;
+            support.release();
         }
         support.held = false;
     }
@@ -390,25 +412,37 @@ fn aim(
         support.held = true;
     }
     support.two_handed = two_handed;
-    let desired = physical_weapon_hand(hand, left, &support).rotation;
-    let old = if support.revision != rig.revision {
-        desired
+    // Only the native heavy / two-arm inventory items are heavy with a single grip: they lag in turn and position,
+    // droop and sag; with both hands they follow exactly.
+    // (Not the Hydrodisplacer: plugging it into a tap wants the hand's exact pose.)
+    let one_handed = two_handed && !support.held && id != 22;
+    let physical = physical_weapon_hand(hand, left, &support);
+    let (desired, target) = if one_handed {
+        (physical.rotation * Quat::from_rotation_x(-HEAVY_DROOP), physical.translation - Vec3::Y * HEAVY_SAG)
     } else {
-        support.rotation.unwrap_or(desired)
+        (physical.rotation, physical.translation)
     };
+    let fresh = support.revision != rig.revision;
     support.revision = rig.revision;
-    // Only the native heavy/two-arm inventory items gain inertia with a single grip.
-    let alpha = if two_handed && !support.held {
-        1.0 - (-1.0_f32 / (60.0 * 0.18)).exp()
+    let (old, previous) = if fresh {
+        (desired, target)
     } else {
-        1.0
+        (support.rotation.unwrap_or(desired), support.position.unwrap_or(target))
     };
-    let mut weighted = old.slerp(desired, alpha);
+    let (turn, follow) = if one_handed {
+        (1.0 - (-TICK / HEAVY_TURN).exp(), 1.0 - (-TICK / HEAVY_FOLLOW).exp())
+    } else {
+        (1.0, 1.0)
+    };
+    let mut weighted = old.slerp(desired, turn);
     let lag = weighted.angle_between(desired);
-    if lag > 0.70 {
-        weighted = weighted.slerp(desired, 1.0 - 0.70 / lag);
+    if lag > HEAVY_MAX_TURN {
+        weighted = weighted.slerp(desired, 1.0 - HEAVY_MAX_TURN / lag);
     }
     support.rotation = Some(weighted);
+    let position = target + (previous.lerp(target, follow) - target).clamp_length_max(HEAVY_MAX_LAG);
+    support.position = Some(position);
+    support.lag = position - physical.translation;
     let mut hand = root.mul_transform(weapon_hand(hand, left, &support));
     let Some(mut item) = p.game.hero.items.slot.item.as_ref().cloned() else {
         return;
