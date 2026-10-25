@@ -1463,6 +1463,10 @@
         {
           "old": "        sound_class: m.o_class,\n        pos: [m.position[0], m.position[1], m.position[2]],\n        tick: p.game.counter,\n    };\n    let listener = rc_game::audio::class_sounds::listener_of(&p.game.camera.out);\n    audio.system().play_class_sound(&ev, Some(hero), &listener, &mut p.game.rng);\n}\n\n/// `RC_HUD_TEXT_WINDOW=1`: the text in a `DrawUIFrame` sized from a `FontPrintWindow` measure (regular font,\n",
           "new": "        sound_class: m.o_class,\n        pos: [m.position[0], m.position[1], m.position[2]],\n        tick: p.game.counter,\n    };\n    let listener = rc_game::audio::class_sounds::listener_for_hero(&p.game.camera.out, &p.game.hero);\n    audio.system().play_class_sound(&ev, Some(hero), &listener, &mut p.game.rng);\n}\n\n/// `RC_HUD_TEXT_WINDOW=1`: the text in a `DrawUIFrame` sized from a `FontPrintWindow` measure (regular font,\n"
+        },
+        {
+          "old": "        .collect();\n    let lang = language();\n    let messages = strings::parse_strings(gameplay, lang).context(\"level text\")?;\n",
+          "new": "        .collect();\n    // VR: the fonts' pad icons show the headset controller's buttons (crate::vr::pad_glyphs).\n    #[cfg(feature = \"vr\")]\n    let (fx, glyphs) = {\n        let (mut fx, mut glyphs) = (fx, glyphs);\n        if crate::vr::game_requested() { crate::vr::pad_glyphs::apply(&mut fx, &mut glyphs); }\n        (fx, glyphs)\n    };\n    let lang = language();\n    let messages = strings::parse_strings(gameplay, lang).context(\"level text\")?;\n"
         }
       ]
     },

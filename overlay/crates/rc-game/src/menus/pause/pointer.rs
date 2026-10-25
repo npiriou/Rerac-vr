@@ -372,9 +372,12 @@ impl PageMenu {
         if changed {
             out.sounds.push(MenuSound::Cursor);
         }
-        // A resting stick must not shift the option under a pointing controller.
-        let directions =
-            button::UP | button::DOWN | button::LEFT | button::RIGHT | button::L1 | button::R1;
+        // A resting stick must not shift the option under a pointing controller, nor a shoulder the pointed list row;
+        // elsewhere the shoulders keep their page roles (the quick-select slot beside a pointed weapon).
+        let mut directions = button::UP | button::DOWN | button::LEFT | button::RIGHT;
+        if matches!(widget.data, Data::List(_)) {
+            directions |= button::L1 | button::R1;
+        }
         inp.pressed &= !directions;
         inp.raw_pressed &= !directions;
         inp.pressed_u &= !directions;

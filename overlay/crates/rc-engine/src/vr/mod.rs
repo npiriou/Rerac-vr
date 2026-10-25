@@ -10,6 +10,7 @@ mod haptics;
 pub(crate) mod loading;
 pub(crate) mod menu_pointer;
 mod orientation;
+pub(crate) mod pad_glyphs;
 mod solid_contact;
 pub(crate) mod spatial_menu;
 mod traversal;

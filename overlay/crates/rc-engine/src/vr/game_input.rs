@@ -462,7 +462,7 @@ pub(super) fn sample(
     mut selection: Local<HandSelect>,
     mut jump: Local<JumpInput>,
     mut skip: Local<SkipInput>,
-    (mut utility_down, mut utility_consumed): (Local<u32>, Local<bool>),
+    (mut utility_down, mut utility_consumed, mut left_squeeze): (Local<u32>, Local<bool>, Local<bool>),
 ) {
     *out = GamePad::default();
     hand.grip = None;
@@ -485,6 +485,7 @@ pub(super) fn sample(
         hand.utility_cancel = false;
         *utility_down = 0;
         *utility_consumed = false;
+        *left_squeeze = false;
         return;
     }
     let (Some(a), Some(session)) = (a, session) else {
@@ -646,10 +647,18 @@ pub(super) fn sample(
     let shopping = mode.spatial_vendor && mode.state.mode == rc_game::menus::mode::Mode::Vendor;
     let mut movement = movement.unwrap_or_default();
     let mut camera = camera.unwrap_or_default();
+    if hand.left_grip.is_some_and(|v| v > 0.6) {
+        *left_squeeze = true;
+    } else if hand.left_grip.is_none_or(|v| v < 0.35) {
+        *left_squeeze = false;
+    }
     if gameplay {
         if hand.pack_modifier {
             buttons |= button::R1;
         }
+        // X and B, free in play, hold the native L2 and R2 (the hover and Clank strafes, hoverboard tricks, the
+        // first-person R.Y.N.O., the Hydro-Pack's boost, a ledge drop). Mounted or disguised they keep ○ and □.
+        let face = buttons;
         if shopping {
             // Purchases are the pointer's click (super::vendor); the stick pages.
             let mut shop_buttons = buttons & button::TRIANGLE;
@@ -788,6 +797,14 @@ pub(super) fn sample(
             | button::START
             | button::SELECT
             | square;
+        if mounted.is_none() && !disguised && !shopping {
+            if face & button::CIRCLE != 0 {
+                buttons |= button::L2;
+            }
+            if face & button::SQUARE != 0 {
+                buttons |= button::R2;
+            }
+        }
     } else {
         *selection = HandSelect::default();
         *jump = JumpInput::default();
@@ -799,6 +816,14 @@ pub(super) fn sample(
             rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
         ) {
             buttons |= menu_directions(movement, camera);
+            // The page shoulders (the map's previous / next page, the planet lists, shoulder-stepped lists): the left
+            // grip is L1, the left trigger R1 as in play.
+            if *left_squeeze {
+                buttons |= button::L1;
+            }
+            if hand.pack_modifier {
+                buttons |= button::R1;
+            }
         }
     }
     if gameplay

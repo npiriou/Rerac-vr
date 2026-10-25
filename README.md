@@ -47,7 +47,8 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Right stick | 30-degree snap turn; return to centre before turning again |
 | Vendor open | Left stick walks, A jumps, right stick browses / adjusts quantity, fresh right-trigger presses buy / confirm, right-stick click cancels / closes. Displays stay on the vendor's monitors |
 | Right A | Immediate jump / double jump. Hold the left index trigger + press A for pack jumps or a native side/back flip with a timed directional flick. Confirm in menus |
-| Left index trigger | Native R1 modifier: packs and flips; right trigger remains weapon use |
+| Left index trigger | Native R1 modifier: packs and flips; right trigger remains weapon use. R1 in menus: next map / planet / quick-select slot |
+| Left grip in menus | L1: previous map / planet / quick-select slot |
 | Right grip held | Hold the wrench; swing the hand to hit |
 | Downward wrench strike in the air | Native Hyper Strike: accelerated descent and double wrench damage |
 | Release right grip during a throwing motion | Throw the wrench in the direction of the hand's motion; automatic return |
@@ -63,7 +64,7 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove the gripping hands down at least 12 cm at 0.9 m/s (from their recent top) to climb/jump exactly as A (left-stick movement disabled while hanging); release both grips to drop |
 | Submerged palm strokes | Push water opposite the motion of the hands; turn palms edge-on for recovery. Push up to dive |
 | Right stick click held + right stick left/right | Previous / next quick-select page (return the stick to centre between changes) |
-| B / X | Original menu controls; B also exits the Hologuise |
+| B / X | □ / ○ in menus. In play X holds L2 and B R2 (hover and Clank strafes, hoverboard tricks, Hydro-Pack boost, ledge drop); B exits the Hologuise and both keep □ / ○ on turrets and ships |
 | Left stick click | Select — map |
 | Left Y | Pause during play; skip the current scene/movie during a cinematic (one click queues through its opening fade) |
 | Either joystick in menus | Directional navigation; return to centre between steps. A confirms, Y goes back |
@@ -90,6 +91,8 @@ The build script compiles by default without running tests. Only pass `-RunTests
 The gameplay body is hidden again. Pause/freeze menus use original world-placed primitives, native animated frames and stereo menu models around their opening pose, without a composed-frame headset screen. Left trigger holds native R1 (crouch with blended eye-height change, timed directional flips and pack jumps with A); wrench throwing retains its grip/release gesture.
 
 In the spatial pause menu, aim the right controller at an option or equipment icon and press its trigger to confirm. Cyan marks an actionable target. Hold the trigger on an audio slider to set it by pointing; the native joystick/buttons remain available. Release the trigger before firing after leaving the menu.
+
+Menus, help boxes, banners and subtitles show the headset's buttons instead of the PS2 icons: ✕ becomes A, ○ the right trigger (RT), △ a right-stick click, □ the right grip (RG), L1 the left grip (LG), R1 the left trigger (LT), L2 X, R2 B, and the analog sticks a left (L) or right (R) thumbstick. Each icon names a control that sends that button.
 
 Hyper Strike now gives a strong landing pulse, with a softer echo in the left hand. Held wrench swings stop against solid walls with native sparks/sound and force-scaled impact haptics; resting against a wall does not vibrate repeatedly.
 
