@@ -20,6 +20,10 @@ pub struct Tracked {
     /// Headset listener and levelled locomotion frames; neither overwrites the native camera.
     pub view: Option<crate::follow_camera::CameraView>,
     pub navigation: Option<crate::follow_camera::CameraView>,
+    /// The yaw the hero moved along this tick when it was not his heading (the stick walking backward or sideways, or
+    /// the motion carried once the stick is released): the native movement physics ran facing it
+    /// ([`Hero::tracked_movement_facing`]).
+    pub move_yaw: Option<Pf>,
     pub view_origin: [f32; 3],
     pub hands: [Option<[f32; 3]>; 2],
     pub grips: [bool; 2],
@@ -156,13 +160,73 @@ impl Hero {
             && self.frozen == 0
             && match self.mode {
                 0 => matches!(self.state, 0..=4 | 6..=0x12 | 0x2d | 0x3f | 0x70 | 0x71 | 0x73),
-                // Clank idle, walk, fall, jump and 0x50; Giant Clank idle, walk, fall.
+                // Clank idle, walk, fall, jump and 0x50.
                 1 => matches!(self.state, 0x43..=0x45 | 0x49 | 0x50),
-                2 => matches!(self.state, 0x5a..=0x5c),
+                // Giant Clank: everything but his death (0x62). His body is not drawn: his missiles and beam follow the
+                // player (they kept his heading from when the trigger was pressed).
+                2 => matches!(self.state, 0x5a..=0x61),
                 // The Hologuise disguise idle, walk, fall and salute.
                 3 => matches!(self.state, 0x53..=0x55 | 0x59),
                 _ => false,
             }
+    }
+
+    /// The free-facing states whose movement the stick steers (not the flip, the pack jumps, the wall jump, the look
+    /// stance, the Magneboots or Giant Clank).
+    fn tracked_stick_steered(&self) -> bool {
+        self.gravity_mode == 0
+            && match self.mode {
+                0 => matches!(self.state, 0 | 2 | 3 | 4 | 6 | 7 | 8 | 9 | 0xe | 0x12 | 0x2d | 0x73),
+                1 => matches!(self.state, 0x43..=0x45 | 0x49 | 0x50),
+                3 => matches!(self.state, 0x53..=0x55),
+                _ => false,
+            }
+    }
+
+    /// VR: in the original game the hero always moves the way he faces; in VR he faces the player's heading and the
+    /// stick can walk him backward or sideways. The native movement physics (the turn spring, the speed rules, the
+    /// running jump and its push, the air control, the wall and step probes) therefore run with the hero facing the
+    /// stick (StickTarget's yaw) or, once it is released, the way he was moving while he still has speed; the heading
+    /// comes back before the transitions, the weapons, the aim and the write-back ([`Hero::tracked_restore_heading`]).
+    /// Returns whether the facing was turned.
+    pub(super) fn tracked_movement_facing(&mut self, env: &super::Env) -> bool {
+        let carried = self.tracked.move_yaw.take();
+        if !self.tracked_free_facing() || !self.tracked_stick_steered() {
+            return false;
+        }
+        let (sx, sy) = (self.stick[0], self.stick[1]);
+        let yaw = if sx != Pf::ZERO || sy != Pf::ZERO {
+            fast_add_rotations(crate::pad::fast_arctan(-sy, -sx), env.cam_yaw)
+        } else if let Some(y) = carried.filter(|_| Pf::ZERO < self.speed) {
+            y
+        } else {
+            return false;
+        };
+        self.rot[2] = yaw;
+        self.rows = euler_rows(self.rot);
+        self.moby_rot = self.rot;
+        self.moby_rows = self.rows;
+        self.target_yaw = yaw;
+        self.yaw_vel = Pf::ZERO;
+        self.yaw_residual = Pf::ZERO;
+        self.tracked.move_yaw = Some(yaw);
+        true
+    }
+
+    /// VR: the player's heading again after the movement physics, unless the physics entered a state with its own
+    /// orientation (a ledge grab, a scripted pose).
+    pub(super) fn tracked_restore_heading(&mut self) {
+        if !self.tracked_free_facing() {
+            return;
+        }
+        self.tracked_face();
+        self.moby_rot = self.rot;
+        self.moby_rows = self.rows;
+    }
+
+    /// The yaw the hero moves along: the stick's or the carried motion's in VR ([`Tracked::move_yaw`]), else his facing.
+    pub(super) fn move_yaw(&self) -> Pf {
+        self.tracked.move_yaw.unwrap_or(self.rot[2])
     }
 
     /// Keep physical heading on the native body, retaining its current surface normal.

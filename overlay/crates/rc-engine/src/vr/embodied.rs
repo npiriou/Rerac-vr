@@ -90,9 +90,6 @@ impl Motion {
     pub(super) fn wrench_held(&self) -> bool {
         self.held
     }
-    pub(super) fn velocity(&self) -> Vec3 {
-        self.velocity
-    }
 }
 #[derive(Default)]
 pub(super) struct BombGesture {
@@ -119,6 +116,9 @@ struct Melee {
     crank: Option<usize>,
     crank_previous: Option<Vec3>,
     crank_far_since: Option<f64>,
+    /// The swing's whoosh: played this stroke, not before (seconds).
+    whooshed: bool,
+    whoosh_until: f64,
 }
 
 #[derive(Clone, Copy)]
@@ -136,6 +136,7 @@ impl Melee {
     }
     /// Forget the stroke in progress: its contact, the last sample, and where the swing and the Hyper Strike started.
     fn reset_stroke(&mut self) {
+        self.whooshed = false;
         self.clear_contact();
         self.previous = None;
         self.swing_from = None;
@@ -476,6 +477,10 @@ fn obstruction(
         Some(p.game.hero_moby),
     )
 }
+/// The native combo swings' whoosh: Ratchet's class sound 27, a marker on his own swing animations (sequences
+/// 0x17..0x19, the comet throw 0x1a, the jump attack 0x2b); the wrench's swing sequences carry none.
+const SWING_WHOOSH: i32 = 27;
+
 /// The held wrench's size against the native model.
 const WRENCH_SCALE: f32 = 1.20;
 
@@ -727,14 +732,26 @@ fn interact(
     let using_hands = p.game.hero.f838 != 0
         || p.game.hero.tracked.grabbed.iter().any(|&g| g)
         || matches!(p.game.hero.group, 3 | 0x11 | 0x12);
-    if using_hands || p.game.hero.items.slot.id == rc_game::hero::walloper::WALLOPER {
-        if using_hands && motion.equip_wrench {
+    if using_hands {
+        if motion.equip_wrench {
             motion.held = false;
             motion.grip_suppressed = motion.grip_down;
         }
         motion.equip_wrench = false;
         motion.equip_ready_tick = None;
         motion.release = None;
+    }
+    // With the Walloper, a grip takes the wrench back; a fist closed to punch does not (the hand still, no lunge, for
+    // 9 ticks).
+    let walloper = p.game.hero.items.slot.id == rc_game::hero::walloper::WALLOPER;
+    if walloper
+        && motion.equip_wrench
+        && (p.game.hero.state == rc_game::hero::walloper::LUNGE || motion.velocity.length() > 0.9)
+    {
+        motion.held = false;
+        motion.grip_suppressed = motion.grip_down;
+        motion.equip_wrench = false;
+        motion.equip_ready_tick = None;
     }
     if input.left_grip.is_some_and(|v| v > 0.5) {
         motion.equip_wrench = false;
@@ -746,7 +763,7 @@ fn interact(
     }
     if motion.equip_wrench {
         // Let one native collision/probe tick discover a ledge before a fresh squeeze equips a wrench.
-        let ready_tick = *motion.equip_ready_tick.get_or_insert(p.game.counter + 1);
+        let ready_tick = *motion.equip_ready_tick.get_or_insert(p.game.counter + if walloper { 9 } else { 1 });
         if let Some(s) = session.as_mut().filter(|_| p.game.counter >= ready_tick) {
             s.0.temp_hand = 8;
             p.game.hero.items.restore_pending = 0;
@@ -950,6 +967,20 @@ fn interact(
         .swing_from
         .map_or(0.0, |start| start.distance(hand.translation));
     let hand_speed = motion.velocity.length();
+    // The native combo swings whoosh (Ratchet's swing animations play it): once per stroke, hit or miss, re-armed
+    // when the hand slows down, at most every 0.2 s.
+    if hand_speed < 0.65 {
+        melee.whooshed = false;
+    } else if !melee.whooshed
+        && hand_speed >= 2.4
+        && travel >= 0.14
+        && now >= melee.whoosh_until
+        && p.game.hero.state != 0x14
+    {
+        p.game.hero.fx.item_voices.push(rc_game::hero::packs::SoundCmd::Voice { index: SWING_WHOOSH, flags: 0 });
+        melee.whooshed = true;
+        melee.whoosh_until = now + 0.2;
+    }
     let previous = melee.previous.replace((hand, now));
     if p.game.hero.state == 0x14 {
         return;

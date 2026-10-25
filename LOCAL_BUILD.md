@@ -698,3 +698,35 @@ On rails the eye now predicts the body instead of trailing it, which had left th
 The wrench stretches up to 35 % on fast swings and its hits reach with it; the Hyper Strike carries the native aim assist (a drift toward a near target, a near miss pulled onto it), needs a real downward stroke, and the wrench hand no longer grabs crate tops. A Camera flip option (off by default) turns the view with Ratchet's flips, and two-handed weapons held in one hand are heavier. The loading hitch lost its main-thread table re-read and its departure free; the swap now logs its phases. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-112430.log`. SHA-256: `B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA`.
+
+
+## Body direction, the wrench's whoosh, Giant Clank, the Walloper and walking in the quick select
+
+A Direction option (Body by default, or Gaze) makes the heading and the stick follow an estimate of the body from the head and both controllers, so the player can walk one way while looking another. The wrench whooshes on each swing with the native combo sounds, glow billboards face the headset (Clank's antenna light in scenes), Giant Clank's heading follows the player in every state with his missiles leaving from his drawn hands, the Walloper gives the wrench back on a still grip and chains consecutive punches, and the quick select no longer stops Ratchet's movement. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-125434.log`. SHA-256: `B1B8944B2F1C449E3C03C379E64B67264C6661CB1E15BEAA33BF32B347C142A2`.
+
+
+## Walking backward and sideways, Walloper punches and the wrench's whoosh
+
+The original game always moves Ratchet the way he faces. In VR he faces the player's heading, so the native movement physics now run facing the way he actually moves (the stick, or the carried motion once it is released), and the heading comes back right after the move for the transitions, flips, weapons, aim and ledges. Walking backward or sideways no longer lurches forward on release, jumps and steps follow the motion, and the stick no longer aims melee attacks.
+
+A Walloper punch is the right hand thrown forward relative to the head, within about 55° of the facing and away from the body: folding the arm back, swinging sideways or stepping back never punches, and the lunge goes where the player faces. The wrench's whoosh plays Ratchet's own swing sound, since the wrench's animations carry none. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-135137.log`. SHA-256: `DDEE3A69170E96ACD4815FFA47C7B8B1E64F6438DE4714B290E27D538565810C`.
+
+
+## Quick-select pages on the trigger
+
+While the right-stick click holds the quick select open, the right trigger turns to the next page instead of the right stick; the press fires nothing until it is released, and a trigger already held when the ring opens does not turn the page. This change requires headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-140220.log`. SHA-256: `34B438109C51819897F950DC061696A0A6B6D830F55B3AB4299EDD3A6B5DF68C`.
+
+
+## Headset buttons in menus and text
+
+Menus, help boxes, banners, subtitles and the spatial panels now show the headset's buttons instead of the PS2 icons: the fonts' pad icons are repainted when the level HUD loads in VR, ✕ as A, ○ as the right trigger (RT), △ as a right-stick click, □ as the right grip (RG), L1 as the left grip (LG), R1 as the left trigger (LT), L2 as X, R2 as B and the analog sticks as L / R thumbsticks; their advances follow the new glyphs, so layout and pointer targets stay aligned.
+
+Every icon names a control that works: in the pause and freeze menus the left grip sends L1 and the left trigger R1 (previous / next map, the planet lists, the Weapons page's quick-select slot, now also while pointing at a weapon), and in play X and B, unused until now, hold L2 and R2 (hover and Clank strafes, hoverboard tricks, the Hydro-Pack boost, a ledge drop); on turrets, ships and in the Hologuise they keep ○ and □. The first glyph set was confirmed in the headset; the new shoulder bindings require headset confirmation; no tests or gameplay scripts were run.
+
+Built in the separate checkout `X:\codex\worktrees\rerac-vr-pad-glyphs` (release profile) while `rerac-vr-build` was in use. Build: `X:\codex\worktrees\rerac-vr-pad-glyphs\work\vr\build-20261025-143505.log`. SHA-256: `D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE`.

@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_reach_flip_visor_build_ready",
+  "status": "native_windows_pad_glyphs_build_ready",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA",
+  "latest_build_sha256": "D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "No antenna dot; boots under you and wrench hits on rails; the take-off view in the seat; the O2 Mask's view and tint; wrench reach; the Hyper Strike's aim and the crate stacks; the Camera flip option; one-handed two-handed weapons; the loading hitch (and the VR_HITCH timings).",
+  "latest_build_physical_validation": "The left grip / left trigger as L1 / R1 on the map, planet and Weapons pages; X / B as L2 / R2 in play (hover strafe, hoverboard tricks, ledge drop); the LG, X and B icons.",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",
@@ -479,6 +479,65 @@
     "recorded_utc": "2026-10-25T04:28:33.874702+00:00",
     "binary_sha256": "B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-112430.log",
+    "headset_tested": false
+  },
+  "direction_walloper": {
+    "reported_behavior": "A VR option for the character's orientation following the gaze or the body (hands + head), body by default; the wrench should whoosh when swung, even in the air; Clank's antenna light is still offset in in-level movies; Giant Clank feels like the model's orientation is independent of how we are turned; with the Walloper the grip does not switch back to the wrench; the Walloper misses consecutive punches while the arm moves; the quick select blocks the character's movement.",
+    "changes": [
+      "VR Options 'Direction': Body (default) or Gaze, saved as vr_direction. Body: the heading and the stick's frame follow an estimate from the head and both controllers (the shoulder line, the hands' midpoint ahead of the head, where the controllers point), following past 15 degrees and settling within 2 so a glance does not swing it, the head never more than 90 degrees from it, the head alone when a controller is untracked.",
+      "The wrench whooshes on each physical swing (the native combo swings' sound markers, sequences 3..5 in turn), hit or miss, once per stroke.",
+      "Glow billboards face the headset's eye in every mode (in scenes they faced the authored shot's camera and were pulled sideways: Clank's antenna light).",
+      "Giant Clank: his heading follows the player in every gameplay state but death (his missiles and beam kept the heading from when the trigger was pressed); his missiles leave from the hand drawn on that side's controller.",
+      "Walloper: a still grip (no lunge, 9 ticks) takes the wrench back; punches re-arm when the stroke slows below half its peak or the arm pulls back, a punch thrown during a lunge chains once its hit window is over, the cooldown is 0.22 s, and the trigger's native lunge no longer disables physical punches.",
+      "Quick select: the left stick keeps moving Ratchet (the right hand picks); the ring's pad lock is lifted and the stick's d-pad bits are kept out of the ring."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The Direction option (Body / Gaze); the wrench's whoosh; Clank's antenna light in scenes; Giant Clank's missiles and beam; the Walloper (grip back to the wrench, consecutive punches); walking during the quick select.",
+    "recorded_utc": "2026-10-25T05:58:07.608668+00:00",
+    "binary_sha256": "B1B8944B2F1C449E3C03C379E64B67264C6661CB1E15BEAA33BF32B347C142A2",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-125434.log",
+    "headset_tested": false
+  },
+  "strafe_walloper": {
+    "reported_behavior": "No sound on the wrench's swings; the Walloper sometimes takes false backward inputs, especially while walking backward, and fires when the arm folds back, sending Ratchet the opposite way from where the player looks; walking backward or sideways does not really exist in the original game, where Ratchet and Clank always move the way they face, and should be implemented properly.",
+    "changes": [
+      "The wrench's whoosh is Ratchet's own class sound 27, the marker on his native swing animations (the wrench's swing sequences carry no sound marker, so nothing played): once per fast stroke, hit or miss.",
+      "Walking backward and sideways: the native movement physics (turn spring, speed rules, running jump and its push, air control, wall, step and edge probes) run with the hero facing the way he moves (the stick, or the motion carried once it is released while he still has speed); the player's heading comes back right after the move, for the transitions, flips, weapons, aim, ledges and the drawn hands. Ratchet idle, walk, stop, crouch, fall, jumps, double jump, water jump and wading; Clank and the Hologuise idle, walk and fall. A walk keeps only the motion along the stick (a reversal starts from rest); the running jump and the step down follow the motion; Clank's landing no longer stops on a stick off his heading.",
+      "In VR the stick walks and no longer aims the wrench states, the Walloper or the Hyper Strike (their aim and target search follow the player's heading).",
+      "Walloper punches: the right hand's motion relative to the head (walking or leaning is not a punch), at least 1.45 m/s, within about 55 degrees of the player's facing and away from the spine; an arm folding back, a sideways swing or a backward step never punches. The lunge goes where the player faces, turned at most 25 degrees toward the punch or the trigger's aim; Ratchet faces it during the lunge, and the windup keeps only the motion along it."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The wrench's whoosh; walking backward and sideways (no forward lurch on release, jumps, steps, walls); Walloper punches only forward, the lunge along the facing.",
+    "recorded_utc": "2026-10-25T06:55:57.002503+00:00",
+    "binary_sha256": "DDEE3A69170E96ACD4815FFA47C7B8B1E64F6438DE4714B290E27D538565810C",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-135137.log",
+    "headset_tested": false
+  },
+  "qs_trigger": {
+    "reported_behavior": "In the quick select, the other pages should be reached by pressing the trigger of the same controller while the ring is open, not with the joystick.",
+    "changes": [
+      "Quick select: while the right-stick click holds the ring open, the right trigger turns to the next page (cycling); the right stick no longer does. A trigger already held when the ring opens does not turn the page, and a trigger pressed in the ring fires nothing, during the ring or after it closes, until released."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "Quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward; the wrench's whoosh.",
+    "recorded_utc": "2026-10-25T07:04:41.107219+00:00",
+    "binary_sha256": "34B438109C51819897F950DC061696A0A6B6D830F55B3AB4299EDD3A6B5DF68C",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-140220.log",
+    "headset_tested": false
+  },
+  "pad_glyphs": {
+    "reported_behavior": "The menus show PS2 button icons instead of the headset's; then every button the menus show that the headset cannot press (L1, L2, R2) should become a VR controller button that works.",
+    "changes": [
+      "vr/pad_glyphs.rs repaints the PS2 pad icons (text bytes 0x10..0x19) of the three fonts' FX textures when the level HUD loads with RC_VR=1: A (\u2715), RT (\u25cb), right-stick click (\u25b3), RG (\u25a1), LG (L1), LT (R1), X (L2), B (R2), L / R thumbsticks; the glyph tables' advances follow the new widths (layout, word wrap and pointer rectangles stay consistent).",
+      "Pause and freeze menus: the left grip (0.6 / 0.35 hysteresis) sends L1 and the left trigger R1.",
+      "Play: X and B hold L2 and R2 unless mounted, disguised or shopping (there they keep \u25cb and \u25a1).",
+      "The menu pointer masks L1 / R1 only over a pointed list row, so the Weapons page's slot moves while a weapon is pointed."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release: non-VR cargo check, VR cargo check and the Windows release build passed. The glyphs were rendered offline from the level-01 fonts and inspected; the first glyph set was confirmed in the headset by the user. No tests or gameplay scripts were run.",
+    "remaining_confirmation": "The left grip / left trigger as L1 / R1 on the map, planet and Weapons pages; X / B as L2 / R2 in play (hover strafe, hoverboard tricks, ledge drop); the LG, X and B icons.",
+    "recorded_utc": "2026-10-25T07:45:23.110523+00:00",
+    "binary_sha256": "D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-pad-glyphs\\work\\vr\\build-20261025-143505.log",
     "headset_tested": false
   }
 }
