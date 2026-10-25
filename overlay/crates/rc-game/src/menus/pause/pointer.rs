@@ -1,6 +1,6 @@
 //! Pointing selects the original menu cursors; a click goes through their ordinary button actions.
-use super::{Data, MenuAssets, MenuInput, MenuOut, MenuSound, PageMenu, func, lf, list_font, port};
-use crate::{game_state::GameState, hud::text as wtext, pad::button};
+use super::{Data, MenuAssets, MenuInput, MenuOut, MenuSound, PageMenu, func, lf, list_font, port, saves};
+use crate::{game_state::GameState, hud::text as wtext, memcard::TYPE_PS2, pad::button};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Action {
@@ -74,6 +74,22 @@ impl PageMenu {
                 }
             };
             let row_rect = |cy: f32, h: f32| [4.0, cy - h * 0.5, (width - 8) as f32, h];
+            if w.draw == saves::func::SLOTS_DRAW {
+                // The memory card slot lists (Save, Load, New Game) as saves::slots_draw frames them; a slot is
+                // picked once the card is read, and Load only picks a used one.
+                let card = &self.saves.card;
+                let ready = card.idle() && card.card.ty == TYPE_PS2;
+                let step = if card.pal { 0x54 } else { 0x4b };
+                for (i, p) in card.card.previews.iter().enumerate() {
+                    let pick = w.update != saves::func::LOAD_UPDATE || p.level >= 0;
+                    push(
+                        [0.0, (step * i as i32) as f32, width as f32, 0x38 as f32],
+                        Action::Row(i as i32),
+                        ready && pick,
+                    );
+                }
+                continue;
+            }
             match &w.data {
                 Data::Galaxy => {
                     for level in 1..=19 {
@@ -327,6 +343,12 @@ impl PageMenu {
             return;
         }
         let old_focus = page.focus;
+        // A slot page's other widgets (the hints, the slot's planet) take no input, and its slot list only updates while
+        // focused: pointing at them must not leave the stick and ✕ without a slot list.
+        let slot_list = |w: u32| self.widgets.get(&w).is_some_and(|w| w.draw == saves::func::SLOTS_DRAW);
+        if old_focus != target.widget && slot_list(old_focus) && !slot_list(target.widget) {
+            return;
+        }
         if old_focus != target.widget {
             self.call_leave(old_focus, out, gs);
             if let Some(page) = self.pages.get_mut(&self.current) {
@@ -368,6 +390,12 @@ impl PageMenu {
         if let Some((cursor, row)) = cursor.zip(row) {
             changed |= *cursor != row;
             *cursor = row;
+        }
+        if let Some(row) = row.filter(|_| target.enabled && widget.draw == saves::func::SLOTS_DRAW) {
+            // A slot list's cursor is its +0x10 and the pages' shared last slot, which saves::cursor_keys starts from.
+            changed |= widget.raw[4] as i32 != row;
+            widget.raw[4] = row as u32;
+            self.saves.last_slot = row;
         }
         if changed {
             out.sounds.push(MenuSound::Cursor);

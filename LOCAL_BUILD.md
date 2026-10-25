@@ -776,3 +776,9 @@ Build: `work/vr/build-20261025-184248.log`. SHA-256: `EF81BA7003B89AADB8DE2C6FBB
 ## Player release: RatchetVR.exe
 
 `scripts/vr/Package.ps1` builds the player release folder and zip (overlay/docs/vr/README.md). `RatchetVR.exe` (`crates/rc-engine/src/bin/ratchet-vr.rs`) extracts the player's disc on first launch and starts the game in VR; `RatchetVR Sandbox.exe` starts the debug mode. The app-local Visual C++ runtime (14.29) ships with the binaries (linker 14.29). Release `0.1.0` was built from a fresh upstream worktree with the package applied (`rerac-vr-release`), portable x86-64 (no `target-cpu=native`): `dist\RatchetVR-0.1.0.zip`, 34.9 MB. From the unzipped zip, desktop preview only: `RatchetVR.exe <iso>` extracted the disc (SCUS_971.99, 2724 files) and booted the normal front end (preview smoke check not applicable on the title screen); `RatchetVR Sandbox.exe` reused the data and reported `ORIGINAL_GAME_SMOKE_PASS` on Kerwan. The file dialog, message boxes and a headset launch require manual confirmation. No tests were run.
+
+## Menu pointer on the memory card slot lists (release 0.1.1)
+
+The New Game, Save and Load slot lists had no pointer targets, and pointing at another widget of a slot page moved the focus off the slot list, whose native update only runs focused, so neither the trigger nor A nor the sticks picked a slot. Each slot is now a pointer target (hover moves the native cursor and the shared last slot, the trigger confirms through the native ✕; Load only picks a used slot), and on a slot page the pointer never moves the focus off the slot list. Release `0.1.1` was built in `rerac-vr-release` with `scripts/vr/Package.ps1 -Version 0.1.1`: `dist\RatchetVR-0.1.1.zip`, 34.9 MB. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `work/vr/package-20261025-224720.log`. SHA-256 (zip): `9733945E5D32B4E2D3C7E02A41E2735755CD2689A7C84401992F95E859AE6230`.
