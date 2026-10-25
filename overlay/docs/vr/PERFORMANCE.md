@@ -29,7 +29,7 @@ $env:WGPU_DEBUG='0'
 $env:WGPU_VALIDATION='0'
 $env:WGPU_GPU_BASED_VALIDATION='0'
 $env:WGPU_VALIDATION_INDIRECT_CALL='0'
-.\scripts\vr\Run.ps1 -Release -Mode debug-gold -DataDir 'X:\dev\rerac\extracted'
+.\scripts\vr\Run.ps1 -Release -Mode debug-gold -DataDir '<extracted RAC1 data>'
 ```
 
 No automated tests, smoke tests or gameplay scripts were run. Read-only OpenVR

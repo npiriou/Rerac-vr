@@ -1,8 +1,8 @@
 # Native Windows build — 2026-10-22
 
-The original desktop checkout is `X:\dev\rerac`, at upstream commit
+The original desktop checkout (the upstream repository) is at upstream commit
 `89c87e98f9d8296187df2a6310c67b32144090d3`. Its source remains unchanged.
-VR integration lives in `X:\codex\worktrees\rerac-vr-build`, a separate Git
+VR integration lives in a separate build checkout (`rerac-vr-build`), a Git
 worktree at the same upstream revision with this package applied.
 Its ignored `extracted` junction points to the original checkout's extracted
 data. The ISO and compressed archive were not copied or added to Git.
@@ -66,8 +66,8 @@ is present. PICO Connect is installed. Head tracking, stereo views, controller
 bindings, and headset frame timing remain pending until hardware is available.
 
 ```powershell
-& 'X:\codex\worktrees\rerac-vr-build\scripts\vr\Run.ps1' -Scene calibration -DesktopPreview
-& 'X:\codex\worktrees\rerac-vr-build\scripts\vr\Run.ps1' -Scene novalis -DesktopPreview -DataDir 'X:\dev\rerac\extracted'
+& '.\scripts\vr\Run.ps1' -Scene calibration -DesktopPreview
+& '.\scripts\vr\Run.ps1' -Scene novalis -DesktopPreview -DataDir '<extracted RAC1 data>'
 ```
 
 Use WASD to move, Q/E down/up, arrow keys to look, Shift for faster movement,
@@ -77,11 +77,11 @@ the rendering check. Logs are in `work/vr/readiness-*.log` in the VR checkout.
 ## Rebuild and launch with a headset
 
 ```powershell
-Set-Location 'X:\codex\worktrees\rerac-vr-build'
+Set-Location '<build checkout>'
 .\scripts\vr\Build.ps1
 .\scripts\vr\Run.ps1 -Scene calibration
 # After calibration has passed on the headset:
-.\scripts\vr\Run.ps1 -Scene novalis -DataDir 'X:\dev\rerac\extracted'
+.\scripts\vr\Run.ps1 -Scene novalis -DataDir '<extracted RAC1 data>'
 ```
 
 Launch scripts require a completed build record. Headset stereo, controller
@@ -105,14 +105,14 @@ implement those later gameplay systems.
 
 The earlier terrain-only implementation is superseded for Novalis. `RC_VR=1` now enters the original application and plugin chain; only explicit calibration uses the isolated diagnostic app. The original hero and all game systems run once, with XR views and original-pad input added to them.
 
-Original integration Windows executable (before the controller remap below): `X:/codex/worktrees/rerac-vr-build/target/debug/rerac.exe`
+Original integration Windows executable (before the controller remap below): `target/debug/rerac.exe`
 
 SHA-256: `FD9FA600715B98A6A0CDEC487BA4CDA97A86A6957FD5D47BEE1A0F62E44FC5B0`
 
 - Native VR build and non-VR check: PASS (`work/vr/original-game-ready-build.log`).
 - Full workspace/all-targets check with dev + VR: PASS.
 - Workspace unit suite including VR: 1,089 passed, 3 ignored. Diagnostic standalone suite: 15 passed.
-- Package checks: 21 passed. Guarded overlay apply checked on a clean worktree under X:/codex/worktrees.
+- Package checks: 21 passed. Guarded overlay apply checked on a clean worktree.
 - Original-game desktop/stereo smoke: 487 ticks, 327 render frames, 14 Ratchet meshes, two world views and two sky views; minimum 701 world draws and 5 sky draws per eye. No render errors.
 - Scripted movement/jump/wrench/fire went through the original pad/tick. Position changed from [162.5303, 136.3935, 60.0] to [159.8904, 142.3601, 60.0]; maximum game z 61.2268, then returned to z 60.
 - Headset launch: stereo_rendering_and_basic_controller_play_confirmed. Current log: `work/vr/novalis-headset-20261022-205230.log`. The user confirmed Ratchet/scenery visibility and left-stick movement in the headset. Broader combat/menu and comfort checks remain pending.
@@ -121,7 +121,7 @@ The original main camera drives the third-person VR rig. Shared culling/LOD/ligh
 
 PowerShell 7/.NET on this host preserves an empty native environment entry when `[Environment]::SetEnvironmentVariable(name, $null)` is used. The launcher now removes absent optional variables through the Env provider, including empty capture variables, so the original capture-and-exit mode is not accidentally requested.
 
-Start with `scripts/vr/Run.ps1 -Scene novalis -DataDir X:/dev/rerac/extracted`. SteamVR is elevated on this machine, so the local headset launcher uses the normal Windows RunAs/UAC flow to match it. No SteamVR security settings were changed.
+Start with `scripts/vr/Run.ps1 -Scene novalis -DataDir <extracted RAC1 data>`. SteamVR is elevated on this machine, so the local headset launcher uses the normal Windows RunAs/UAC flow to match it. No SteamVR security settings were changed.
 
 This does not implement tracked-hand aiming, new hero physics, or missing upstream ports. Full campaign completion, GPU/compositor budget and comfort are not certified by a startup smoke test.
 
@@ -502,7 +502,7 @@ Native two-hand items gain bounded rotational inertia with one hand; accepted su
 
 Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. SHA-256 `DE5A220B37FA1CF716ED372BA5AD7463874198263B307CA95A020D2F9AF0C08E`; log `work/vr/vr-polish-batch-build.log`. NOT RUN per AGENTS.md. No scripted gameplay checks. Debug relaunch requested; startup verification pending. Pending headset confirmation of each row in VR_POLISH_REVIEW.md, especially actual ladder/rung geometry, all tool sockets, green/purple cockpit fit, menu flows, destination transitions, rail comfort and weapon inertia. Compilation does not establish physical fit or GPU frame cost.
 
-Debug relaunch completed on Kerwan with the matching final executable. OpenXR produced two head views and destination level 3 continued ticking with zero queued pipelines; process responding. Headset was not focused when inspected. Log: `X:\codex\worktrees\rerac-vr-build\work\vr\debug-kerwan-headset-20261024-113028.log`. Startup Bevy time/camera-order warnings remain; no panic/fatal error observed. No gameplay automation or tests run.
+Debug relaunch completed on Kerwan with the matching final executable. OpenXR produced two head views and destination level 3 continued ticking with zero queued pipelines; process responding. Headset was not focused when inspected. Log: `work/vr/debug-kerwan-headset-20261024-113028.log`. Startup Bevy time/camera-order warnings remain; no panic/fatal error observed. No gameplay automation or tests run.
 
 ## Wrench flash follow-up at maximum range
 
@@ -510,7 +510,7 @@ The user still observed intense white/colored flashes, localized near the maximu
 
 VR wrench wall bursts use at most four small unsplit sparks instead of 20 additive ribbons and ten splitting sparks. Actual tracked headset eye supplies effect clearance. Per-eye shader guards reject zero/view-aligned ribbons and near/behind-eye endpoints before projection/normalization. Stationary or non-finite flight collision segments cannot emit a bounce. Turnaround and bounce events now have separate diagnostic positions.
 
-Non-VR cargo check, VR cargo check and debug executable build passed; git diff --check passed. No automated tests run per AGENTS.md. Binary SHA-256 `52B6B56196A8CC8C389558D44DABA49CFD7EB836457EB15559213544415D2553`. Debug startup verified; log `X:\codex\worktrees\rerac-vr-build\work\vr\debug-kerwan-headset-20261024-114337.log`. Pending a physical throw into empty space at maximum range; the previous after-image change alone was insufficient.
+Non-VR cargo check, VR cargo check and debug executable build passed; git diff --check passed. No automated tests run per AGENTS.md. Binary SHA-256 `52B6B56196A8CC8C389558D44DABA49CFD7EB836457EB15559213544415D2553`. Debug startup verified; log `work/vr/debug-kerwan-headset-20261024-114337.log`. Pending a physical throw into empty space at maximum range; the previous after-image change alone was insufficient.
 
 ## Rigid VR wrench presentation through return and catch
 
@@ -518,7 +518,7 @@ No improvement from the particle attempt; user identifies the wrench model durin
 
 Cloned VR wrench uses original ready pose (sequence 1/frame 0, no snapshot) during OUT, BACK and remaining catch blend. Native flight rows provide horizontal spin. Ready attachment pose matches the displayed mesh. Detached renderer clears held-item spring modifiers. Original distant impact bursts restored; per-eye numerical particle guards retained.
 
-Non-VR cargo check, VR cargo check and Windows debug executable build passed. git diff --check passed. No automated tests run per AGENTS.md. SHA-256 `7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2`. Debug startup verified: `X:\codex\worktrees\rerac-vr-build\work\vr\debug-kerwan-headset-20261024-115307.log`. Pending: verify the entire outgoing/return path and catch in the headset. Prior after-image and particle attempts were reported insufficient.
+Non-VR cargo check, VR cargo check and Windows debug executable build passed. git diff --check passed. No automated tests run per AGENTS.md. SHA-256 `7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2`. Debug startup verified: `work/vr/debug-kerwan-headset-20261024-115307.log`. Pending: verify the entire outgoing/return path and catch in the headset. Prior after-image and particle attempts were reported insufficient.
 
 ## Wrench return, gadget lifecycle and actor eye corrections
 
@@ -530,7 +530,7 @@ White flashes resolved; unreadable wrench return, broken utility insertion/water
 - Remove puzzle footer text/buttons, help prompt, decorative background and controller pointer; retain native puzzle elements. Stick directions control rings; Y/right-stick-click/fresh trigger cancel via queued input consumed until release.
 - Evaluate cinematic eye from the complete head chain. Use actual streamed boarding actor scale/valid frames and ignore hidden actors. Hold last living camera position during capture/death until respawn.
 
-Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. No tests or gameplay run. Build log: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-121824.log`. SHA-256 `02237B9F69D84E24F9AC32D5BF77437501C8CE86647CCA115F7285CED4ECC54E`. Not launched. User closed the previous game to allow executable replacement. User headset confirmation: wrench full return/catch, manual and trigger insertion, puzzle controls/cancellation/reinsertion, water fill/empty, Batalia commando scene, ship exits and swallowing attacks.
+Non-VR cargo check, VR cargo check and Windows debug executable build passed; git diff --check passed. No tests or gameplay run. Build log: `work/vr/build-20261024-121824.log`. SHA-256 `02237B9F69D84E24F9AC32D5BF77437501C8CE86647CCA115F7285CED4ECC54E`. Not launched. User closed the previous game to allow executable replacement. User headset confirmation: wrench full return/catch, manual and trigger insertion, puzzle controls/cancellation/reinsertion, water fill/empty, Batalia commando scene, ship exits and swallowing attacks.
 
 
 ## Planet preparation during space flight and cinema presentation
@@ -541,7 +541,7 @@ Flat movies and slideshows use a black surround with the level sky/world exclude
 
 ECS publication and LevelStartup remain synchronous and may still produce a brief hitch during flight; this change does not claim fully asynchronous scene construction or measured hitch-free travel. The transition behavior and movie presentation require user headset confirmation. No tests or scripted gameplay were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-133506.log`. SHA-256: `17C40F0EFE9F54DCF82E484ABF6ED1C8E1A3C42F9DDCE316DF81295860034C90`.
+Build: `work/vr/build-20261024-133506.log`. SHA-256: `17C40F0EFE9F54DCF82E484ABF6ED1C8E1A3C42F9DDCE316DF81295860034C90`.
 
 
 ## Wrench return, utility gadgets and crank jaws
@@ -556,7 +556,7 @@ On bolt cranks, the open jaws of the original crank pose (sequence 0xb) now stra
 
 These changes require headset confirmation. No tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-145246.log`. SHA-256: `B97452996E0B308FC577712B71D77D1E75BB6D32F5E2B13B3D33E2AFF57B5F04`.
+Build: `work/vr/build-20261024-145246.log`. SHA-256: `B97452996E0B308FC577712B71D77D1E75BB6D32F5E2B13B3D33E2AFF57B5F04`.
 
 
 ## Trespasser panel, Hydrodisplacer pads and menu buttons
@@ -569,7 +569,7 @@ The French VR button bar (Retour, arrows, Valider) drawn at the bottom of the pa
 
 No second wrench model is drawn by the engine at the turnaround. Per-frame diagnostics (`VR_GAME wrench_frame`) now log what each rendered frame draws around it. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-153506.log`. SHA-256: `DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F`.
+Build: `work/vr/build-20261024-153506.log`. SHA-256: `DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F`.
 
 
 ## Ledges, loading, ship opening, caught wrench and the Clank bodies
@@ -584,7 +584,7 @@ Clank and Giant Clank are first person: native eye heights 0.9 and 9.5, Giant Cl
 
 The reported wrench duplicate at maximum range is not explained: per-frame diagnostics show one smooth model without pose change or teleport. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-165439.log`. SHA-256: `2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA`.
+Build: `work/vr/build-20261024-165439.log`. SHA-256: `2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA`.
 
 
 ## Clank fixes and the wrench's spin centre
@@ -593,7 +593,7 @@ Clank's repeated launches came from room-scale walking: the capsule resolver ign
 
 The thrown wrench now spins about its middle, like the original's centred spin pose, instead of the ready mesh's grip origin, whose head swept a metre-wide circle through the eyes when thrown upward. The flight carries the middle from its place in the hand, and the return ends at the held middle; the first tick back no longer doubles the spin step. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-172001.log`. SHA-256: `F4D8D32257A47684C188891D681EEAC2790CB1857321E23F545F770E393931C5`.
+Build: `work/vr/build-20261024-172001.log`. SHA-256: `F4D8D32257A47684C188891D681EEAC2790CB1857321E23F545F770E393931C5`.
 
 
 ## Clank's physical fists, his VR ledges and closing hands
@@ -604,7 +604,7 @@ Clank's ledges use Ratchet's VR ledge system on his own states and dimensions: a
 
 Ratchet's and Clank's free hands close into a fist with the analog grip: the finger joints curl about their measured local axes toward the palm and the thumb folds across. A hand holding a weapon or a ledge keeps its pose. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-174511.log`. SHA-256: `C2129830169A41A33F61D91453FADFF3B6B4D760818411CEE056DE0CE78775FD`.
+Build: `work/vr/build-20261024-174511.log`. SHA-256: `C2129830169A41A33F61D91453FADFF3B6B4D760818411CEE056DE0CE78775FD`.
 
 
 ## Cutscene eye, Clank's scenes and climb, the wrench's spin, Umbris mines and Rilgar
@@ -615,14 +615,14 @@ The thrown wrench's tracked spin is wrapped to ±π: on long throws it grew past
 
 On Rilgar, a lurker holding the hidden Ratchet 20 above itself parks the eye at the last living viewpoint. The hoverboard turns the current gaze to the board's heading at its start and at each respawn, so the race no longer starts backwards. Room-scale steps stop while a carrier (hover car, Kerwan transports, ferries, path platforms) holds Ratchet with its edge brake, so physical steps no longer push him off a taxi. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-184404.log`. SHA-256: `B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84`.
+Build: `work/vr/build-20261024-184404.log`. SHA-256: `B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84`.
 
 
 ## Ratchet's eye at 1.1 m
 
 Ratchet's VR eye sits 1.1 above his feet, his own eye height, instead of the 1.6 of the native first-person camera, in gameplay and in cutscenes (0.18 above his head attach). The hanging and cable eyes are capped at it, the crouched eye is 0.6, and the line-of-sight checks from the eye to the hands use the same height. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-185513.log`. SHA-256: `839AE147FEEB1579632EBF0C4142C6CA0A1C049B6D8F47C6351F086ED2F346C8`.
+Build: `work/vr/build-20261024-185513.log`. SHA-256: `839AE147FEEB1579632EBF0C4142C6CA0A1C049B6D8F47C6351F086ED2F346C8`.
 
 
 ## Clank's eye height, the two-hand pull-up, a firmer wrench throw and the taxis
@@ -631,7 +631,7 @@ Clank's VR eye sits 0.63 above his feet, where his model's eyes are in the idle 
 
 Carriers no longer eject Ratchet: the VR thin-floor sweep is skipped on the ticks a carrier moves him. It swept from the carrier's old floor and left him a few centimetres above the carried one on descents, an airborne tick that detached the carry. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-192636.log`. SHA-256: `C2B6D5DFBE6F7866A586AA0349F00C70BFC84A6E0305EE3109777EA253117B8A`.
+Build: `work/vr/build-20261024-192636.log`. SHA-256: `C2B6D5DFBE6F7866A586AA0349F00C70BFC84A6E0305EE3109777EA253117B8A`.
 
 
 ## Review fixes and cleanup
@@ -640,7 +640,7 @@ A review of the VR layer fixed what was wrong without a headset session. The eye
 
 Clank's grip no longer arms Ratchet's wrench, death releases the bolt crank, a thrown wrench keeps flying while the right controller is untracked, the Visibomb monitor hides when its pose is missing, and the gold Decoy Glove throws gold decoys. Native-path exactness was restored for the Walloper's glow point and the flight sky. 137 comment lines corrupted by a cp1252 re-save were restored, and duplicated constants and dead code were removed. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-195121.log`. SHA-256: `895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7`.
+Build: `work/vr/build-20261024-195121.log`. SHA-256: `895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7`.
 
 
 ## The cutscene anchor and a first-person Hologuise
@@ -649,28 +649,28 @@ Cutscene and pilot views map the head's room position at the start of the view t
 
 The Hologuise disguise is first person: the rig no longer treats it as Giant Clank, it sees from Ratchet's eye height, turns with the head and walks with the room. Its body and head glow are hidden and its own forearms and hands are drawn on the controllers, closing with the grip. A fresh trigger press or a right-hand salute at the brow makes it salute; B or A returns to Ratchet. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-213838.log`. SHA-256: `B8CA98C2286315AF516E37751F1D3548A4E5A2E7EC42773BE9F5DF4ED3DB113C`.
+Build: `work/vr/build-20261024-213838.log`. SHA-256: `B8CA98C2286315AF516E37751F1D3548A4E5A2E7EC42773BE9F5DF4ED3DB113C`.
 
 
 ## Turrets and flown ships fire on the trigger
 
 Mounted in a turret (Gaspar's cannons, Hoven's and Batalia's turrets), the trigger holds ○, their fire key; flying a ship (Pokitaru's jet, Gemlik's ship, the fleet's ship), it holds □, the lasers, while X and the left trigger keep ○ / R1 for the missiles. Mounted, Y leaves the turret or the ship natively instead of opening the hand's quick select. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-231458.log`. SHA-256: `6CAA687134FDFC75E5FFDD36B10DAED47AEAC761DD8442F7AB1D270B933DC78C`.
+Build: `work/vr/build-20261024-231458.log`. SHA-256: `6CAA687134FDFC75E5FFDD36B10DAED47AEAC761DD8442F7AB1D270B933DC78C`.
 
 
 ## A cockpit view for the flown ships
 
 Flying Pokitaru's jet, Gemlik's ship or the fleet's ship, the VR view rides the ship: the eye sits in the fighter model's own canopy (measured on its glass texels), the view follows the ship's heading and pitch with smoothing while its roll is left to the head, and the tracking space takes the ship's quarter flight scale so the head moves inside the cockpit at Ratchet's size. Ratchet's hands and wrench, hidden natively in the ship, are not drawn. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-232308.log`. SHA-256: `73AA5DEF64BCC0F25EE12D800C874F835C994CB6E18CF60B555F89743F939DAF`.
+Build: `work/vr/build-20261024-232308.log`. SHA-256: `73AA5DEF64BCC0F25EE12D800C874F835C994CB6E18CF60B555F89743F939DAF`.
 
 
 ## The HUD along the aim, the ship's eye above its canopy
 
 Mounted in a turret or flying a ship, the HUD panel hangs along the aim (the turret's script camera behind its barrels, the ship's nose) instead of following the gaze, so the reticles the game draws at its screen centre mark where the guns point. The flown fighter's canopy is opaque and its hull two-sided, so the eye rides just above the canopy rather than inside it. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261024-234217.log`. SHA-256: `2B8038A502A1A22B166F47A6E75455D420AC848890330B0FED2B971719CA06F0`.
+Build: `work/vr/build-20261024-234217.log`. SHA-256: `2B8038A502A1A22B166F47A6E75455D420AC848890330B0FED2B971719CA06F0`.
 
 
 ## Culling for the headset, VR turrets and spectator scenes
@@ -679,7 +679,7 @@ Level content is culled for the headset's eye in every mode: in-level movies, sh
 
 The manned turrets put the eye at their seat with a fixed view and turn toward where the right controller points, at their own speeds, the trigger firing. The ship no longer vanishes after the inter-planet loading: the new level's setup hid it along with its own instance 0. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-010105.log`. SHA-256: `D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083`.
+Build: `work/vr/build-20261025-010105.log`. SHA-256: `D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083`.
 
 
 ## VR Options, the helmet on the player's head, boots and Oltanis' hand items
@@ -688,7 +688,7 @@ A VR Options page sits right below Port Options (only with a VR headset), with H
 
 On Oltanis, and on any arrival without a landing after a flight streamed in VR, the hand items were hidden by the travel's hide flag that the preloaded switch never cleared; it is cleared now. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-103944.log`. SHA-256: `C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B`.
+Build: `work/vr/build-20261025-103944.log`. SHA-256: `C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B`.
 
 
 ## Rails, reach, Hyper Strike aim, a wider visor and the camera flip
@@ -697,14 +697,14 @@ On rails the eye now predicts the body instead of trailing it, which had left th
 
 The wrench stretches up to 35 % on fast swings and its hits reach with it; the Hyper Strike carries the native aim assist (a drift toward a near target, a near miss pulled onto it), needs a real downward stroke, and the wrench hand no longer grabs crate tops. A Camera flip option (off by default) turns the view with Ratchet's flips, and two-handed weapons held in one hand are heavier. The loading hitch lost its main-thread table re-read and its departure free; the swap now logs its phases. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-112430.log`. SHA-256: `B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA`.
+Build: `work/vr/build-20261025-112430.log`. SHA-256: `B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA`.
 
 
 ## Body direction, the wrench's whoosh, Giant Clank, the Walloper and walking in the quick select
 
 A Direction option (Body by default, or Gaze) makes the heading and the stick follow an estimate of the body from the head and both controllers, so the player can walk one way while looking another. The wrench whooshes on each swing with the native combo sounds, glow billboards face the headset (Clank's antenna light in scenes), Giant Clank's heading follows the player in every state with his missiles leaving from his drawn hands, the Walloper gives the wrench back on a still grip and chains consecutive punches, and the quick select no longer stops Ratchet's movement. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-125434.log`. SHA-256: `B1B8944B2F1C449E3C03C379E64B67264C6661CB1E15BEAA33BF32B347C142A2`.
+Build: `work/vr/build-20261025-125434.log`. SHA-256: `B1B8944B2F1C449E3C03C379E64B67264C6661CB1E15BEAA33BF32B347C142A2`.
 
 
 ## Walking backward and sideways, Walloper punches and the wrench's whoosh
@@ -713,14 +713,14 @@ The original game always moves Ratchet the way he faces. In VR he faces the play
 
 A Walloper punch is the right hand thrown forward relative to the head, within about 55° of the facing and away from the body: folding the arm back, swinging sideways or stepping back never punches, and the lunge goes where the player faces. The wrench's whoosh plays Ratchet's own swing sound, since the wrench's animations carry none. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-135137.log`. SHA-256: `DDEE3A69170E96ACD4815FFA47C7B8B1E64F6438DE4714B290E27D538565810C`.
+Build: `work/vr/build-20261025-135137.log`. SHA-256: `DDEE3A69170E96ACD4815FFA47C7B8B1E64F6438DE4714B290E27D538565810C`.
 
 
 ## Quick-select pages on the trigger
 
 While the right-stick click holds the quick select open, the right trigger turns to the next page instead of the right stick; the press fires nothing until it is released, and a trigger already held when the ring opens does not turn the page. This change requires headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-140220.log`. SHA-256: `34B438109C51819897F950DC061696A0A6B6D830F55B3AB4299EDD3A6B5DF68C`.
+Build: `work/vr/build-20261025-140220.log`. SHA-256: `34B438109C51819897F950DC061696A0A6B6D830F55B3AB4299EDD3A6B5DF68C`.
 
 
 ## Headset buttons in menus and text
@@ -729,7 +729,7 @@ Menus, help boxes, banners, subtitles and the spatial panels now show the headse
 
 Every icon names a control that works: in the pause and freeze menus the left grip sends L1 and the left trigger R1 (previous / next map, the planet lists, the Weapons page's quick-select slot, now also while pointing at a weapon), and in play X and B, unused until now, hold L2 and R2 (hover and Clank strafes, hoverboard tricks, the Hydro-Pack boost, a ledge drop); on turrets, ships and in the Hologuise they keep ○ and □. The first glyph set was confirmed in the headset; the new shoulder bindings require headset confirmation; no tests or gameplay scripts were run.
 
-Built in the separate checkout `X:\codex\worktrees\rerac-vr-pad-glyphs` (release profile) while `rerac-vr-build` was in use. Build: `X:\codex\worktrees\rerac-vr-pad-glyphs\work\vr\build-20261025-143505.log`. SHA-256: `D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE`.
+Built in the separate checkout `rerac-vr-pad-glyphs` (release profile) while `rerac-vr-build` was in use. Build: `work/vr/build-20261025-143505.log`. SHA-256: `D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE`.
 
 
 ## Streamed inter-planet loading (branch `vr-streamed-loading`)
@@ -742,37 +742,37 @@ Measured in the headset (Kerwan to level 10): the change's frame takes 34-41 ms 
 
 New log lines: `level switch: level NN prepared beside the load in ...`, `VR_HITCH swap ... streaming=true old_ties_deferred=N`, `VR_HITCH stream ...` (what was streamed and over how many frames), `VR_HITCH frame phase=... main=... split first=... pre_update=... fixed=... update=... post_update=... last=...` / `render=... prep=...` for every frame of 20 ms or more during a transition, and `level setup: <name> <ms> ms` for those set-ups (the gameplay set-up step by step). No tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-streaming\work\vr\build-20261025-170117.log`. SHA-256: `6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D`. The branch builds in its own checkout, `X:\codex\worktrees\rerac-vr-streaming` (this package applied to the pinned upstream commit); `X:\codex\worktrees\rerac-vr-build` is unchanged.
+Build: `work/vr/build-20261025-170117.log`. SHA-256: `6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D`. The branch builds in its own checkout, `rerac-vr-streaming` (this package applied to the pinned upstream commit); `rerac-vr-build` is unchanged.
 
 
 ## Weapon recall after a wrench throw, a rarer whoosh
 
 A weapon swap refused while the swap is locked (the wrench in flight) no longer leaves a stale target that made the hand ignore that weapon afterward; while the wrench flies the trigger does nothing, and a fresh press once it is back brings the last weapon. The wrench's whoosh now needs a big fast swing. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-173319.log`. SHA-256: `B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0`.
+Build: `work/vr/build-20261025-173319.log`. SHA-256: `B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0`.
 
 
 ## The hoverboard in VR
 
 The board steers about its own heading (the left stick's x plus the player's sideways lean, VR Options → Hoverboard lean), the view turns with the board (no snap turn, no room-scale step on it), the right trigger boosts, the left grip is L1 and the right stick holds the four tricks; a landing tilted or turned away straightens along the board in VR. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktreeserac-vr-build\workruild-20261025-175634.log`. SHA-256: `B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432`.
+Build: `work/vr/build-20261025-175634.log`. SHA-256: `B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432`.
 
 
 ## Hoverboard: lean, race start, Kalebo III's board weapon
 
 In VR the board's turn is a rate set by the stick's x plus the lean (from 1.5 cm, full at 12 cm, gentle at first), eased over 0.06 s, so it straightens as soon as both return to centre; the race start and respawns take the body's heading as the board's front; Kalebo III's board weapon is held in the right hand and fired by the right trigger, the left trigger boosts. These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-182923.log`. SHA-256: `9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B`.
+Build: `work/vr/build-20261025-182923.log`. SHA-256: `9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B`.
 
 
 ## Hoverboard: the stick back, the lean like the stick
 
 The stick steers the board through the native turn spring again, as in the first VR board change, and the lean adds to the stick's x through the same spring (a small lean also steers, the board stops turning back within 1.5 cm). These changes require headset confirmation; no tests or gameplay scripts were run.
 
-Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-184248.log`. SHA-256: `EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473`.
+Build: `work/vr/build-20261025-184248.log`. SHA-256: `EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473`.
 
 
 ## Player release: RatchetVR.exe
 
-`scripts/vr/Package.ps1` builds the player release folder and zip (overlay/docs/vr/README.md). `RatchetVR.exe` (`crates/rc-engine/src/bin/ratchet-vr.rs`) extracts the player's disc on first launch and starts the game in VR; `RatchetVR Sandbox.exe` starts the debug mode. The app-local Visual C++ runtime (14.29) ships with the binaries (linker 14.29). Release `0.1.0` was built from a fresh upstream worktree with the package applied (`X:\codex\worktrees\rerac-vr-release`), portable x86-64 (no `target-cpu=native`): `dist\RatchetVR-0.1.0.zip`, 34.9 MB. From the unzipped zip, desktop preview only: `RatchetVR.exe <iso>` extracted the disc (SCUS_971.99, 2724 files) and booted the normal front end (preview smoke check not applicable on the title screen); `RatchetVR Sandbox.exe` reused the data and reported `ORIGINAL_GAME_SMOKE_PASS` on Kerwan. The file dialog, message boxes and a headset launch require manual confirmation. No tests were run.
+`scripts/vr/Package.ps1` builds the player release folder and zip (overlay/docs/vr/README.md). `RatchetVR.exe` (`crates/rc-engine/src/bin/ratchet-vr.rs`) extracts the player's disc on first launch and starts the game in VR; `RatchetVR Sandbox.exe` starts the debug mode. The app-local Visual C++ runtime (14.29) ships with the binaries (linker 14.29). Release `0.1.0` was built from a fresh upstream worktree with the package applied (`rerac-vr-release`), portable x86-64 (no `target-cpu=native`): `dist\RatchetVR-0.1.0.zip`, 34.9 MB. From the unzipped zip, desktop preview only: `RatchetVR.exe <iso>` extracted the disc (SCUS_971.99, 2724 files) and booted the normal front end (preview smoke check not applicable on the title screen); `RatchetVR Sandbox.exe` reused the data and reported `ORIGINAL_GAME_SMOKE_PASS` on Kerwan. The file dialog, message boxes and a headset launch require manual confirmation. No tests were run.

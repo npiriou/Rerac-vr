@@ -105,7 +105,7 @@
     "status": "PASS",
     "upstream_commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
     "guarded_source_paths": 21,
-    "fresh_worktree_location": "X:/codex/worktrees",
+    "fresh_worktree_location": "a fresh worktree beside the build checkout",
     "notes": "Guarded patch anchors and payload reproduced against a clean pinned checkout; source and payload compared after application."
   },
   "limitations": [
@@ -852,10 +852,10 @@
       "rust_optimization_level": 1,
       "executable_sha256": "B4250C4ED75823CD4509327FC4149F479CD5CCC4BFB1713B3D58E9B7AF7C871B",
       "restored_utc": "2026-10-23T10:12:46.493024+00:00",
-      "restored_from": "X:\\codex\\worktrees\\rerac-vr-build\\target\\debug\\rerac-running-B4250C4E.exe",
+      "restored_from": "target/debug/rerac-running-B4250C4E.exe",
       "original_build_log": "work/vr/head-facing-rails-build.log",
       "original_validation_record": "validation.json:headset_heading_and_rail_camera",
-      "experimental_executable": "X:\\codex\\worktrees\\rerac-vr-build\\target\\debug\\rerac-visibility-D3914197.exe",
+      "experimental_executable": "target/debug/rerac-visibility-D3914197.exe",
       "rollback_reason": "User reported worse headset lag after batched visibility and opt-level-3 changes; restore the entire prior executable and original source/build entrypoints. No performance cause established.",
       "tests": "NOT RUN per AGENTS.md",
       "gpu_budget_measured": false
@@ -934,7 +934,7 @@
     "measurement_limitations": "Free play in changing scenes, not a matched-scene before/after comparison. SteamVR GPU fields are elapsed spans and may include scheduling gaps/other work; CPU elapsed includes waiting. NVIDIA usage is global to the GPU. Compiler activity excluded from these selected captures.",
     "tests": "NOT RUN per AGENTS.md; no unit/smoke tests or scripted gameplay",
     "physical_validation": "User free play observed through live logs; subjective smoothness and full visual/gameplay equivalence are not certified",
-    "launch_script": "X:/dev/Rerac-vr/.local-build/Launch-Performance-ReRAC-VR.ps1",
+    "launch_script": ".local-build/Launch-Performance-ReRAC-VR.ps1",
     "rollback": "Original B4250C4E and unchanged-source dev opt3 A3E2431D builds preserved in target/debug; remove the dedicated NVIDIA application profile to restore previous power policy"
   },
   "rail_ledge_hyper_comfort": {
@@ -1039,7 +1039,7 @@
       "mode": "debug",
       "level": 3,
       "scene": "Kerwan",
-      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-kerwan-headset-20261024-113028.log",
+      "log": "work/vr/debug-kerwan-headset-20261024-113028.log",
       "binary_sha256": "DE5A220B37FA1CF716ED372BA5AD7463874198263B307CA95A020D2F9AF0C08E",
       "verified_utc": "2026-10-24T04:31:22.967033+00:00",
       "evidence": "Native level 3 ticking; debug inventory/max ammo and all 19 planets; two OpenXR head views; pipeline queue drained; process responding. XR state SYNCHRONIZED with controller focus false when inspected; no physical interaction validation claimed.",
@@ -1058,7 +1058,7 @@
     "launch": {
       "mode": "debug",
       "scene": "Kerwan",
-      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-kerwan-headset-20261024-114337.log",
+      "log": "work/vr/debug-kerwan-headset-20261024-114337.log",
       "verified_utc": "2026-10-24T04:44:17.249047+00:00",
       "evidence": "Level 3 ticking; two XR head views and drained pipeline queue. Physical throw still requires user confirmation."
     },
@@ -1076,7 +1076,7 @@
     "launch": {
       "mode": "debug",
       "scene": "Kerwan",
-      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-kerwan-headset-20261024-115307.log",
+      "log": "work/vr/debug-kerwan-headset-20261024-115307.log",
       "binary_sha256": "7F3F8BCA471D22261CAC6E4EC3BC7EE5484C894684055A34757913292A27CDE2",
       "verified_utc": "2026-10-24T04:53:41.101862+00:00",
       "evidence": "Level 3 ticking, two XR views, pipeline queue drained; physical throw confirmation pending."
@@ -1096,7 +1096,7 @@
     "headset_tested": false,
     "remaining_confirmation": "User headset confirmation: wrench full return/catch, manual and trigger insertion, puzzle controls/cancellation/reinsertion, water fill/empty, Batalia commando scene, ship exits and swallowing attacks.",
     "binary_sha256": "02237B9F69D84E24F9AC32D5BF77437501C8CE86647CCA115F7285CED4ECC54E",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-121824.log",
+    "build_log": "work/vr/build-20261024-121824.log",
     "launch": "Not launched. User closed the previous game to allow executable replacement."
   },
   "planet_preload_cinema": {
@@ -1115,10 +1115,10 @@
     "remaining_confirmation": "Confirm first and repeat arrivals, continued animated flight while preparing, no monochrome gap, beginning of native landing retained, Drek movie surround and free head motion.",
     "limitation": "Disk decoding is asynchronous and GPU preparation is overlapped with flight. ECS publication/LevelStartup still runs on the main thread and can cause a brief hitch; no zero-stall claim or measured transition latency.",
     "binary_sha256": "17C40F0EFE9F54DCF82E484ABF6ED1C8E1A3C42F9DDCE316DF81295860034C90",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-133506.log",
+    "build_log": "work/vr/build-20261024-133506.log",
     "ordinary_debug_startup": {
       "visible": true,
-      "log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\debug-visible-20261024-133712",
+      "log": "work/vr/debug-visible-20261024-133712",
       "mode": "debug",
       "foreground_requested": true,
       "title": "rerac",
@@ -1141,7 +1141,7 @@
     "headset_tested": false,
     "remaining_confirmation": "Wrench return/catch readability, Trespasser panel distance and frame, Hydrodisplacer fill/empty with and without a cutaway, crank jaw fit on Novalis/Eudora/Batalia bolts.",
     "binary_sha256": "B97452996E0B308FC577712B71D77D1E75BB6D32F5E2B13B3D33E2AFF57B5F04",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-145246.log"
+    "build_log": "work/vr/build-20261024-145246.log"
   },
   "gadget_pause_fixes": {
     "recorded_utc": "2026-10-24T08:39:23.669682+00:00",
@@ -1157,7 +1157,7 @@
     "headset_tested": false,
     "remaining_confirmation": "Trespasser panel visibility and distance, Hydrodisplacer fill/empty without camera change, insertion into the retracted tap, absence of the menu button bar, wrench_frame log of a maximum-range throw.",
     "binary_sha256": "DEB47E3DB168EFA299971D131A066DD0A175FE6F12E4B627DB040C43CA537F4F",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-153506.log"
+    "build_log": "work/vr/build-20261024-153506.log"
   },
   "bodies_ledges_loading": {
     "recorded_utc": "2026-10-24T10:00:02.001872+00:00",
@@ -1175,7 +1175,7 @@
     "headset_tested": false,
     "remaining_confirmation": "Transition stall on a first visit, ship opening on all ships, ledges/rungs on Aridia, Clank (Blarg, Orxon) and Giant Clank (Quartu, Veldin 2) sections, the caught-wrench grip, a capture of the wrench duplicate.",
     "binary_sha256": "2D81CBF75A213CD86732E67A6B72D9D91961B9F421F4DAAE8525E3F466F606CA",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-165439.log"
+    "build_log": "work/vr/build-20261024-165439.log"
   },
   "clank_wrench_pivot": {
     "reported_behavior": "Clank sections: no Clank hands; the player flies about ten metres up every few seconds. Wrench: a few giant frames, most visible when thrown straight up while looking up.",
@@ -1189,7 +1189,7 @@
     "remaining_confirmation": "Clank hands and stable height on Blarg/Orxon, Giant Clank on Quartu/Veldin 2, the thrown wrench close to the eyes.",
     "recorded_utc": "2026-10-24T10:23:54.858337+00:00",
     "binary_sha256": "F4D8D32257A47684C188891D681EEAC2790CB1857321E23F545F770E393931C5",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-172001.log",
+    "build_log": "work/vr/build-20261024-172001.log",
     "headset_tested": false
   },
   "clank_fists_ledges": {
@@ -1203,7 +1203,7 @@
     "remaining_confirmation": "Clank punches on Blarg/Orxon enemies (both fists, thresholds), Giant Clank fists, the grip fist pose on both bodies, Clank ledge grab / move / climb / drop and the hooked hands.",
     "recorded_utc": "2026-10-24T10:50:04.307400+00:00",
     "binary_sha256": "C2129830169A41A33F61D91453FADFF3B6B4D760818411CEE056DE0CE78775FD",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-174511.log",
+    "build_log": "work/vr/build-20261024-174511.log",
     "headset_tested": false
   },
   "cutscenes_rilgar_mines": {
@@ -1222,7 +1222,7 @@
     "remaining_confirmation": "Clank's climb height, cutscene eye height, Clank-only cutscenes (Blarg Hydrodisplacer pickup), long wrench throws (no white plane), Umbris mines destroyed by the wrench, the Rilgar lurker death view, the hoverboard race start, riding Rilgar and Kerwan taxis.",
     "recorded_utc": "2026-10-24T11:48:13.839197+00:00",
     "binary_sha256": "B11E5A02CACEA9FAC7CAE04E8E9A89C6C1F3604899956E83E947B551CCE28B84",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-184404.log",
+    "build_log": "work/vr/build-20261024-184404.log",
     "headset_tested": false
   },
   "ratchet_eye": {
@@ -1236,7 +1236,7 @@
     "remaining_confirmation": "Ratchet's eye height on foot, hanging, crouched, on cables and in cutscenes; reach of the floor and of low objects with the hands.",
     "recorded_utc": "2026-10-24T11:57:30.950297+00:00",
     "binary_sha256": "839AE147FEEB1579632EBF0C4142C6CA0A1C049B6D8F47C6351F086ED2F346C8",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-185513.log",
+    "build_log": "work/vr/build-20261024-185513.log",
     "headset_tested": false
   },
   "clank_eye_ledges_taxis": {
@@ -1251,7 +1251,7 @@
     "remaining_confirmation": "Clank's eye height, the pull-up delay and two-hand rule on both bodies, deliberate and accidental wrench throws, Rilgar and Kerwan taxi rides (no VR_GAME carried_airborne lines while riding).",
     "recorded_utc": "2026-10-24T12:30:42.655383+00:00",
     "binary_sha256": "C2B6D5DFBE6F7866A586AA0349F00C70BFC84A6E0305EE3109777EA253117B8A",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-192636.log",
+    "build_log": "work/vr/build-20261024-192636.log",
     "headset_tested": false
   },
   "review_cleanup": {
@@ -1274,7 +1274,7 @@
     "remaining_confirmation": "Rail grinding (pitch, leaving a rail), posture eye blends, snap turns after quick select and the shop, Clank's punches, wrench throws with tracking loss, gold decoys, the Visibomb monitor.",
     "recorded_utc": "2026-10-24T12:54:59.264432+00:00",
     "binary_sha256": "895BECB9E3CA0C18040AAF2CB96AE4A4E2CEF2979E29DB32F2397C5DA9349EC7",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-195121.log",
+    "build_log": "work/vr/build-20261024-195121.log",
     "headset_tested": false
   },
   "hologuise_cutscene_anchor": {
@@ -1289,7 +1289,7 @@
     "remaining_confirmation": "Cutscene eye position after walking around the room; the Hologuise view height, hands and forearms, trigger and gesture salutes (VR_GAME salute lines), A and B exits.",
     "recorded_utc": "2026-10-24T14:42:39.162024+00:00",
     "binary_sha256": "B8CA98C2286315AF516E37751F1D3548A4E5A2E7EC42773BE9F5DF4ED3DB113C",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-213838.log",
+    "build_log": "work/vr/build-20261024-213838.log",
     "headset_tested": false
   },
   "turrets": {
@@ -1303,7 +1303,7 @@
     "remaining_confirmation": "Gaspar's cannons, Hoven's and Batalia's turrets firing on the trigger and leaving with Y; Pokitaru's jet, Gemlik's ship and the fleet's ship: lasers on the trigger, missiles on X or the left trigger.",
     "recorded_utc": "2026-10-24T16:16:05.878194+00:00",
     "binary_sha256": "6CAA687134FDFC75E5FFDD36B10DAED47AEAC761DD8442F7AB1D270B933DC78C",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-231458.log",
+    "build_log": "work/vr/build-20261024-231458.log",
     "headset_tested": false
   },
   "ship_cockpit": {
@@ -1317,7 +1317,7 @@
     "remaining_confirmation": "The three ship missions: the seat in the canopy, the view following the ship, the cockpit scale, comfort in turns, lasers on the trigger and missiles on X / the left trigger.",
     "recorded_utc": "2026-10-24T16:25:44.950658+00:00",
     "binary_sha256": "73AA5DEF64BCC0F25EE12D800C874F835C994CB6E18CF60B555F89743F939DAF",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-232308.log",
+    "build_log": "work/vr/build-20261024-232308.log",
     "headset_tested": false
   },
   "aim_hud": {
@@ -1330,7 +1330,7 @@
     "remaining_confirmation": "The reticle following the aim on Gaspar's, Hoven's and Batalia's turrets; the ships' view from above the canopy and their HUD along the nose.",
     "recorded_utc": "2026-10-24T16:44:26.641630+00:00",
     "binary_sha256": "2B8038A502A1A22B166F47A6E75455D420AC848890330B0FED2B971719CA06F0",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261024-234217.log",
+    "build_log": "work/vr/build-20261024-234217.log",
     "headset_tested": false
   },
   "culling_turrets_scenes": {
@@ -1346,7 +1346,7 @@
     "remaining_confirmation": "In-level movies, ship take-offs / landings / boarding and the Visibomb view with nothing missing (and the frame rate there); cutscene start orientation; Hoven's arrival scene as a spectator; the three turrets (seat, aiming with the controller, firing); the ship through the inter-planet loading.",
     "recorded_utc": "2026-10-24T18:06:05.875649+00:00",
     "binary_sha256": "D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-010105.log",
+    "build_log": "work/vr/build-20261025-010105.log",
     "headset_tested": false
   },
   "vr_options_helmet": {
@@ -1361,7 +1361,7 @@
     "remaining_confirmation": "The VR Options page and its persistence; the O2 Mask / Pilot's Helmet on the head in play, in scenes (Orxon, Gemlik) and in the ship sequences (visor tint, the HUD behind the shell); boots at the feet; hand items on Oltanis.",
     "recorded_utc": "2026-10-25T03:44:23.477801+00:00",
     "binary_sha256": "C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-103944.log",
+    "build_log": "work/vr/build-20261025-103944.log",
     "headset_tested": false
   },
   "reach_flip_visor": {
@@ -1382,7 +1382,7 @@
     "remaining_confirmation": "No antenna dot; boots under you and wrench hits on rails; the take-off view in the seat; the O2 Mask's view and tint; wrench reach; the Hyper Strike's aim and the crate stacks; the Camera flip option; one-handed two-handed weapons; the loading hitch (and the VR_HITCH timings).",
     "recorded_utc": "2026-10-25T04:28:33.874702+00:00",
     "binary_sha256": "B6615E93D3FE03A6707AF5AEA424C6591F392B757A4BC1A4365182E2263AEFDA",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-112430.log",
+    "build_log": "work/vr/build-20261025-112430.log",
     "headset_tested": false
   },
   "direction_walloper": {
@@ -1399,7 +1399,7 @@
     "remaining_confirmation": "The Direction option (Body / Gaze); the wrench's whoosh; Clank's antenna light in scenes; Giant Clank's missiles and beam; the Walloper (grip back to the wrench, consecutive punches); walking during the quick select.",
     "recorded_utc": "2026-10-25T05:58:07.608668+00:00",
     "binary_sha256": "B1B8944B2F1C449E3C03C379E64B67264C6661CB1E15BEAA33BF32B347C142A2",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-125434.log",
+    "build_log": "work/vr/build-20261025-125434.log",
     "headset_tested": false
   },
   "strafe_walloper": {
@@ -1414,7 +1414,7 @@
     "remaining_confirmation": "The wrench's whoosh; walking backward and sideways (no forward lurch on release, jumps, steps, walls); Walloper punches only forward, the lunge along the facing.",
     "recorded_utc": "2026-10-25T06:55:57.002503+00:00",
     "binary_sha256": "DDEE3A69170E96ACD4815FFA47C7B8B1E64F6438DE4714B290E27D538565810C",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-135137.log",
+    "build_log": "work/vr/build-20261025-135137.log",
     "headset_tested": false
   },
   "qs_trigger": {
@@ -1426,7 +1426,7 @@
     "remaining_confirmation": "Quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward; the wrench's whoosh.",
     "recorded_utc": "2026-10-25T07:04:41.107219+00:00",
     "binary_sha256": "34B438109C51819897F950DC061696A0A6B6D830F55B3AB4299EDD3A6B5DF68C",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-140220.log",
+    "build_log": "work/vr/build-20261025-140220.log",
     "headset_tested": false
   },
   "pad_glyphs": {
@@ -1441,7 +1441,7 @@
     "remaining_confirmation": "The left grip / left trigger as L1 / R1 on the map, planet and Weapons pages; X / B as L2 / R2 in play (hover strafe, hoverboard tricks, ledge drop); the LG, X and B icons.",
     "recorded_utc": "2026-10-25T07:45:23.110523+00:00",
     "binary_sha256": "D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-pad-glyphs\\work\\vr\\build-20261025-143505.log",
+    "build_log": "work/vr/build-20261025-143505.log",
     "headset_tested": false
   },
   "streamed_loading": {
@@ -1459,7 +1459,7 @@
     "remaining_confirmation": "Pausing during a flight after the level change (the destination's play state is not set up yet); longer play after landing on more destinations (vendors, the pause pages' 3D preview).",
     "recorded_utc": "2026-10-25T10:12:48.447582+00:00",
     "binary_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-streaming\\work\\vr\\build-20261025-170117.log",
+    "build_log": "work/vr/build-20261025-170117.log",
     "headset_tested": false
   },
   "recall_whoosh": {
@@ -1473,7 +1473,7 @@
     "remaining_confirmation": "The trigger bringing the weapon back after a wrench throw; the whoosh only on big fast swings; quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward.",
     "recorded_utc": "2026-10-25T10:37:10.359383+00:00",
     "binary_sha256": "B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-173319.log",
+    "build_log": "work/vr/build-20261025-173319.log",
     "headset_tested": false
   },
   "hoverboard_vr": {
@@ -1489,7 +1489,7 @@
     "remaining_confirmation": "Steering with the stick and with the lean (the dead zone and full-turn distances), the view following the board (comfort, the 0.12 s constant), the right-stick tricks and the four-trick skill point, the right-trigger boost, forgiving landings, the race start and respawns.",
     "recorded_utc": "2026-10-25T11:11:17.611042+00:00",
     "binary_sha256": "B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432",
-    "build_log": "X:\\codex\\worktrees\rerac-vr-build\\work\u000br\build-20261025-175634.log",
+    "build_log": "work/vr/build-20261025-175634.log",
     "headset_tested": false
   },
   "hoverboard_lean_weapon": {
@@ -1505,7 +1505,7 @@
     "remaining_confirmation": "Lean feel (1.5 / 12 cm, the curve, the drift), straightening speed, the race start heading on Kalebo III and Rilgar, the board weapon drawn in the hand and its rockets (aim, homing on the racer ahead), the left-trigger boost.",
     "recorded_utc": "2026-10-25T11:33:21.896831+00:00",
     "binary_sha256": "9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-182923.log",
+    "build_log": "work/vr/build-20261025-182923.log",
     "headset_tested": false
   },
   "hoverboard_stick_lean": {
@@ -1519,7 +1519,7 @@
     "remaining_confirmation": "The stick as in the first VR board change; the lean's feel through the same spring; the race start heading; the board weapon and the left-trigger boost.",
     "recorded_utc": "2026-10-25T11:46:43.634530+00:00",
     "binary_sha256": "EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-184248.log",
+    "build_log": "work/vr/build-20261025-184248.log",
     "headset_tested": false
   }
 }
