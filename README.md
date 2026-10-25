@@ -63,7 +63,7 @@ The window remains playable with the original keyboard/gamepad controls. Preview
 | Left grip near a heavy weapon's barrel | Hold the foregrip and guide the weapon with both hands; release to return to one hand |
 | Grip near a ledge while falling | Catch with a grip; move gripping hands along the edge to pull the body; shove the gripping hands down at least 12 cm at 0.9 m/s (from their recent top) to climb/jump exactly as A (left-stick movement disabled while hanging); release both grips to drop |
 | Submerged palm strokes | Push water opposite the motion of the hands; turn palms edge-on for recovery. Push up to dive |
-| Right stick click held + right stick left/right | Previous / next quick-select page (return the stick to centre between changes) |
+| Right stick click held + right trigger | Next quick-select page (a trigger already held when the ring opens does not turn it; the press fires nothing until released) |
 | B / X | □ / ○ in menus. In play X holds L2 and B R2 (hover and Clank strafes, hoverboard tricks, Hydro-Pack boost, ledge drop); B exits the Hologuise and both keep □ / ○ on turrets and ships |
 | Left stick click | Select — map |
 | Left Y | Pause during play; skip the current scene/movie during a cinematic (one click queues through its opening fade) |
@@ -138,7 +138,7 @@ Each hand bound to a ledge uses Ratchet's original reach/hang animation palette 
 
 A fresh right-grip squeeze does not request the wrench while the left grip is held, a ledge candidate is available, or the right hand is attached/hanging. A new wrench request waits one native collision/probe tick so a right-hand-only catch has priority. A suppressed squeeze requires release and a fresh press before it can equip a wrench later; releasing from a ledge cannot become a wrench throw. The frame in which a right-hand anchor is accepted also hides held weapon/glove geometry. Ordinary wrench throwing remains available outside ledge use.
 
-Touch/PICO Y (Index left B / Microsoft left menu) now sends native Start: pause, frontend start and queued cinematic skip. Right thumbstick click sends native Triangle: contextual interaction, vendor cancel, and held quick select with right-hand sector selection. Hold the right-stick click and move the right stick horizontally for quick-select pages. Left thumbstick click remains Select/map. Existing Start skip suppression through release and Triangle contextual priority are retained.
+Touch/PICO Y (Index left B / Microsoft left menu) now sends native Start: pause, frontend start and queued cinematic skip. Right thumbstick click sends native Triangle: contextual interaction, vendor cancel, and held quick select with right-hand sector selection. Hold the right-stick click and press the right trigger for the next quick-select page. Left thumbstick click remains Select/map. Existing Start skip suppression through release and Triangle contextual priority are retained.
 
 Port Options now offers a High preset: requested 8x MSAA (clamped to GPU support), anisotropic Sharp textures, Maximum model detail and Sharp-pixel HUD. VR adopts those settings and enabled shadows once, including existing saved settings, then preserves subsequent menu choices. Fresh VR settings default to High; explicit environment overrides remain available. The former forced RC_MSAA=0 is removed, and the headset's world/sky eye cameras follow Port Options MSAA as well. Desktop original defaults and display/window geometry remain independent.
 

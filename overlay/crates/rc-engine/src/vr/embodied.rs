@@ -480,6 +480,12 @@ fn obstruction(
 /// The native combo swings' whoosh: Ratchet's class sound 27, a marker on his own swing animations (sequences
 /// 0x17..0x19, the comet throw 0x1a, the jump attack 0x2b); the wrench's swing sequences carry none.
 const SWING_WHOOSH: i32 = 27;
+/// The whoosh needs a big fast swing: the hand at least this fast (m/s) over a stroke at least this long (m), the
+/// next one only after the hand slowed below the re-arm speed (m/s) and this delay (s).
+const WHOOSH_SPEED: f32 = 3.8;
+const WHOOSH_TRAVEL: f32 = 0.35;
+const WHOOSH_REARM: f32 = 1.0;
+const WHOOSH_GAP: f64 = 0.5;
 
 /// The held wrench's size against the native model.
 const WRENCH_SCALE: f32 = 1.20;
@@ -967,19 +973,19 @@ fn interact(
         .swing_from
         .map_or(0.0, |start| start.distance(hand.translation));
     let hand_speed = motion.velocity.length();
-    // The native combo swings whoosh (Ratchet's swing animations play it): once per stroke, hit or miss, re-armed
-    // when the hand slows down, at most every 0.2 s.
-    if hand_speed < 0.65 {
+    // The native combo swings whoosh (Ratchet's swing animations play it): once per big fast stroke, hit or miss,
+    // re-armed when the hand slows down.
+    if hand_speed < WHOOSH_REARM {
         melee.whooshed = false;
     } else if !melee.whooshed
-        && hand_speed >= 2.4
-        && travel >= 0.14
+        && hand_speed >= WHOOSH_SPEED
+        && travel >= WHOOSH_TRAVEL
         && now >= melee.whoosh_until
         && p.game.hero.state != 0x14
     {
         p.game.hero.fx.item_voices.push(rc_game::hero::packs::SoundCmd::Voice { index: SWING_WHOOSH, flags: 0 });
         melee.whooshed = true;
-        melee.whoosh_until = now + 0.2;
+        melee.whoosh_until = now + WHOOSH_GAP;
     }
     let previous = melee.previous.replace((hand, now));
     if p.game.hero.state == 0x14 {

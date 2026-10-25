@@ -212,3 +212,8 @@ The set-ups a level runs on its first frame (the pause menus' 3D models 62 ms, t
 Measured in the headset (Kerwan to level 10): the change's frame takes 34-41 ms (was 170-225 ms), the frames after it at most 27 ms (one of 140-160 ms with the set-ups still in the flight), and the upload 35 MiB over 52 frames; the worst flight frame went from about 245 ms to 40 ms. The set-ups and the first tick of the destination (160-200 ms) run under black.
 
 New log lines: `level switch: level NN prepared beside the load in ...`, `VR_HITCH swap ... streaming=true old_ties_deferred=N`, `VR_HITCH stream ...` (what was streamed and over how many frames), `VR_HITCH frame phase=... main=... split first=... pre_update=... fixed=... update=... post_update=... last=...` / `render=... prep=...` for every frame of 20 ms or more during a transition, and `level setup: <name> <ms> ms` for those set-ups (the gameplay set-up step by step). No tests or gameplay scripts were run.
+
+
+## Weapon recall after a wrench throw, a rarer whoosh
+
+A weapon swap refused while the swap is locked (the wrench in flight) no longer leaves a stale target that made the hand ignore that weapon afterward; while the wrench flies the trigger does nothing, and a fresh press once it is back brings the last weapon. The wrench's whoosh now needs a big fast swing. These changes require headset confirmation; no tests or gameplay scripts were run.

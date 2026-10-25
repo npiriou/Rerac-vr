@@ -258,7 +258,15 @@ fn update(
     let empty_hand = selected == 0 || selected == 8;
     let swapping = (p.game.hero.items.target != 0 && p.game.hero.items.target != selected)
         || session.as_ref().is_some_and(|s| s.0.temp_hand != 0);
-    if ready && empty_hand && !swapping && motion.bomb.press.is_some() {
+    // The wrench in flight: a trigger press does nothing (a fresh press once it is back brings the weapon).
+    let thrown = selected == 8
+        && p.game.hero.items.slot.item.as_ref().is_some_and(|m| {
+            matches!(m.mstate, rc_game::hero::comet::OUT | rc_game::hero::comet::BACK)
+        });
+    if thrown && motion.bomb.press.is_some() {
+        recall.trigger_consumed = true;
+    }
+    if ready && empty_hand && !swapping && !thrown && !recall.trigger_consumed && motion.bomb.press.is_some() {
         if let (Some(saved), Some(session)) = (saved.as_ref(), session.as_mut()) {
             let available = |id: i32| {
                 super::blaster::supported(id)

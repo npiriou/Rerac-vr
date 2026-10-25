@@ -743,3 +743,10 @@ Measured in the headset (Kerwan to level 10): the change's frame takes 34-41 ms 
 New log lines: `level switch: level NN prepared beside the load in ...`, `VR_HITCH swap ... streaming=true old_ties_deferred=N`, `VR_HITCH stream ...` (what was streamed and over how many frames), `VR_HITCH frame phase=... main=... split first=... pre_update=... fixed=... update=... post_update=... last=...` / `render=... prep=...` for every frame of 20 ms or more during a transition, and `level setup: <name> <ms> ms` for those set-ups (the gameplay set-up step by step). No tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-streaming\work\vr\build-20261025-170117.log`. SHA-256: `6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D`. The branch builds in its own checkout, `X:\codex\worktrees\rerac-vr-streaming` (this package applied to the pinned upstream commit); `X:\codex\worktrees\rerac-vr-build` is unchanged.
+
+
+## Weapon recall after a wrench throw, a rarer whoosh
+
+A weapon swap refused while the swap is locked (the wrench in flight) no longer leaves a stale target that made the hand ignore that weapon afterward; while the wrench flies the trigger does nothing, and a fresh press once it is back brings the last weapon. The wrench's whoosh now needs a big fast swing. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-173319.log`. SHA-256: `B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0`.

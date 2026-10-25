@@ -1,5 +1,5 @@
 {
-  "status": "native_windows_streamed_loading_build_ready",
+  "status": "native_windows_recall_whoosh_build_ready",
   "upstream": {
     "repository": "https://github.com/re-rac/rerac",
     "commit": "89c87e98f9d8296187df2a6310c67b32144090d3",
@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
+  "latest_build_sha256": "B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "Pausing during a flight after the level change (the destination's play state is not set up yet); longer play after landing on more destinations (vendors, the pause pages' 3D preview).",
+  "latest_build_physical_validation": "The trigger bringing the weapon back after a wrench throw; the whoosh only on big fast swings; quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward.",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",
@@ -556,6 +556,20 @@
     "recorded_utc": "2026-10-25T10:12:48.447582+00:00",
     "binary_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-streaming\\work\\vr\\build-20261025-170117.log",
+    "headset_tested": false
+  },
+  "recall_whoosh": {
+    "reported_behavior": "The wrench's whoosh plays on too many swings (it should need big fast ones); after equipping a weapon and taking the wrench back, a trigger press during the wrench's throw left the trigger unable to bring the weapon back once the wrench returned, until another weapon was picked in the quick select.",
+    "changes": [
+      "The whoosh needs a big fast swing: the hand at 3.8 m/s or more over a 35 cm stroke, re-armed once it slows below 1 m/s, at least 0.5 s apart.",
+      "A weapon swap refused while the swap is locked (the wrench in flight, a weapon's own lock) no longer leaves a stale target: the target goes back to the held item and a pending request swaps once the lock ends (natively the next tick dropped the request as already targeted and the hand then ignored requests for that weapon).",
+      "While the wrench flies, a trigger press does nothing; a fresh press once it is back brings the last weapon."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The trigger bringing the weapon back after a wrench throw; the whoosh only on big fast swings; quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward.",
+    "recorded_utc": "2026-10-25T10:37:10.359383+00:00",
+    "binary_sha256": "B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-173319.log",
     "headset_tested": false
   }
 }

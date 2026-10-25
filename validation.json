@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-25T10:12:48.447582+00:00",
-  "delivery_status": "streamed_loading_build_ready",
+  "updated_utc": "2026-10-25T10:37:10.359383+00:00",
+  "delivery_status": "recall_whoosh_build_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -23,9 +23,9 @@
     "scope": "Historical result; not rerun for arsenal/traversal expansion"
   },
   "native_windows_build": {
-    "profile": "release",
-    "executable_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
-    "completed_utc": "2026-10-25T10:03:58.9112045Z",
+    "profile": "debug",
+    "executable_sha256": "B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0",
+    "completed_utc": "2026-10-25T10:37:00.4207950Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1460,6 +1460,20 @@
     "recorded_utc": "2026-10-25T10:12:48.447582+00:00",
     "binary_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-streaming\\work\\vr\\build-20261025-170117.log",
+    "headset_tested": false
+  },
+  "recall_whoosh": {
+    "reported_behavior": "The wrench's whoosh plays on too many swings (it should need big fast ones); after equipping a weapon and taking the wrench back, a trigger press during the wrench's throw left the trigger unable to bring the weapon back once the wrench returned, until another weapon was picked in the quick select.",
+    "changes": [
+      "The whoosh needs a big fast swing: the hand at 3.8 m/s or more over a 35 cm stroke, re-armed once it slows below 1 m/s, at least 0.5 s apart.",
+      "A weapon swap refused while the swap is locked (the wrench in flight, a weapon's own lock) no longer leaves a stale target: the target goes back to the held item and a pending request swaps once the lock ends (natively the next tick dropped the request as already targeted and the hand then ignored requests for that weapon).",
+      "While the wrench flies, a trigger press does nothing; a fresh press once it is back brings the last weapon."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The trigger bringing the weapon back after a wrench throw; the whoosh only on big fast swings; quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward.",
+    "recorded_utc": "2026-10-25T10:37:10.359383+00:00",
+    "binary_sha256": "B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-173319.log",
     "headset_tested": false
   }
 }
