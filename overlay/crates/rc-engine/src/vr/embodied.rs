@@ -57,6 +57,14 @@ impl Plugin for EmbodiedPlugin {
                     .in_set(HandPresentation)
                     .before(crate::moby_attach::upload)
                     .before(TransformSystems::Propagate),
+            )
+            .add_systems(
+                PostUpdate,
+                present_worn
+                    .in_set(HandPresentation)
+                    .after(present)
+                    .before(crate::moby_attach::upload)
+                    .before(TransformSystems::Propagate),
             );
     }
 }
@@ -1362,6 +1370,40 @@ impl WrenchTrace {
             );
         }
     }
+}
+
+/// The worn items in first person (the VR Options page, crate::render_settings::VrOptions): the helmet the hero wears
+/// (in play, in his scenes, in the ship sequences) on the player's head, the eye behind its visor; the worn boots at
+/// the feet.
+fn present_worn(
+    views: Option<Res<bevy_mod_openxr::resources::OxrViews>>,
+    settings: Res<Settings>,
+    rig: Res<Rig>,
+    options: Option<Res<crate::render_settings::VrOptions>>,
+    play: Option<Res<crate::gameplay::Play>>,
+    (scene, scene_rt): (Res<crate::scene_render::ActiveScene>, Res<crate::scene_render::SceneRuntime>),
+    attach: Option<ResMut<crate::moby_attach::MobyAttach>>,
+) {
+    let (Some(play), Some(mut attach)) = (play, attach) else { return };
+    let (helmet, boots) = options.map_or((true, true), |o| (o.helmet, o.boots));
+    let head = super::game::pose(views.as_deref())
+        .or_else(|| settings.desktop_preview.then(|| Transform::from_xyz(0.0, 1.6, 0.0)));
+    // The root is the cinematic one in scenes and ship sequences: the player's head in the world in every case.
+    let world = head
+        .zip(rig.root_for(&play.game, settings.units_per_metre))
+        .map(|(h, root)| root.mul_transform(h));
+    let class = if scene.running {
+        crate::scene_render::worn_head_class(&scene_rt)
+    } else if play.svc.game_mode == 6 {
+        // The ship sequences' actor wears its own helmet moby (rc_game::travel::space): the same class.
+        play.game.mobys.mobys.iter().find(|m| m.state < 0x80 && matches!(m.o_class, 0x509 | 0x50a)).map(|m| m.o_class)
+    } else if play.game.hero.mode == 0 && !play.death_pending {
+        crate::moby_attach::worn_head_class(&play)
+    } else {
+        None
+    };
+    attach.tracked_head(world.filter(|_| helmet), class);
+    attach.tracked_feet(boots);
 }
 
 fn present(

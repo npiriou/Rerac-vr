@@ -680,3 +680,12 @@ Level content is culled for the headset's eye in every mode: in-level movies, sh
 The manned turrets put the eye at their seat with a fixed view and turn toward where the right controller points, at their own speeds, the trigger firing. The ship no longer vanishes after the inter-planet loading: the new level's setup hid it along with its own instance 0. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-010105.log`. SHA-256: `D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083`.
+
+
+## VR Options, the helmet on the player's head, boots and Oltanis' hand items
+
+A VR Options page sits right below Port Options (only with a VR headset), with Helmet and Boots, both On by default and saved with the port settings. With Helmet on, the worn O2 Mask or Pilot's Helmet is drawn on the player's head, in play, in Ratchet's scenes and in the ship sequences, the eye behind its visor; the scene actor's own helmet, which followed Ratchet's animated head across the view, is hidden. With Boots on, the worn boots show at the feet as the game poses them.
+
+On Oltanis, and on any arrival without a landing after a flight streamed in VR, the hand items were hidden by the travel's hide flag that the preloaded switch never cleared; it is cleared now. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-103944.log`. SHA-256: `C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B`.

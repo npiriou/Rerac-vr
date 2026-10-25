@@ -354,7 +354,8 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
     let frames = Rendered::default();
     let draw = DrawAudit::default();
     let now = std::time::Instant::now();
-    app.insert_resource(settings.clone())
+    app.insert_resource(crate::render_settings::VrOptions::startup())
+        .insert_resource(settings.clone())
         .init_resource::<Rig>()
         .add_plugins(super::embodied::EmbodiedPlugin)
         .add_plugins(super::vendor::VendorPlugin)

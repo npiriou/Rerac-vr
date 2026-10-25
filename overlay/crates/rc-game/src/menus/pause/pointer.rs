@@ -226,9 +226,10 @@ impl PageMenu {
                     }
                 }
                 Data::Port(p) => {
-                    let shown = port::VISIBLE.min(port::ENTRIES.len());
+                    let rows = port::entries_of(id).len();
+                    let shown = port::VISIBLE.min(rows);
                     let step = height / (shown as i32 + 1);
-                    let top = (p.top.max(0) as usize).min(port::ENTRIES.len() - shown);
+                    let top = (p.top.max(0) as usize).min(rows - shown);
                     for i in 0..shown {
                         push(
                             row_rect((step * (i as i32 + 1)) as f32, 24.0),
@@ -244,7 +245,7 @@ impl PageMenu {
                             true,
                         );
                     }
-                    if top + shown < port::ENTRIES.len() {
+                    if top + shown < rows {
                         push(
                             [4.0, height as f32 - gap, (width - 8) as f32, gap],
                             Action::Scroll(1),
@@ -385,12 +386,12 @@ impl PageMenu {
         match target.action {
             Action::Scroll(direction) if pointer.pressed => {
                 if let Data::Port(p) = &mut widget.data {
-                    p.top = (p.top + direction)
-                        .clamp(0, port::ENTRIES.len().saturating_sub(port::VISIBLE) as i32);
+                    let rows = port::entries_of(target.widget).len();
+                    p.top = (p.top + direction).clamp(0, rows.saturating_sub(port::VISIBLE) as i32);
                     p.cursor = if direction < 0 {
                         p.top
                     } else {
-                        (p.top + port::VISIBLE as i32 - 1).min(port::ENTRIES.len() as i32 - 1)
+                        (p.top + port::VISIBLE as i32 - 1).min(rows as i32 - 1)
                     };
                     out.sounds.push(MenuSound::Cursor);
                 }

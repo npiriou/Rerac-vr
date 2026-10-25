@@ -163,3 +163,10 @@ Mounted in a turret or flying a ship, the HUD panel hangs along the aim (the tur
 Level content is culled for the headset's eye in every mode: in-level movies, ship sequences and the Visibomb view used the native camera (an authored shot elsewhere), which left holes in view; the native image shown on the Visibomb's monitor still gets what it sees, and gameplay's "drawn last frame" keeps the native culls. Cutscenes start facing where Ratchet's head looks, and scenes with no one to see through (the infobot's messages) are watched from their camera as a spectator, instead of reusing the previous scene's eye, which showed Hoven's arrival from far away.
 
 The manned turrets put the eye at their seat with a fixed view and turn toward where the right controller points, at their own speeds, the trigger firing. The ship no longer vanishes after the inter-planet loading: the new level's setup hid it along with its own instance 0. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## VR Options, the helmet on the player's head, boots and Oltanis' hand items
+
+A VR Options page sits right below Port Options (only with a VR headset), with Helmet and Boots, both On by default and saved with the port settings. With Helmet on, the worn O2 Mask or Pilot's Helmet is drawn on the player's head, in play, in Ratchet's scenes and in the ship sequences, the eye behind its visor; the scene actor's own helmet, which followed Ratchet's animated head across the view, is hidden. With Boots on, the worn boots show at the feet as the game poses them.
+
+On Oltanis, and on any arrival without a landing after a flight streamed in VR, the hand items were hidden by the travel's hide flag that the preloaded switch never cleared; it is cleared now. These changes require headset confirmation; no tests or gameplay scripts were run.

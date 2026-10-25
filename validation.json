@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-24T18:06:05.875649+00:00",
-  "delivery_status": "culling_turrets_scenes_build_ready",
+  "updated_utc": "2026-10-25T03:44:23.477801+00:00",
+  "delivery_status": "vr_options_helmet_build_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -24,8 +24,8 @@
   },
   "native_windows_build": {
     "profile": "debug",
-    "executable_sha256": "D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083",
-    "completed_utc": "2026-10-24T18:05:45.1152931Z",
+    "executable_sha256": "C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B",
+    "completed_utc": "2026-10-25T03:44:16.3376865Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1347,6 +1347,21 @@
     "recorded_utc": "2026-10-24T18:06:05.875649+00:00",
     "binary_sha256": "D9AE7A087FFA881A05B3AEC5867768A0B12C6221F76A6674F041D85D0CC9D083",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-010105.log",
+    "headset_tested": false
+  },
+  "vr_options_helmet": {
+    "reported_behavior": "In cutscenes where Ratchet wears the O2 Mask it follows his head and hides the view; in play we cannot tell we wear it. Wanted: a VR Options page below Port Options with Helmet and Boots toggles (both on by default); a shown helmet follows the player's head and is seen through its visor, in play and in in-level movies; shown boots at our feet. Also: on Oltanis no weapon, gadget or wrench is drawn although they work.",
+    "changes": [
+      "VR Options page (only with a VR headset), right below Port Options in the pause menu's and the main menu's Options: Helmet and Boots, On or Off, On by default, saved in the port settings file (vr_helmet / vr_boots). The port page code serves both pages (rows per list widget).",
+      "The worn helmet (the O2 Mask or the Pilot's Helmet) is drawn on the player's head in play, in Ratchet's scenes and in the ship sequences: placed from the headset so that the eye sits behind its visor (measured on the model: the visor's alpha texels, the eye 0.15 from the shell), in its bind pose; the scene's and the ship actor's own helmet is hidden. Off: no helmet at all.",
+      "The worn boots are drawn at the hidden body's feet as the game poses them (the VR hand presentation no longer hides the worn items); Off hides them.",
+      "Oltanis (and every arrival without a landing after a flight streamed in VR): the travel's hide flag is cleared, so the hand items are drawn again (it stayed set because the preloaded switch skips level_unload's reset)."
+    ],
+    "validation": "Non-VR cargo check, VR cargo check and Windows debug build passed. No tests, gameplay scripts or headset session were run.",
+    "remaining_confirmation": "The VR Options page and its persistence; the O2 Mask / Pilot's Helmet on the head in play, in scenes (Orxon, Gemlik) and in the ship sequences (visor tint, the HUD behind the shell); boots at the feet; hand items on Oltanis.",
+    "recorded_utc": "2026-10-25T03:44:23.477801+00:00",
+    "binary_sha256": "C6FB71C233EC0142073C1D6343DB69CBA49E0562A6C057ACB219A732B8B0088B",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-103944.log",
     "headset_tested": false
   }
 }
