@@ -1,5 +1,7 @@
 # Original-game VR integration
 
+`scripts/vr/Package.ps1 [-Version <v>] [-NoBuild]` builds the player release: `dist/RatchetVR-<v>/` and its zip, holding `RatchetVR.exe` and `RatchetVR Sandbox.exe` (the launcher, `crates/rc-engine/src/bin/ratchet-vr.rs`), `rerac.exe` (built with `--features vr`, never `target-cpu=native`), `rerac-extract.exe`, `assets/shaders`, README/LICENSE/notices. The folder is checked against that exact file list. On first launch the launcher extracts the player's `.iso` (dropped onto it, alone in its folder, or picked in a file dialog) into `data\` with `--ntsc-only`, then starts `rerac.exe --data-dir data` with Run.ps1's VR environment (`normal`; the Sandbox copy runs `debug`) and saves under `saves\<mode>\`. Extractor and runtime exit codes (docs/plan/launcher_contract.md) become plain-language message boxes.
+
 The default launch is now `normal`: native boot/logos, Press Start and the main menu, followed by ordinary New Game/Load Game progression. Inventory, initial ammunition, planets and story scenes use their original state; VR debug grants are disabled. `-Mode debug` names the former direct-Kerwan launch with every inventory item, full initial reserves and all planets unlocked. `-Mode debug-gold` adds the native ten gold upgrades to that same debug setup. `-Scene novalis` selects the previous level only in debug modes; calibration remains explicit. Each launch mode has a separate native memory card under `work/vr/saves/<mode>`.
 
 

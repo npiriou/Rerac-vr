@@ -771,3 +771,8 @@ Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-182923.log`. SH
 The stick steers the board through the native turn spring again, as in the first VR board change, and the lean adds to the stick's x through the same spring (a small lean also steers, the board stops turning back within 1.5 cm). These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-184248.log`. SHA-256: `EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473`.
+
+
+## Player release: RatchetVR.exe
+
+`scripts/vr/Package.ps1` builds the player release folder and zip (overlay/docs/vr/README.md). `RatchetVR.exe` (`crates/rc-engine/src/bin/ratchet-vr.rs`) extracts the player's disc on first launch and starts the game in VR; `RatchetVR Sandbox.exe` starts the debug mode. The app-local Visual C++ runtime (14.29) ships with the binaries (linker 14.29). Release `0.1.0` was built from a fresh upstream worktree with the package applied (`X:\codex\worktrees\rerac-vr-release`), portable x86-64 (no `target-cpu=native`): `dist\RatchetVR-0.1.0.zip`, 34.9 MB. From the unzipped zip, desktop preview only: `RatchetVR.exe <iso>` extracted the disc (SCUS_971.99, 2724 files) and booted the normal front end (preview smoke check not applicable on the title screen); `RatchetVR Sandbox.exe` reused the data and reported `ORIGINAL_GAME_SMOKE_PASS` on Kerwan. The file dialog, message boxes and a headset launch require manual confirmation. No tests were run.
