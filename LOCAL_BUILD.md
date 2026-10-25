@@ -757,3 +757,10 @@ Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-173319.log`. SH
 The board steers about its own heading (the left stick's x plus the player's sideways lean, VR Options → Hoverboard lean), the view turns with the board (no snap turn, no room-scale step on it), the right trigger boosts, the left grip is L1 and the right stick holds the four tricks; a landing tilted or turned away straightens along the board in VR. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktreeserac-vr-build\workruild-20261025-175634.log`. SHA-256: `B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432`.
+
+
+## Hoverboard: lean, race start, Kalebo III's board weapon
+
+In VR the board's turn is a rate set by the stick's x plus the lean (from 1.5 cm, full at 12 cm, gentle at first), eased over 0.06 s, so it straightens as soon as both return to centre; the race start and respawns take the body's heading as the board's front; Kalebo III's board weapon is held in the right hand and fired by the right trigger, the left trigger boosts. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-182923.log`. SHA-256: `9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B`.

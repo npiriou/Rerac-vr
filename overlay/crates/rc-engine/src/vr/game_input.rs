@@ -705,15 +705,13 @@ pub(super) fn sample(
         }
         jump.disguised = disguised;
         // On the hoverboard (super::game turns the view with the board): no snap turn, the right stick holds the tricks,
-        // the right trigger boosts and the left grip is L1.
+        // the left trigger boosts (not R1), the right trigger fires Kalebo III's board weapon (○, as the other weapons:
+        // super::blaster) and the left grip is L1.
         let board = play
             .as_ref()
             .is_some_and(|p| p.game.hero.mode == 0 && p.game.hero.group == rc_game::hero::hoverboard::GROUP);
         let tricks = if board { board_tricks(camera) } else { 0 };
-        let boost = board && hand.firing && !jump.trigger_consumed;
-        if board {
-            hand.trigger = None;
-        }
+        let boost = board && hand.pack_modifier;
         if down && !jump.pressed && hand.pack_modifier {
             let pack_ready = play.as_ref().is_some_and(|p| {
                 let h = &p.game.hero;
@@ -840,7 +838,7 @@ pub(super) fn sample(
             }
         }
         if board {
-            buttons &= !button::CIRCLE;
+            buttons &= !button::R1;
             buttons |= tricks;
             if boost {
                 buttons |= button::SQUARE;

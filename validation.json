@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-25T11:11:17.611042+00:00",
-  "delivery_status": "hoverboard_vr_build_ready",
+  "updated_utc": "2026-10-25T11:33:21.896831+00:00",
+  "delivery_status": "hoverboard_lean_weapon_build_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -24,8 +24,8 @@
   },
   "native_windows_build": {
     "profile": "release",
-    "executable_sha256": "B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432",
-    "completed_utc": "2026-10-25T11:09:48.8971760Z",
+    "executable_sha256": "9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B",
+    "completed_utc": "2026-10-25T11:33:10.7689776Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1490,6 +1490,22 @@
     "recorded_utc": "2026-10-25T11:11:17.611042+00:00",
     "binary_sha256": "B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432",
     "build_log": "X:\\codex\\worktrees\rerac-vr-build\\work\u000br\build-20261025-175634.log",
+    "headset_tested": false
+  },
+  "hoverboard_lean_weapon": {
+    "reported_behavior": "In the headset: Kalebo III's board weapon was neither drawn nor fired; leaning had to be large before it registered, then turned the board hard, and standing straight did not straighten it quickly; at the race start the board's front was not always the player's forward. Requested: the left trigger boosts, the right trigger fires the rockets.",
+    "changes": [
+      "VR board steering is a turn rate: the stick's x plus the lean set it directly (the native 170 deg/s at full, 100 deg/s in the air), eased over 0.06 s with no dead band in the game, so the board straightens as soon as both return to centre (the native turn spring only ran past a fifth of the input and carried its own momentum).",
+      "Lean response: from 1.5 cm of neck offset, full turn at 12 cm, 45 % linear and the rest with the square; within 3 cm the reference follows the neck over 3 s so a drifted upright stance does not steer.",
+      "Race start and respawns: the board's front is the body's heading (head, shoulder line, controllers) instead of the gaze of that instant, and keeps easing to it for 2 s (on Kalebo III the race places the board about five seconds after mounting).",
+      "Kalebo III's board weapon (item 0x24, Devastator model) is a VR-supported hand item: held in the right hand, fired by the right trigger, the shot along the hand's aim with the racer ahead picked about it; on the board the trigger neither recalls a weapon nor makes the board weapon the recalled one.",
+      "Board controls: the left trigger boosts (no longer R1), the right trigger fires; the right stick still holds the four tricks, the left grip L1, X and B L2 / R2."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release: non-VR cargo check, VR cargo check and the Windows release build passed. The package's manifest was re-applied on the upstream blobs and matches the build checkout (five unrelated files differ only by CRLF line endings in the checkout). No tests or gameplay scripts were run.",
+    "remaining_confirmation": "Lean feel (1.5 / 12 cm, the curve, the drift), straightening speed, the race start heading on Kalebo III and Rilgar, the board weapon drawn in the hand and its rockets (aim, homing on the racer ahead), the left-trigger boost.",
+    "recorded_utc": "2026-10-25T11:33:21.896831+00:00",
+    "binary_sha256": "9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-182923.log",
     "headset_tested": false
   }
 }

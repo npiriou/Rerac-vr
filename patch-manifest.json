@@ -2419,6 +2419,42 @@
         {
           "old": "        return to(h, c, id::CRASH);\n    }\n",
           "new": "        return to(h, c, id::CRASH);\n    }\n    // VR: the player cannot see the body's spin from its eyes, so a landing tilted or turned away from the board\n    // straightens the body along the board instead of throwing it off (an unfinished trick still does).\n    if askew {\n        h.rot = [Pf::ZERO, Pf::ZERO, p(h.board.yaw), h.rot[3]];\n        h.rows = euler_rows(h.rot);\n        h.moby_rot = h.rot;\n        h.moby_rows = h.rows;\n        h.yaw_vel = Pf::ZERO;\n    }\n"
+        },
+        {
+          "old": "const DTF: f32 = 1.0 / 60.0;\nconst DT2F: f32 = 1.0 / 3600.0;\n",
+          "new": "const DTF: f32 = 1.0 / 60.0;\n/// VR: the share of the way the board's turn eases toward the wanted rate each tick (a 0.06 s time constant).\nconst BOARD_TURN_EASE: f32 = 0.24;\nconst DT2F: f32 = 1.0 / 3600.0;\n"
+        },
+        {
+          "old": "    }\n    // Steering. VR (Tracked::board_lean): the stick's x plus the body's lean turn the board about its own heading at\n    // the native rate times their amount, instead of turning it toward the stick's direction about the heading.\n    let turn = h.tracked.board_lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n",
+          "new": "    }\n    // Steering. VR (Tracked::board_lean): the stick's x plus the body's lean set a turn rate about the board's own\n    // heading (the native rate at full), instead of a direction about the heading for the turn spring; the rate eases\n    // in and out over a few ticks with no dead band, so the board straightens as soon as they return to centre.\n    let turn = h.tracked.board_lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n"
+        },
+        {
+          "old": "    let turn = h.tracked.board_lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n    let steer_mag = turn.map_or(h.stick_mag, |t| p(t.abs()));\n    if h.f65c == 0 || !h.board.trick_mode {\n",
+          "new": "    let turn = h.tracked.board_lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n    if h.f65c == 0 || !h.board.trick_mode {\n"
+        },
+        {
+          "old": "        if let Some(t) = turn {\n            h.target_yaw = fast_add_rotations(h.rot[2], p(-t * HALF_PI));\n        }\n        if Pf::b(0x3e4c_cccd) < steer_mag {\n            let (mut rate, mut k) = (2.967_059_6f32, 0.005f32);\n",
+          "new": "        if let Some(t) = turn {\n            let rate = if h.f65c != 0 { 1.745_329_3 } else { 2.967_059_6 };\n            let r = &mut h.tracked.board_turn;\n            *r += (-t * DTF * rate - *r) * BOARD_TURN_EASE;\n            let r = *r;\n            h.rot[2] = fast_add_rotations(h.rot[2], p(r));\n            h.target_yaw = h.rot[2];\n            h.yaw_vel = p(r);\n            if h.air_ticks != 0 { h.board.yaw = f(fast_add_rotations(p(h.board.yaw), p(r))); }\n        } else if Pf::b(0x3e4c_cccd) < h.stick_mag {\n            let (mut rate, mut k) = (2.967_059_6f32, 0.005f32);\n"
+        },
+        {
+          "old": "            }\n            let max = p(DTF * rate) * steer_mag;\n            let k = SCALE64 * p(k);\n",
+          "new": "            }\n            let max = p(DTF * rate) * h.stick_mag;\n            let k = SCALE64 * p(k);\n"
+        },
+        {
+          "old": "        h.board.steer = StickSpring::default();\n    }\n",
+          "new": "        h.board.steer = StickSpring::default();\n        h.tracked.board_turn = 0.0;\n    }\n"
+        },
+        {
+          "old": "    // The lean records 3 / 0 / 1.\n    let v = if steer_mag < Pf::b(0x3e4c_cccd) { 0.0 } else { f(h.yaw_vel) };\n    {\n",
+          "new": "    // The lean records 3 / 0 / 1.\n    let v = if turn.is_none() && h.stick_mag < Pf::b(0x3e4c_cccd) { 0.0 } else { f(h.yaw_vel) };\n    {\n"
+        },
+        {
+          "old": "    let me = to_f32x3(h.pos);\n    let yaw = h.rot[2].to_f32();\n    let mut best = 9_999_999.0f32;\n",
+          "new": "    let me = to_f32x3(h.pos);\n    // VR: the shot leaves along the hand's aim (Hero::items.tracked_aim) and the racer ahead is picked about it.\n    let aim = h.items.tracked_aim.filter(|a| h.items.slot.item.as_ref().is_some_and(|i| i.o_class == a.class));\n    let (yaw, pitch) = match aim {\n        Some(a) => (a.forward[1].atan2(a.forward[0]), (-a.forward[2]).atan2(a.forward[0].hypot(a.forward[1]))),\n        None => (h.rot[2].to_f32(), h.rot[1].to_f32()),\n    };\n    let mut best = 9_999_999.0f32;\n"
+        },
+        {
+          "old": "    if h.board.shots != -1 { h.board.shots += 1; }\n    h.board.shot = Some(Shot { yaw, pitch: h.rot[1].to_f32(), target });\n}\n",
+          "new": "    if h.board.shots != -1 { h.board.shots += 1; }\n    h.board.shot = Some(Shot { yaw, pitch, target });\n}\n"
         }
       ]
     }

@@ -245,7 +245,9 @@ fn update(
         && p.game.hero.health > 0
         && !p.death_pending
         && !p.game.hero.hand_hidden();
-    if ready && p.game.hero.items.slot.state == 2 && super::blaster::supported(selected) {
+    // On the hoverboard the trigger fires the board weapon: it neither recalls a weapon nor becomes the one recalled.
+    let board = p.game.hero.group == rc_game::hero::hoverboard::GROUP;
+    if ready && !board && p.game.hero.items.slot.state == 2 && super::blaster::supported(selected) {
         recall.weapon = Some(selected);
     }
     if input
@@ -266,10 +268,11 @@ fn update(
     if thrown && motion.bomb.press.is_some() {
         recall.trigger_consumed = true;
     }
-    if ready && empty_hand && !swapping && !thrown && !recall.trigger_consumed && motion.bomb.press.is_some() {
+    if ready && !board && empty_hand && !swapping && !thrown && !recall.trigger_consumed && motion.bomb.press.is_some() {
         if let (Some(saved), Some(session)) = (saved.as_ref(), session.as_mut()) {
             let available = |id: i32| {
                 super::blaster::supported(id)
+                    && id != rc_game::hero::hoverboard::WEAPON_ITEM
                     && saved
                         .0
                         .global

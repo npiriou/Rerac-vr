@@ -47,39 +47,49 @@ fn smooth(a: f32, b: f32, x: f32) -> f32 {
     let t = ((x - a) / (b - a)).clamp(0.0, 1.0);
     t * t * (3.0 - 2.0 * t)
 }
+/// The body's heading this instant (tracking space, [`BodyHeading`]'s weights) and the head's.
+fn body_target(head: Transform, hands: [Option<Transform>; 2]) -> (f32, f32) {
+    // A pitch-proof head heading: perpendicular to the head's right axis.
+    let mut h = Vec3::Y.cross(*head.right());
+    if h.length_squared() < 0.04 {
+        h = head.forward().with_y(0.0);
+    }
+    let h = h.normalize_or(Vec3::NEG_Z);
+    let head_yaw = yaw_of(h).unwrap_or(0.0);
+    let target = match hands {
+        [Some(l), Some(r)] => {
+            let mut sum = h * HEAD_W;
+            // The shoulder line: forward is perpendicular to left → right (not when the hands cross).
+            let across = (r.translation - l.translation).with_y(0.0);
+            let shoulder = Vec3::Y.cross(across).normalize_or_zero();
+            if shoulder.dot(h) > -0.3 {
+                sum += shoulder * SHOULDER_W * smooth(0.2, 0.4, across.length());
+            }
+            // The hands' midpoint ahead of the head.
+            let reach = ((l.translation + r.translation) * 0.5 - head.translation).with_y(0.0);
+            if reach.normalize_or_zero().dot(h) > 0.0 {
+                sum += reach.normalize_or_zero() * REACH_W * smooth(0.08, 0.25, reach.length());
+            }
+            // Where the controllers point (a near-vertical controller adds little).
+            for c in [l, r] {
+                sum += c.forward().with_y(0.0) * POINT_W;
+            }
+            yaw_of(sum).unwrap_or(head_yaw)
+        }
+        // A controller untracked: the head.
+        _ => head_yaw,
+    };
+    (target, head_yaw)
+}
+/// The body's heading this instant from the head and both controllers (tracking space; the yaw of
+/// `Quat::from_rotation_y`), unsmoothed: where the player faces, not where a glance looks.
+pub(super) fn body_yaw(head: Transform, hands: [Option<Transform>; 2]) -> f32 {
+    body_target(head, hands).0
+}
 impl BodyHeading {
     /// The body's horizontal forward (tracking space) from the head and the controllers (tracking space).
     fn update(&mut self, head: Transform, hands: [Option<Transform>; 2], dt: f32) -> Vec3 {
-        // A pitch-proof head heading: perpendicular to the head's right axis.
-        let mut h = Vec3::Y.cross(*head.right());
-        if h.length_squared() < 0.04 {
-            h = head.forward().with_y(0.0);
-        }
-        let h = h.normalize_or(Vec3::NEG_Z);
-        let head_yaw = yaw_of(h).unwrap_or(0.0);
-        let target = match hands {
-            [Some(l), Some(r)] => {
-                let mut sum = h * HEAD_W;
-                // The shoulder line: forward is perpendicular to left → right (not when the hands cross).
-                let across = (r.translation - l.translation).with_y(0.0);
-                let shoulder = Vec3::Y.cross(across).normalize_or_zero();
-                if shoulder.dot(h) > -0.3 {
-                    sum += shoulder * SHOULDER_W * smooth(0.2, 0.4, across.length());
-                }
-                // The hands' midpoint ahead of the head.
-                let reach = ((l.translation + r.translation) * 0.5 - head.translation).with_y(0.0);
-                if reach.normalize_or_zero().dot(h) > 0.0 {
-                    sum += reach.normalize_or_zero() * REACH_W * smooth(0.08, 0.25, reach.length());
-                }
-                // Where the controllers point (a near-vertical controller adds little).
-                for c in [l, r] {
-                    sum += c.forward().with_y(0.0) * POINT_W;
-                }
-                yaw_of(sum).unwrap_or(head_yaw)
-            }
-            // A controller untracked: the head.
-            _ => head_yaw,
-        };
+        let (target, head_yaw) = body_target(head, hands);
         let yaw = self.yaw.get_or_insert(target);
         let gap = wrap(target - *yaw);
         if gap.abs() > START {
@@ -147,7 +157,7 @@ fn sync(
     };
     let head = root.mul_transform(head_local);
     // The hoverboard steers about its own heading, with the stick and the player's lean.
-    p.game.hero.tracked.board_lean = rig.board_lean(&head_local, options.as_ref().is_none_or(|o| o.board_lean));
+    p.game.hero.tracked.board_lean = rig.board_lean(options.as_ref().is_none_or(|o| o.board_lean));
     let native = p.game.camera.out;
     p.game.hero.tracked.view = Some(view(native, head));
     p.game.hero.tracked.view_origin = p.game.hero.position();

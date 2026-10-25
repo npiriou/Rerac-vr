@@ -16,8 +16,10 @@ pub(super) struct WeaponAim;
 pub(super) const SELECTABLE: [i32; 22] = [
     8, 10, 15, 16, 11, 13, 9, 18, 19, 20, 17, 21, 23, 14, 24, 25, 12, 22, 26, 27, 31, 32,
 ];
+/// The hand items held and fired in the right hand: the weapons and gadgets, and Kalebo III's board weapon (the
+/// Devastator's model).
 pub(super) fn supported(id: i32) -> bool {
-    matches!(id, 9..=27 | 31 | 32)
+    matches!(id, 9..=27 | 31 | 32) || id == rc_game::hero::hoverboard::WEAPON_ITEM
 }
 #[derive(Resource, Default)]
 pub(super) struct SupportGrip {
