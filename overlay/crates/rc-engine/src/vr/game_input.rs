@@ -59,6 +59,7 @@ pub(super) struct HandSelect {
     previous: Option<Vec3>,
     revision: u64,
     selecting: bool,
+    /// The trigger is held since it last turned the page (or since the ring opened).
     page_held: bool,
 }
 impl HandSelect {
@@ -67,6 +68,7 @@ impl HandSelect {
             *self = Self {
                 held: true,
                 revision,
+                page_held: self.page_held,
                 ..default()
             };
         }
@@ -199,6 +201,7 @@ impl Plugin for GameInputPlugin {
                     .after(crate::gameplay::GameTick)
                     .before(crate::menu_render::MenuFrameSet),
             )
+            .add_systems(FixedUpdate, keep_stick_with_hero.after(crate::menu_render::MenuFrameSet))
             .add_systems(
                 PreUpdate,
                 sync.before(OxrActionSetSyncSet)
@@ -750,24 +753,31 @@ pub(super) fn sample(
         let selecting = buttons & button::TRIANGLE != 0 && mounted.is_none();
         if selecting {
             rig.hold_snap(camera.x);
-            selection.held = true;
-            if camera.x.abs() < 0.25 {
-                selection.page_held = false;
+            // The same hand's trigger turns the page (a trigger already held when the ring opens does not); while the
+            // ring is open it fires nothing, nor once it closes until released.
+            if !selection.held {
+                selection.page_held = hand.firing;
             }
-            if camera.x.abs() > 0.7 && !selection.page_held {
-                hand.quick_page = if camera.x > 0.0 { 1 } else { -1 };
+            selection.held = true;
+            if !hand.firing {
+                selection.page_held = false;
+            } else if !selection.page_held {
+                hand.quick_page = 1;
                 selection.page_held = true;
             }
+            if hand.firing {
+                jump.trigger_consumed = true;
+            }
+            hand.trigger = None;
             let right = tracked.iter().find_map(|(hand, pose, flags)| {
                 (hand.0 == 1 && flags.pos_valid() && flags.pos_tracked())
                     .then_some(pose.translation)
             });
+            // The right hand picks; the left stick keeps walking.
             out.quick_select =
                 Some(selection.direction(right, super::game::pose(views.as_deref()), rig.revision));
-            movement = Vec2::ZERO;
         } else if selection.held {
-            // Release confirms the last hand-selected sector without leaking the locomotion stick.
-            movement = Vec2::ZERO;
+            // Release confirms the last hand-selected sector.
             *selection = HandSelect::default();
             if shopping { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
         } else {
@@ -893,6 +903,21 @@ fn hand_select_menu(
     play.game.pad.analog_copy[2] = rc_game::pad::axis(axes.lx);
     play.game.pad.analog_copy[3] = rc_game::pad::axis(axes.ly);
     play.game.pad.stick_active = direction != Vec2::ZERO;
+    // The walking stick's d-pad bits stay out of the ring (VR sends no d-pad of its own).
+    let dpad = button::UP | button::RIGHT | button::DOWN | button::LEFT;
+    play.game.pad.held_unmirrored &= !dpad;
+    play.game.pad.pressed_unmirrored &= !dpad;
+}
+
+/// The ring locks the pad (PAD+0x1cc = 2) because the PS2 picks with the left stick; in VR the right hand picks, so the
+/// stick keeps walking.
+fn keep_stick_with_hero(input: Res<GamePad>, play: Option<ResMut<crate::gameplay::Play>>) {
+    if !input.active {
+        return;
+    }
+    if let Some(mut play) = play.filter(|p| p.game.pad.lock == 2) {
+        play.game.pad.lock = 0;
+    }
 }
 
 pub fn merge_pad(pad: &mut PadInput, xr: Option<&GamePad>) {

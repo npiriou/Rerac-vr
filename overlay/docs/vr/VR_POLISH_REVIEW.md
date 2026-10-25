@@ -177,3 +177,20 @@ On Oltanis, and on any arrival without a landing after a flight streamed in VR, 
 On rails the eye now predicts the body instead of trailing it, which had left the eye, the hands and the wrench's hits a metre behind at grind speed; the take-off keeps the eye in the ship's seat once Ratchet sits down; Clank's antenna dot is no longer drawn. The worn O2 Mask sits with the eye closer behind a taller visor whose glass is lighter.
 
 The wrench stretches up to 35 % on fast swings and its hits reach with it; the Hyper Strike carries the native aim assist (a drift toward a near target, a near miss pulled onto it), needs a real downward stroke, and the wrench hand no longer grabs crate tops. A Camera flip option (off by default) turns the view with Ratchet's flips, and two-handed weapons held in one hand are heavier. The loading hitch lost its main-thread table re-read and its departure free; the swap now logs its phases. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Body direction, the wrench's whoosh, Giant Clank, the Walloper and walking in the quick select
+
+A Direction option (Body by default, or Gaze) makes the heading and the stick follow an estimate of the body from the head and both controllers, so the player can walk one way while looking another. The wrench whooshes on each swing with the native combo sounds, glow billboards face the headset (Clank's antenna light in scenes), Giant Clank's heading follows the player in every state with his missiles leaving from his drawn hands, the Walloper gives the wrench back on a still grip and chains consecutive punches, and the quick select no longer stops Ratchet's movement. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Walking backward and sideways, Walloper punches and the wrench's whoosh
+
+The original game always moves Ratchet the way he faces. In VR he faces the player's heading, so the native movement physics now run facing the way he actually moves (the stick, or the carried motion once it is released), and the heading comes back right after the move for the transitions, flips, weapons, aim and ledges. Walking backward or sideways no longer lurches forward on release, jumps and steps follow the motion, and the stick no longer aims melee attacks.
+
+A Walloper punch is the right hand thrown forward relative to the head, within about 55° of the facing and away from the body: folding the arm back, swinging sideways or stepping back never punches, and the lunge goes where the player faces. The wrench's whoosh plays Ratchet's own swing sound, since the wrench's animations carry none. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Quick-select pages on the trigger
+
+While the right-stick click holds the quick select open, the right trigger turns to the next page instead of the right stick; the press fires nothing until it is released, and a trigger already held when the ring opens does not turn the page. This change requires headset confirmation; no tests or gameplay scripts were run.
