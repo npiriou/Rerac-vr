@@ -537,7 +537,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
 
 fn warm_destination(
     mut commands: Commands,
-    play: Option<Res<crate::gameplay::Play>>,
+    level: Res<crate::Level>,
     eyes: Query<(&RenderTarget, &Projection, &Msaa), With<GameEye>>,
     warm: Query<Entity, With<DestinationWarmup>>,
 ) {
@@ -546,10 +546,13 @@ fn warm_destination(
         return;
     }
     if !warm.is_empty() { return; }
-    let Some(play) = play else { return };
+    // The destination's play state is set up at the cut (crate::vr::loading): its placed Ratchet instance (class 0)
+    // gives the eye, before the hero init's ground snap.
+    let m = &level.0.mobys;
+    let Some(hero) = m.instances.iter().zip(&m.placed).find(|(i, p)| i.o_class == 0 && p.is_some()).map(|(i, _)| i) else { return };
     let Some((target, projection, msaa)) = eyes.iter().next() else { return };
-    let view = Transform::from_translation(crate::tfrag_render::game_to_bevy(play.game.hero.position()) + Vec3::Y * RATCHET_EYE)
-        .with_rotation(Quat::from_rotation_y(play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2));
+    let view = Transform::from_translation(crate::tfrag_render::game_to_bevy(hero.position) + Vec3::Y * RATCHET_EYE)
+        .with_rotation(Quat::from_rotation_y(hero.rotation[2] - std::f32::consts::FRAC_PI_2));
     super::loading::set_destination_view(view);
     // Prepare the destination's visible material pipelines using the real eye target/format.
     // The flight sky and eye render AFTER this view and replace it completely; none of the
@@ -920,6 +923,14 @@ fn rail_direction(game: &rc_game::tick::Game) -> Option<Vec3> {
     (direction.length_squared() > 0.01).then(|| direction.normalize())
 }
 
+/// [`follow_game_camera`]'s optional state: Ratchet's attachments, the VR options, the departure world of a
+/// streaming flight.
+type CameraExtras<'w> = (
+    Option<Res<'w, crate::moby_attach::MobyAttach>>,
+    Option<Res<'w, crate::render_settings::VrOptions>>,
+    Option<Res<'w, super::loading::FlightWorld>>,
+);
+
 fn follow_game_camera(
     settings: Res<Settings>,
     views: Option<Res<OxrViews>>,
@@ -935,11 +946,13 @@ fn follow_game_camera(
     scene: Res<crate::scene_render::ActiveScene>,
     scene_runtime: Res<crate::scene_render::SceneRuntime>,
     fixed: Res<Time<Fixed>>,
-    (attach, vr_options): (Option<Res<crate::moby_attach::MobyAttach>>, Option<Res<crate::render_settings::VrOptions>>),
+    (attach, vr_options, departure): CameraExtras,
 ) {
     // Until this frame's eye is known, culling uses the native camera (the title, a lost focus).
     super::loading::set_render_eye(None, false);
-    let Some(play) = play else { return };
+    // While a flight streams the destination, its play state is only set up at the cut (crate::vr::loading): the
+    // voyage runs on the departure's, as before the level change.
+    let Some(play) = play.as_deref().or(departure.as_deref().map(|d| &d.play)) else { return };
     // Startup poses while the headset is on the desk are not the player's neutral pose.
     if !settings.desktop_preview && !focus.as_ref().is_some_and(|f| f.0) {
         return;
@@ -1001,8 +1014,8 @@ fn follow_game_camera(
         .replace(now)
         .map_or(0.0, |old| (now - old).clamp(0.0, 0.05) as f32);
     // The planet-side voyage, or a flown ship's cockpit (at the ship's flight scale).
-    let ship = ship_view(&play);
-    let pilot = travel.pilot_view(&play).or(ship.map(|(eye, rotation, _)| (eye, rotation)));
+    let ship = ship_view(play);
+    let pilot = travel.pilot_view(play).or(ship.map(|(eye, rotation, _)| (eye, rotation)));
     let view_scale = settings.units_per_metre * ship.map_or(1.0, |(_, _, scale)| scale);
     let actor_eye = scene
         .running
@@ -1014,7 +1027,7 @@ fn follow_game_camera(
         .then(|| crate::scene_render::actor_gaze(&scene_runtime))
         .flatten();
     // A manned turret: the eye at its seat, the view fixed while the turret turns beneath it (super::turret).
-    let turret = if scene.running { None } else { super::turret::seat(&play) };
+    let turret = if scene.running { None } else { super::turret::seat(play) };
     // A scene with no one to see through (a flyover, the infobot's message): a spectator at the scene's camera, its
     // heading taken at the scene's start and at each cut, the head free.
     let spectator = scene
@@ -1230,7 +1243,7 @@ fn follow_game_camera(
         })
     } else {
         let flip_on = vr_options.as_ref().is_some_and(|o| o.camera_flip) && pilot.is_none();
-        update_flip(&mut rig, &play, attach.as_deref(), flip_on, dt, fixed.overstep_fraction());
+        update_flip(&mut rig, play, attach.as_deref(), flip_on, dt, fixed.overstep_fraction());
         rig.view_root_for(&play.game, settings.units_per_metre, head)
     };
     let Some(root) = root else {
@@ -1243,11 +1256,11 @@ fn follow_game_camera(
     // Level content is culled for the headset's eye, whatever the native camera shows (crate::vr::loading).
     super::loading::set_render_eye(
         Some(center),
-        native_panel(&play) || crate::visibomb_view::missile_view(Some(&play)),
+        native_panel(play) || crate::visibomb_view::missile_view(Some(play)),
     );
     if mode.free_movement()
-        && !native_panel(&play)
-        && !crate::visibomb_view::missile_view(Some(&play))
+        && !native_panel(play)
+        && !crate::visibomb_view::missile_view(Some(play))
     {
         for mut t in &mut main {
             // Keep authored camera shots in the original menu/cinematic panel.

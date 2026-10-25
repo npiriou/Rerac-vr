@@ -20,7 +20,9 @@
 //!   (entities batched into them in brackets);
 //! * the active cameras, on a line of their own.
 use bevy::{
+    app::{MainScheduleOrder, RunFixedMainLoop},
     core_pipeline::core_3d::{AlphaMask3d, Opaque3d, Transparent3d},
+    ecs::schedule::ScheduleLabel,
     prelude::*,
     render::{
         Render, RenderApp, RenderSystems,
@@ -64,9 +66,18 @@ impl Plugin for FrameTimingPlugin {
                 frame: None,
                 awake: None,
                 main_end: None,
+                marks: [None; MARKS],
             })
             .add_systems(FixedUpdate, count_tick)
-            .add_systems(Last, main_end);
+            // After the level change: a swap's frame counts in its own `main`.
+            .add_systems(Last, main_end.after(crate::level_switch::LevelChangeSet));
+        // A slow frame during a transition is split by main schedule (`VR_HITCH frame ... split`): a one-system
+        // schedule after each of them stamps the time.
+        mark_after(app, First, 0);
+        mark_after(app, PreUpdate, 1);
+        mark_after(app, RunFixedMainLoop, 2);
+        mark_after(app, Update, 3);
+        mark_after(app, PostUpdate, 4);
         if self.xr {
             app.add_systems(XrFirst, wait_start.before(OxrWaitFrameSystem))
                 .add_systems(XrFirst, wait_end.after(OxrWaitFrameSystem));
@@ -152,14 +163,35 @@ struct Clock {
     frame: Option<Instant>,
     awake: Option<Instant>,
     main_end: Option<Instant>,
+    /// This frame's [`MarkAfter`] stamps.
+    marks: [Option<Instant>; MARKS],
 }
+
+/// The main schedules a slow frame is split by, each followed by a [`MarkAfter`] schedule ([`mark_after`]).
+const MARKS: usize = 5;
+const MARK_NAMES: [&str; MARKS] = ["first", "pre_update", "fixed", "update", "post_update"];
+/// Stamps the time after main schedule `MARK_NAMES[.0]`.
+#[derive(ScheduleLabel, Clone, Debug, PartialEq, Eq, Hash)]
+struct MarkAfter(usize);
+/// Runs [`MarkAfter`]`(i)` right after main schedule `label`.
+fn mark_after(app: &mut App, label: impl ScheduleLabel, i: usize) {
+    app.world_mut().resource_mut::<MainScheduleOrder>().insert_after(label, MarkAfter(i));
+    app.add_systems(MarkAfter(i), move |mut clock: ResMut<Clock>| clock.marks[i] = Some(Instant::now()));
+}
+
 #[derive(Resource, Default)]
 struct RenderClock {
     start: Option<Instant>,
     graph: Option<Instant>,
     xr_pre: Option<Instant>,
     xr_end: Option<Instant>,
+    /// This frame's `prep` (the `VR_HITCH frame` line).
+    prep: f32,
 }
+
+/// During a level transition (crate::vr::loading), a main-world or render frame at least this long is logged on
+/// its own as `VR_HITCH frame`.
+const HITCH_MS: f32 = 20.0;
 
 fn ms(d: Duration) -> f32 {
     d.as_secs_f32() * 1e3
@@ -190,10 +222,25 @@ fn main_end(
     shared: Res<Shared>,
     frame: Option<Res<OxrFrameState>>,
     cameras: Query<(&Camera, Option<&Name>, Has<Camera3d>)>,
+    hold: Option<Res<super::loading::Hold>>,
 ) {
     let now = Instant::now();
+    let marks = std::mem::replace(&mut clock.marks, [None; MARKS]);
     if let Some(awake) = clock.awake.take() {
-        shared.lock().main.push(ms(now - awake));
+        let main = ms(now - awake);
+        shared.lock().main.push(main);
+        if let Some(phase) = hold.and_then(|h| h.hitch_phase()).filter(|_| main >= HITCH_MS) {
+            // The time between the stamps of this frame (a stamp before `awake` is a previous frame's).
+            let mut split = String::new();
+            let mut from = awake;
+            for (name, mark) in MARK_NAMES.into_iter().zip(marks) {
+                if let Some(t) = mark.filter(|t| *t >= from) {
+                    split += &format!(" {name}={:.1}", ms(t - from));
+                    from = t;
+                }
+            }
+            println!("VR_HITCH frame phase={phase} main={main:.1} split{split} last={:.1}", ms(now - from));
+        }
     }
     clock.main_end = Some(now);
     if now - clock.report < REPORT_EVERY {
@@ -346,7 +393,8 @@ fn render_start(mut clock: ResMut<RenderClock>) {
 fn graph_start(mut clock: ResMut<RenderClock>, shared: Res<Shared>) {
     let now = Instant::now();
     if let Some(start) = clock.start {
-        shared.lock().prep.push(ms(now - start));
+        clock.prep = ms(now - start);
+        shared.lock().prep.push(clock.prep);
     }
     clock.graph = Some(now);
 }
@@ -371,9 +419,13 @@ fn xr_end_done(mut clock: ResMut<RenderClock>, shared: Res<Shared>) {
         shared.lock().xr_end.push(ms(start.elapsed()));
     }
 }
-fn render_end(mut clock: ResMut<RenderClock>, shared: Res<Shared>) {
+fn render_end(mut clock: ResMut<RenderClock>, shared: Res<Shared>, hold: Option<Res<super::loading::Hold>>) {
     if let Some(start) = clock.start.take() {
-        shared.lock().render.push(ms(start.elapsed()));
+        let render = ms(start.elapsed());
+        shared.lock().render.push(render);
+        if let Some(phase) = hold.and_then(|h| h.hitch_phase()).filter(|_| render >= HITCH_MS) {
+            println!("VR_HITCH frame phase={phase} render={render:.1} prep={:.1}", clock.prep);
+        }
     }
 }
 

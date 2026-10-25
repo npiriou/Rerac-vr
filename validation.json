@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-25T07:45:23.110523+00:00",
-  "delivery_status": "pad_glyphs_build_ready",
+  "updated_utc": "2026-10-25T10:12:48.447582+00:00",
+  "delivery_status": "streamed_loading_build_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -24,8 +24,8 @@
   },
   "native_windows_build": {
     "profile": "release",
-    "executable_sha256": "D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE",
-    "completed_utc": "2026-10-25T07:45:10.8725514Z",
+    "executable_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
+    "completed_utc": "2026-10-25T10:03:58.9112045Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1442,6 +1442,24 @@
     "recorded_utc": "2026-10-25T07:45:23.110523+00:00",
     "binary_sha256": "D31C8D55B4FD4019DD9593A8947C6BF0B8B115FBA8CA93A2206A98275BB4BECE",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-pad-glyphs\\work\\vr\\build-20261025-143505.log",
+    "headset_tested": false
+  },
+  "streamed_loading": {
+    "reported_behavior": "The inter-planet loading hitch: the swap frame took 170-225 ms on the main thread (VR_HITCH startup 120-180 ms, unload 13-27 ms, despawn 11-33 ms) and the render thread then stalled about 100 ms uploading the whole level (prep up to 93 ms).",
+    "changes": [
+      "The loader thread prepares the level start beside the load (crate::level_switch::PreparedLevel): the tfrag batches, tie, shrub and moby class meshes, their images, the tie and shrub instance records and entity lists (names included). The boot uses the same path; the title world and Going Commando build theirs in place.",
+      "A VR flight streams the destination (crate::level_stream): meshes and images get their handles at the swap and are inserted at most 4 MiB, 12 images and 48 meshes per frame; tie and shrub entities are spawned within 2.5 ms per frame, the tie LOD state naming each instance's entities as they come.",
+      "At the swap the old ties are hidden and despawned a few hundred per frame; the level's unloaded resources, the replaced Level, fog and spawn states and the old level's lumps are freed on a cleanup thread (every level change).",
+      "The voyage may finish only once the stream is empty and the destination uploaded; a new level change first completes a stream still running.",
+      "VR_HITCH stream (what was streamed, frames, job time) and VR_HITCH frame (any main or render frame of 20 ms or more during a transition, with its phase and its time per main schedule); VR_PERF main now includes the level change's frame; `level setup:` times the set-ups of a level's first frame (gameplay step by step, Ratchet's attachments, the menus' 3D models, the vendor).",
+      "A flight streaming the destination leaves the gameplay set-up, Ratchet's attachments, the menus' 3D models and the vendor for the cut to the landing, under black; the voyage (travel post_tick), the VR camera (follow_game_camera) and the flight's audio use the departure's play state until then, and the pipeline warm-up view is the level's Ratchet instance."
+    ],
+    "measured": "Headset, 2026-10-25. Kerwan to 08 / 08 to 01 (first build): change frame 34-41 ms (was 170-225 ms), then one frame of 142-162 ms (menus' 3D models 62, gameplay 31, attachments 24, vendor 5, menus 4). Kerwan to 10 (final build, set-ups at the cut): change frame 40 ms, the next frames at most 27 ms, upload 35 MiB over 52 frames; worst flight frame about 245 ms before this branch, 40 ms now.",
+    "validation": "Non-VR cargo check, VR cargo check, clippy (no new warning) and the Windows release build passed. The branch's package applied to a fresh upstream checkout reproduces the build checkout exactly. The final build was flown in the headset (Kerwan to level 10) and confirmed by the user; no tests or gameplay scripts were run.",
+    "remaining_confirmation": "Pausing during a flight after the level change (the destination's play state is not set up yet); longer play after landing on more destinations (vendors, the pause pages' 3D preview).",
+    "recorded_utc": "2026-10-25T10:12:48.447582+00:00",
+    "binary_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-streaming\\work\\vr\\build-20261025-170117.log",
     "headset_tested": false
   }
 }
