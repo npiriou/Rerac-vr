@@ -217,3 +217,10 @@ New log lines: `level switch: level NN prepared beside the load in ...`, `VR_HIT
 ## Weapon recall after a wrench throw, a rarer whoosh
 
 A weapon swap refused while the swap is locked (the wrench in flight) no longer leaves a stale target that made the hand ignore that weapon afterward; while the wrench flies the trigger does nothing, and a fresh press once it is back brings the last weapon. The wrench's whoosh now needs a big fast swing. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## The hoverboard in VR
+
+The board steered toward the stick's direction about the player's heading, and the view did not turn with it: pushing forward meant "go where I face", turning the torso or the hands turned the board, a lap meant turning around in the room, and a snap turn swerved the board by 30°. In play the input mask also dropped □ and L1, so the manual boost and the L1 trick (and with it the four-trick skill point) were unreachable.
+
+The board now steers about its own heading: the left stick's x, plus the player's sideways lean (the neck's offset from where it was when the board was placed: straight within 4 cm, full turn at 20 cm; VR Options → Hoverboard lean, `vr_board_lean`, on by default), turns it at the native rate times their amount. The view follows the board's heading (time constant 0.12 s, at most 4 rad/s), stays anchored where the head was at the start or respawn so a lean moves the eye, not the rider, and takes no room-scale step; there is no snap turn on the board. The right trigger boosts (□), the left grip is L1, and in a jump the right stick up / right / down / left holds the L1 / R1 / L2 / R2 tricks (the left trigger, X and B still do). The body's spin cannot be seen from its eyes, so a landing tilted beyond 60° or turned more than 80° from the board straightens the body along the board instead of throwing Ratchet off; an unfinished trick still does. These changes require headset confirmation; no tests or gameplay scripts were run.

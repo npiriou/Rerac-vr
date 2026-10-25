@@ -571,5 +571,21 @@
     "binary_sha256": "B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-173319.log",
     "headset_tested": false
+  },
+  "hoverboard_vr": {
+    "reported_behavior": "The hoverboard is hard to control, not intuitive and not VR friendly: it steered toward the stick's direction about the player's heading (turning the torso or the hands turned the board), the view did not turn with it (a lap meant turning around in the room, a snap turn swerved the board), and in play the input mask dropped the boost (square) and L1 (one of the four tricks).",
+    "changes": [
+      "The board steers about its own heading in VR (Tracked::board_lean): the left stick's x plus the player's sideways lean turn it at the native rate times their amount; the stick's forward axis no longer matters.",
+      "Lean steering: the neck's sideways offset from where it was when the board was placed (or the view recentred), straight within 4 cm, full turn at 20 cm; VR Options -> Hoverboard lean (vr_board_lean, on by default).",
+      "The view follows the board's heading (time constant 0.12 s, at most 4 rad/s), stays anchored at the head's position at the start or respawn (a lean moves the eye), and takes no room-scale step on the board; no snap turn on the board.",
+      "Board controls: the right trigger boosts (square), the left grip is L1, the right stick up / right / down / left holds the L1 / R1 / L2 / R2 tricks (the left trigger, X and B still do); the trigger fires no weapon on the board.",
+      "A VR landing tilted beyond 60 degrees or turned more than 80 degrees from the board straightens the body along the board instead of throwing Ratchet off; an unfinished trick still does."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release: non-VR cargo check, VR cargo check and the Windows release build passed. The package's manifest was re-applied on the upstream blobs and matches the build checkout (five unrelated files differ only by CRLF line endings in the checkout). No tests or gameplay scripts were run.",
+    "remaining_confirmation": "Steering with the stick and with the lean (the dead zone and full-turn distances), the view following the board (comfort, the 0.12 s constant), the right-stick tricks and the four-trick skill point, the right-trigger boost, forgiving landings, the race start and respawns.",
+    "recorded_utc": "2026-10-25T11:11:17.611042+00:00",
+    "binary_sha256": "B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432",
+    "build_log": "X:\\codex\\worktrees\rerac-vr-build\\work\u000br\build-20261025-175634.log",
+    "headset_tested": false
   }
 }

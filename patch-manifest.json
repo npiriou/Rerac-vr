@@ -861,6 +861,14 @@
         {
           "old": "    let menu = rt.menu.as_ref();\n    let frames = menu.and_then(|m| m.frames.as_ref()).and_then(|f| f.slots.as_ref().map(|s| (f, s)));\n    let goodies = menu.is_some_and(|m| m.goodies);\n    let fold = main_t.to_matrix() * fr.camera.inverse() * fr.model;\n    let mut palette: Option<Vec<u8>> = None;\n    let mut records: Option<Vec<u8>> = None;\n    for i in 0..frame::SLOTS {\n        let show = active && frames.is_some() && (i != 6 || goodies);\n        let want = if show { Visibility::Inherited } else { Visibility::Hidden };\n        for &e in &fr.entities[i] {\n            // The gameplay setup hides every moby entity tagged with Ratchet's instance index (MeshTag 0 here)\n            // by `SpawnHidden`, which `moby_spawn` enforces each frame: these are not his.\n            if spawn_hidden.contains(e) { commands.entity(e).remove::<crate::moby_spawn::SpawnHidden>(); }\n            if let Ok(mut v) = vis.get_mut(e) {\n",
           "new": "    let menu = rt.menu.as_ref();\n    let frames = menu.and_then(|m| m.frames.as_ref()).and_then(|f| f.slots.as_ref().map(|s| (f, s)));\n    let goodies = menu.is_some_and(|m| m.goodies);\n    let fold = main_t.to_matrix() * fr.camera.inverse() * fr.model;\n    #[cfg(feature = \"vr\")]\n    let fold = spatial.as_ref().and_then(|s|s.anchor).map_or(fold, |anchor|anchor.to_matrix()*Mat4::from_scale(Vec3::splat(crate::vr::spatial_menu::DEPTH/5.0))*fr.camera.inverse()*fr.model);\n    let mut palette: Option<Vec<u8>> = None;\n    let mut records: Option<Vec<u8>> = None;\n    for i in 0..frame::SLOTS {\n        let show = active && frames.is_some() && (i != 6 || goodies);\n        let want = if show { Visibility::Inherited } else { Visibility::Hidden };\n        for &e in &fr.entities[i] {\n            #[cfg(feature = \"vr\")]\n            if crate::vr::game_requested() { commands.entity(e).insert(RenderLayers::from_layers(&[MENU_3D_LAYER,62])); }\n            // The gameplay setup hides every moby entity tagged with Ratchet's instance index (MeshTag 0 here)\n            // by `SpawnHidden`, which `moby_spawn` enforces each frame: these are not his.\n            if spawn_hidden.contains(e) { commands.entity(e).remove::<crate::moby_spawn::SpawnHidden>(); }\n            if let Ok(mut v) = vis.get_mut(e) {\n"
+        },
+        {
+          "old": "        menu.set_port_value(Setting::Direction, !o.direction_body as u8);\n    }\n",
+          "new": "        menu.set_port_value(Setting::Direction, !o.direction_body as u8);\n        menu.set_port_value(Setting::BoardLean, !o.board_lean as u8);\n    }\n"
+        },
+        {
+          "old": "            direction_body: menu.port_value(Setting::Direction).map_or(o.direction_body, |v| v == 0),\n        };\n",
+          "new": "            direction_body: menu.port_value(Setting::Direction).map_or(o.direction_body, |v| v == 0),\n            board_lean: menu.port_value(Setting::BoardLean).map_or(o.board_lean, |v| v == 0),\n        };\n"
         }
       ]
     },
@@ -1791,6 +1799,22 @@
         {
           "old": "/// The scroll arrows' half sizes (pixels; [`super::map_page::rotated`]'s `w` and `h`).\nconst ARROW_W: f32 = 6.0;\nconst ARROW_H: f32 = 10.0;\n\n/// Whether rows are hidden above and below when `shown` rows from `top` are drawn.\npub fn scroll_marks(top: usize, shown: usize) -> (bool, bool) { (top > 0, top + shown < ENTRIES.len()) }\n\n#[cfg(test)]\nmod tests {\n    use super::{next_choice, scroll_marks, ENTRIES, VISIBLE};\n\n    #[test]\n    fn scroll_marks_show_hidden_rows() {\n        assert_eq!(scroll_marks(0, VISIBLE), (false, true));\n        assert_eq!(scroll_marks(1, VISIBLE), (true, true));\n        assert_eq!(scroll_marks(ENTRIES.len() - VISIBLE, VISIBLE), (true, false));\n    }\n\n    #[test]\n    fn cycle_skips_unsupported_values() {\n",
           "new": "/// The scroll arrows' half sizes (pixels; [`super::map_page::rotated`]'s `w` and `h`).\nconst ARROW_W: f32 = 6.0;\nconst ARROW_H: f32 = 10.0;\n\n/// Whether rows are hidden above and below when `shown` of `n` rows from `top` are drawn.\npub fn scroll_marks(top: usize, shown: usize, n: usize) -> (bool, bool) { (top > 0, top + shown < n) }\n\n#[cfg(test)]\nmod tests {\n    use super::{next_choice, scroll_marks, ENTRIES, VISIBLE};\n\n    #[test]\n    fn scroll_marks_show_hidden_rows() {\n        assert_eq!(scroll_marks(0, VISIBLE, ENTRIES.len()), (false, true));\n        assert_eq!(scroll_marks(1, VISIBLE, ENTRIES.len()), (true, true));\n        assert_eq!(scroll_marks(ENTRIES.len() - VISIBLE, VISIBLE, ENTRIES.len()), (true, false));\n    }\n\n    #[test]\n    fn cycle_skips_unsupported_values() {\n"
+        },
+        {
+          "old": "    pub const GAZE: i32 = -0x215;\n\n",
+          "new": "    pub const GAZE: i32 = -0x215;\n    pub const BOARD_LEAN: i32 = -0x216;\n\n"
+        },
+        {
+          "old": "            GAZE => b\"Gaze\",\n            _ => return None,\n",
+          "new": "            GAZE => b\"Gaze\",\n            BOARD_LEAN => b\"Hoverboard lean\",\n            _ => return None,\n"
+        },
+        {
+          "old": "    Direction,\n}\n",
+          "new": "    Direction,\n    /// VR: on the hoverboard, leaning sideways steers too: value 0 on (the default), 1 off.\n    BoardLean,\n}\n"
+        },
+        {
+          "old": "    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n];\n",
+          "new": "    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n    Entry { setting: Setting::BoardLean, label: text::BOARD_LEAN, values: &[text::ON, text::OFF] },\n];\n"
         }
       ]
     },
@@ -2235,6 +2259,18 @@
         {
           "old": "        assert!(fresh.starts_with('#') && fresh.ends_with(\"msaa = 8\\n\"));\n        assert_eq!(read_key(&fresh, \"msaa\"), Some(\"8\"));\n    }\n}\n",
           "new": "        assert!(fresh.starts_with('#') && fresh.ends_with(\"msaa = 8\\n\"));\n        assert_eq!(read_key(&fresh, \"msaa\"), Some(\"8\"));\n    }\n}\n\n/// The VR Options page (`rc_game::menus::pause::port::VR_ENTRIES`): the worn head item drawn on the player's head and the\n/// worn boots at the player's feet. Inserted only for VR play; the settings file's `vr_helmet` / `vr_boots`, on by\n/// default.\n#[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]\npub struct VrOptions {\n    pub helmet: bool,\n    pub boots: bool,\n    /// The view turns with Ratchet's flips and double jumps (`vr_camera_flip`, off by default).\n    pub camera_flip: bool,\n    /// The heading and the stick's frame follow the body (the head and both controllers; the default) or the gaze\n    /// (`vr_direction = body | gaze`).\n    pub direction_body: bool,\n}\n\nimpl VrOptions {\n    #[cfg(feature = \"vr\")]\n    pub fn startup() -> Self {\n        let on = |key: &str| load_key(key).is_none_or(|v| v.trim() != \"off\");\n        VrOptions {\n            helmet: on(\"vr_helmet\"),\n            boots: on(\"vr_boots\"),\n            camera_flip: load_key(\"vr_camera_flip\").is_some_and(|v| v.trim() == \"on\"),\n            direction_body: load_key(\"vr_direction\").is_none_or(|v| v.trim() != \"gaze\"),\n        }\n    }\n\n    /// Writes both options into the port settings file.\n    pub fn save(&self) {\n        let word = |on: bool| if on { \"on\" } else { \"off\" };\n        save_key(\"vr_helmet\", word(self.helmet));\n        save_key(\"vr_boots\", word(self.boots));\n        save_key(\"vr_camera_flip\", word(self.camera_flip));\n        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n    }\n}\n"
+        },
+        {
+          "old": "    pub direction_body: bool,\n}\n",
+          "new": "    pub direction_body: bool,\n    /// On the hoverboard, leaning sideways steers too, added to the stick (`vr_board_lean`, on by default).\n    pub board_lean: bool,\n}\n"
+        },
+        {
+          "old": "            direction_body: load_key(\"vr_direction\").is_none_or(|v| v.trim() != \"gaze\"),\n        }\n",
+          "new": "            direction_body: load_key(\"vr_direction\").is_none_or(|v| v.trim() != \"gaze\"),\n            board_lean: on(\"vr_board_lean\"),\n        }\n"
+        },
+        {
+          "old": "        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n    }\n",
+          "new": "        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n        save_key(\"vr_board_lean\", word(self.board_lean));\n    }\n"
         }
       ]
     },
@@ -2353,6 +2389,36 @@
         {
           "old": "    // With the game tick the EE frames ran in its sound step; fill the ticks it did not run with IOP-only frames.\n    let driven = play.is_some();\n    while out.done < ticks.0 {\n        out.buf.clear();\n",
           "new": "    // With the game tick the EE frames ran in its sound step; fill the ticks it did not run with IOP-only frames.\n    let driven = play.is_some();\n    // A VR flight streaming the destination has no play state until the cut (crate::vr::loading): its audio stays as\n    // with one, as before the level change.\n    #[cfg(feature = \"vr\")]\n    let driven = driven || crate::vr::loading::streaming();\n    while out.done < ticks.0 {\n        out.buf.clear();\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-game/src/hero/hoverboard.rs",
+      "expectedBlobSha": "2367ed3aea44b9dab3c661d2ed7b309f248d74a4",
+      "replacements": [
+        {
+          "old": "    }\n    // Steering.\n    if h.f65c == 0 || !h.board.trick_mode {\n",
+          "new": "    }\n    // Steering. VR (Tracked::board_lean): the stick's x plus the body's lean turn the board about its own heading at\n    // the native rate times their amount, instead of turning it toward the stick's direction about the heading.\n    let turn = h.tracked.board_lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n    let steer_mag = turn.map_or(h.stick_mag, |t| p(t.abs()));\n    if h.f65c == 0 || !h.board.trick_mode {\n"
+        },
+        {
+          "old": "        h.target_yaw = fast_add_rotations(env.cam_yaw, a);\n        if Pf::b(0x3e4c_cccd) < h.stick_mag {\n            let (mut rate, mut k) = (2.967_059_6f32, 0.005f32);\n",
+          "new": "        h.target_yaw = fast_add_rotations(env.cam_yaw, a);\n        if let Some(t) = turn {\n            h.target_yaw = fast_add_rotations(h.rot[2], p(-t * HALF_PI));\n        }\n        if Pf::b(0x3e4c_cccd) < steer_mag {\n            let (mut rate, mut k) = (2.967_059_6f32, 0.005f32);\n"
+        },
+        {
+          "old": "            }\n            let max = p(DTF * rate) * h.stick_mag;\n            let k = SCALE64 * p(k);\n",
+          "new": "            }\n            let max = p(DTF * rate) * steer_mag;\n            let k = SCALE64 * p(k);\n"
+        },
+        {
+          "old": "    // The lean records 3 / 0 / 1.\n    let v = if h.stick_mag < Pf::b(0x3e4c_cccd) { 0.0 } else { f(h.yaw_vel) };\n    {\n",
+          "new": "    // The lean records 3 / 0 / 1.\n    let v = if steer_mag < Pf::b(0x3e4c_cccd) { 0.0 } else { f(h.yaw_vel) };\n    {\n"
+        },
+        {
+          "old": "    let trick_done = !(0x69..=0x6c).contains(&v.seq_b) || TRICK_LAND[h.board.trick as usize & 3] as f32 <= v.frame;\n    if lim < fabs(h.rot[1]) || lim < fabs(h.rot[0]) || Pf::b(0x3fb2_b8c2) < fast_diff_rots(h.rot[2], p(h.board.yaw)) || !trick_done {\n        return to(h, c, id::CRASH);\n",
+          "new": "    let trick_done = !(0x69..=0x6c).contains(&v.seq_b) || TRICK_LAND[h.board.trick as usize & 3] as f32 <= v.frame;\n    let askew = lim < fabs(h.rot[1]) || lim < fabs(h.rot[0]) || Pf::b(0x3fb2_b8c2) < fast_diff_rots(h.rot[2], p(h.board.yaw));\n    if !trick_done || (askew && h.tracked.board_lean.is_none()) {\n        return to(h, c, id::CRASH);\n"
+        },
+        {
+          "old": "        return to(h, c, id::CRASH);\n    }\n",
+          "new": "        return to(h, c, id::CRASH);\n    }\n    // VR: the player cannot see the body's spin from its eyes, so a landing tilted or turned away from the board\n    // straightens the body along the board instead of throwing it off (an unfinished trick still does).\n    if askew {\n        h.rot = [Pf::ZERO, Pf::ZERO, p(h.board.yaw), h.rot[3]];\n        h.rows = euler_rows(h.rot);\n        h.moby_rot = h.rot;\n        h.moby_rows = h.rows;\n        h.yaw_vel = Pf::ZERO;\n    }\n"
         }
       ]
     }

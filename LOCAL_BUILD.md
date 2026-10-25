@@ -750,3 +750,10 @@ Build: `X:\codex\worktrees\rerac-vr-streaming\work\vr\build-20261025-170117.log`
 A weapon swap refused while the swap is locked (the wrench in flight) no longer leaves a stale target that made the hand ignore that weapon afterward; while the wrench flies the trigger does nothing, and a fresh press once it is back brings the last weapon. The wrench's whoosh now needs a big fast swing. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-173319.log`. SHA-256: `B2BB491C812F7573110B4241BC7E0694AAE4C4300994BC112C4686AA89EEFAA0`.
+
+
+## The hoverboard in VR
+
+The board steers about its own heading (the left stick's x plus the player's sideways lean, VR Options → Hoverboard lean), the view turns with the board (no snap turn, no room-scale step on it), the right trigger boosts, the left grip is L1 and the right stick holds the four tricks; a landing tilted or turned away straightens along the board in VR. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktreeserac-vr-build\workruild-20261025-175634.log`. SHA-256: `B1347DC8EF556E7FB368DB9E306BCFD49F5F3DBC66BFE1B4796CE25F46689432`.

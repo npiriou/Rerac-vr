@@ -129,6 +129,7 @@ fn sync(
     let p = &mut *play;
     p.game.hero.tracked.view = None;
     p.game.hero.tracked.navigation = None;
+    p.game.hero.tracked.board_lean = None;
     if settings.desktop_preview
         || !focus.0
         || (!(mode.free_movement() && p.game.hero.tracked.enabled) && !rig.cinematic_active())
@@ -145,6 +146,8 @@ fn sync(
         return;
     };
     let head = root.mul_transform(head_local);
+    // The hoverboard steers about its own heading, with the stick and the player's lean.
+    p.game.hero.tracked.board_lean = rig.board_lean(&head_local, options.as_ref().is_none_or(|o| o.board_lean));
     let native = p.game.camera.out;
     p.game.hero.tracked.view = Some(view(native, head));
     p.game.hero.tracked.view_origin = p.game.hero.position();

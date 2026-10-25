@@ -135,6 +135,10 @@ pub(super) struct Rig {
     /// The hero's group and, on the hoverboard, his position of the last frame (its start and respawns teleport him).
     hero_group: i32,
     board_pos: Option<Vec3>,
+    /// On the hoverboard, the head's and the neck's room positions when the board was placed (or the view recentred):
+    /// the view stays anchored at the head's, as on a rail, and the lean is the neck's sideways offset from its own
+    /// ([`Rig::board_lean`]).
+    board_center: Option<(Vec3, Vec3)>,
 }
 pub(crate) fn native_panel(play: &crate::gameplay::Play) -> bool {
     let gold_bolt = play
@@ -149,6 +153,18 @@ pub(crate) fn native_panel(play: &crate::gameplay::Play) -> bool {
         && !gold_bolt
 }
 impl Rig {
+    /// On the hoverboard, the player's lean (−1 left .. 1 right, 0 without lean steering) from the head's room pose:
+    /// the neck's offset from where it was when the board was placed, along the room's side axis (the board's, since
+    /// the view follows the board).
+    pub(super) fn board_lean(&self, head: &Transform, lean: bool) -> Option<f32> {
+        let (_, center) = self.board_center?;
+        if !lean {
+            return Some(0.0);
+        }
+        let side = Quat::from_rotation_y(self.yaw) * Vec3::X;
+        let offset = (neck(head) - center).dot(side);
+        Some(offset.signum() * ((offset.abs() - BOARD_LEAN_DEAD) / (BOARD_LEAN_FULL - BOARD_LEAN_DEAD)).clamp(0.0, 1.0))
+    }
     pub(super) fn cinematic_active(&self) -> bool {
         self.cinematic_root.is_some()
     }
@@ -199,7 +215,7 @@ impl Rig {
         }
         let scale = scale * self.body_scale();
         let mut center = self.center?;
-        if let Some(head) = self.rail_center.or(self.head) {
+        if let Some(head) = self.rail_center.or(self.board_center.map(|(head, _)| head)).or(self.head) {
             center.x = head.x;
             center.z = head.z;
         }
@@ -836,6 +852,18 @@ pub(super) fn pose(views: Option<&OxrViews>) -> Option<Transform> {
     }
     Some(t)
 }
+/// How fast the view follows the hoverboard's heading (the time constant, seconds) and at most (radians / second; the
+/// board turns at up to 170° / s).
+const BOARD_FOLLOW_SECS: f32 = 0.12;
+const BOARD_FOLLOW_RATE: f32 = 4.0;
+/// The lean steering on the hoverboard: the neck's sideways offset (metres) below which the board goes straight, and
+/// the offset that turns it at full rate.
+const BOARD_LEAN_DEAD: f32 = 0.04;
+const BOARD_LEAN_FULL: f32 = 0.20;
+/// The neck, about which the head turns: looking around moves the eyes but barely the neck, leaning moves both.
+fn neck(head: &Transform) -> Vec3 {
+    head.translation + head.rotation * Vec3::new(0.0, -0.10, 0.08)
+}
 fn heading(rotation: Quat) -> f32 {
     let forward = rotation * Vec3::NEG_Z;
     (-forward.x).atan2(-forward.z)
@@ -870,8 +898,9 @@ fn align_body(
         rig.previous_head = None;
         return;
     }
-    if play.as_ref().is_some_and(|p| p.game.hero.group == 0xf) {
-        // Lean around the rail attachment; room-scale walking cannot push the capsule off its spline.
+    if play.as_ref().is_some_and(|p| matches!(p.game.hero.group, 0xf | rc_game::hero::hoverboard::GROUP)) {
+        // Lean around the rail attachment; room-scale walking cannot push the capsule off its spline. On the hoverboard
+        // the lean steers (Rig::board_lean) and moves the eye, not the rider.
         rig.previous_head = None;
         return;
     }
@@ -973,6 +1002,7 @@ fn follow_game_camera(
         rig.rail_center = None;
         rig.rail_pitch = 0.0;
         rig.rail_position = None;
+        rig.board_center = None;
         rig.head = Some(head.translation);
         rig.previous_head = Some(head.translation);
         rig.revision = rig.revision.wrapping_add(1);
@@ -1122,20 +1152,32 @@ fn follow_game_camera(
         // `rail_center` stays until `align_body` turns the lean around the rail into a room-scale step.
         rig.rail_heading = None;
     }
-    // The board steers toward the gaze (`env.cam_yaw`): its start and its respawns place it along the course, so the
-    // current gaze becomes the board's heading, as a recentre does.
+    // The hoverboard: its start and its respawns place it along the course, so the current gaze becomes the board's
+    // heading, as a recentre does. While riding, the view turns with the board (it steers about its own heading,
+    // `Tracked::board_lean`), so the player keeps facing the board's front without turning in the room.
     let group = play.game.hero.group;
+    let on_board = group == rc_game::hero::hoverboard::GROUP;
     let board = Vec3::from_array(play.game.hero.position());
     let placed = rig.board_pos.is_some_and(|old| old.distance(board) > 3.0);
-    if group == rc_game::hero::hoverboard::GROUP && (rig.hero_group != group || placed) {
+    if on_board && (rig.hero_group != group || placed) {
         rig.world_yaw = play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2;
         rig.yaw = heading(head.rotation);
         rig.turn = 0.0;
+        rig.board_center = None;
         rig.revision = rig.revision.wrapping_add(1);
         println!("VR_GAME board_heading yaw={:.3} placed={placed}", play.game.hero.rot[2].to_f32());
+    } else if on_board {
+        let target = play.game.hero.board.yaw - std::f32::consts::FRAC_PI_2;
+        let error = (target - rig.world_yaw).sin().atan2((target - rig.world_yaw).cos());
+        rig.world_yaw += (error * (1.0 - (-dt / BOARD_FOLLOW_SECS).exp())).clamp(-dt * BOARD_FOLLOW_RATE, dt * BOARD_FOLLOW_RATE);
+    }
+    if !on_board {
+        rig.board_center = None;
+    } else if rig.board_center.is_none() {
+        rig.board_center = Some((head.translation, neck(&head)));
     }
     rig.hero_group = group;
-    rig.board_pos = (group == rc_game::hero::hoverboard::GROUP).then_some(board);
+    rig.board_pos = on_board.then_some(board);
     let pitch_error = target_pitch - rig.rail_pitch;
     rig.rail_pitch += (pitch_error * (1.0 - (-dt / 0.62).exp())).clamp(-dt * 0.30, dt * 0.30);
     let position = crate::tfrag_render::game_to_bevy(play.game.hero.position());

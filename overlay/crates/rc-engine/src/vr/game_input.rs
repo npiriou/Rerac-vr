@@ -426,6 +426,20 @@ pub fn encode(movement: Vec2, camera: Vec2, buttons: u32) -> PadInput {
     p
 }
 
+/// On the hoverboard, the right stick pushed past [`BOARD_TRICK_PUSH`] holds one of the four trick shoulders: up L1,
+/// right R1, down L2, left R2 (they only count in a jump).
+const BOARD_TRICK_PUSH: f32 = 0.6;
+fn board_tricks(stick: Vec2) -> u32 {
+    if stick.length() < BOARD_TRICK_PUSH {
+        0
+    } else if stick.y.abs() >= stick.x.abs() {
+        if stick.y > 0.0 { button::L1 } else { button::L2 }
+    } else if stick.x > 0.0 {
+        button::R1
+    } else {
+        button::R2
+    }
+}
 fn menu_directions(left: Vec2, right: Vec2) -> u32 {
     // The ship list sets lf::BUTTONS_ONLY: stick-derived PadState::held bits never reach its
     // raw_pressed input. Send actual D-pad buttons, so either XR stick can navigate the menus.
@@ -690,6 +704,16 @@ pub(super) fn sample(
             jump.trigger_consumed = true;
         }
         jump.disguised = disguised;
+        // On the hoverboard (super::game turns the view with the board): no snap turn, the right stick holds the tricks,
+        // the right trigger boosts and the left grip is L1.
+        let board = play
+            .as_ref()
+            .is_some_and(|p| p.game.hero.mode == 0 && p.game.hero.group == rc_game::hero::hoverboard::GROUP);
+        let tricks = if board { board_tricks(camera) } else { 0 };
+        let boost = board && hand.firing && !jump.trigger_consumed;
+        if board {
+            hand.trigger = None;
+        }
         if down && !jump.pressed && hand.pack_modifier {
             let pack_ready = play.as_ref().is_some_and(|p| {
                 let h = &p.game.hero;
@@ -788,9 +812,9 @@ pub(super) fn sample(
         } else if selection.held {
             // Release confirms the last hand-selected sector.
             *selection = HandSelect::default();
-            if shopping { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
+            if shopping || board { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
         } else {
-            if shopping { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
+            if shopping || board { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.
@@ -813,6 +837,16 @@ pub(super) fn sample(
             }
             if face & button::SQUARE != 0 {
                 buttons |= button::R2;
+            }
+        }
+        if board {
+            buttons &= !button::CIRCLE;
+            buttons |= tricks;
+            if boost {
+                buttons |= button::SQUARE;
+            }
+            if *left_squeeze {
+                buttons |= button::L1;
             }
         }
     } else {
