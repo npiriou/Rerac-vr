@@ -2455,6 +2455,30 @@
         {
           "old": "    if h.board.shots != -1 { h.board.shots += 1; }\n    h.board.shot = Some(Shot { yaw, pitch: h.rot[1].to_f32(), target });\n}\n",
           "new": "    if h.board.shots != -1 { h.board.shots += 1; }\n    h.board.shot = Some(Shot { yaw, pitch, target });\n}\n"
+        },
+        {
+          "old": "const DTF: f32 = 1.0 / 60.0;\n/// VR: the share of the way the board's turn eases toward the wanted rate each tick (a 0.06 s time constant).\nconst BOARD_TURN_EASE: f32 = 0.24;\nconst DT2F: f32 = 1.0 / 3600.0;\n",
+          "new": "const DTF: f32 = 1.0 / 60.0;\nconst DT2F: f32 = 1.0 / 3600.0;\n"
+        },
+        {
+          "old": "    }\n    // Steering. VR (Tracked::board_lean): the stick's x plus the body's lean set a turn rate about the board's own\n    // heading (the native rate at full), instead of a direction about the heading for the turn spring; the rate eases\n    // in and out over a few ticks with no dead band, so the board straightens as soon as they return to centre.\n    let turn = h.tracked.board_lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n    if h.f65c == 0 || !h.board.trick_mode {\n",
+          "new": "    }\n    // Steering. VR (Tracked::board_lean): the stick's x plus the body's lean turn the board about its own heading through\n    // the native turn spring (its target that far off the heading, at the native rate times their amount), instead of\n    // toward the stick's direction about the heading; a lean also steers below the stick's fifth, so a small lean turns\n    // gently and the board stops turning as soon as the player stands up straight.\n    let lean = h.tracked.board_lean;\n    let turn = lean.map(|lean| (f(h.stick[0]) + lean).clamp(-1.0, 1.0));\n    let steer_mag = turn.map_or(h.stick_mag, |t| p(t.abs()));\n    let steered = Pf::b(0x3e4c_cccd) < steer_mag || lean.is_some_and(|l| l != 0.0);\n    if h.f65c == 0 || !h.board.trick_mode {\n"
+        },
+        {
+          "old": "        if let Some(t) = turn {\n            let rate = if h.f65c != 0 { 1.745_329_3 } else { 2.967_059_6 };\n            let r = &mut h.tracked.board_turn;\n            *r += (-t * DTF * rate - *r) * BOARD_TURN_EASE;\n            let r = *r;\n            h.rot[2] = fast_add_rotations(h.rot[2], p(r));\n            h.target_yaw = h.rot[2];\n            h.yaw_vel = p(r);\n            if h.air_ticks != 0 { h.board.yaw = f(fast_add_rotations(p(h.board.yaw), p(r))); }\n        } else if Pf::b(0x3e4c_cccd) < h.stick_mag {\n            let (mut rate, mut k) = (2.967_059_6f32, 0.005f32);\n",
+          "new": "        if let Some(t) = turn {\n            h.target_yaw = fast_add_rotations(h.rot[2], p(-t * HALF_PI));\n        }\n        if steered {\n            let (mut rate, mut k) = (2.967_059_6f32, 0.005f32);\n"
+        },
+        {
+          "old": "            }\n            let max = p(DTF * rate) * h.stick_mag;\n            let k = SCALE64 * p(k);\n",
+          "new": "            }\n            let max = p(DTF * rate) * steer_mag;\n            let k = SCALE64 * p(k);\n"
+        },
+        {
+          "old": "        h.board.steer = StickSpring::default();\n        h.tracked.board_turn = 0.0;\n    }\n",
+          "new": "        h.board.steer = StickSpring::default();\n    }\n"
+        },
+        {
+          "old": "    // The lean records 3 / 0 / 1.\n    let v = if turn.is_none() && h.stick_mag < Pf::b(0x3e4c_cccd) { 0.0 } else { f(h.yaw_vel) };\n    {\n",
+          "new": "    // The lean records 3 / 0 / 1.\n    let v = if steered { f(h.yaw_vel) } else { 0.0 };\n    {\n"
         }
       ]
     }

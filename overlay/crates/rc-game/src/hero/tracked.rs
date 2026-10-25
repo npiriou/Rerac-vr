@@ -28,8 +28,6 @@ pub struct Tracked {
     /// body (−1 left .. 1 right; 0 without lean steering), not toward the stick's direction about the heading
     /// (super::hoverboard). `None`: the native steering.
     pub board_lean: Option<f32>,
-    /// The board's VR turn this tick (radians, positive left): it eases toward the stick's and the lean's rate.
-    pub board_turn: f32,
     pub view_origin: [f32; 3],
     pub hands: [Option<[f32; 3]>; 2],
     pub grips: [bool; 2],

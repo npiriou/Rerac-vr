@@ -233,3 +233,8 @@ The lean needed a large lean before the board turned, then turned it hard, and s
 At the start and each respawn the board's front was the gaze of that instant; on Kalebo III the race places the board about five seconds after mounting, while the player may look aside. It is now the body's heading (the head, the shoulder line and the controllers, as for walking), and it keeps easing to it over the next two seconds.
 
 Kalebo III's board weapon (item 0x24, the Devastator's model) was neither drawn nor fired in VR: the hand only shows and aims the items it supports, and the native fire waits for that aim. It is now held in the right hand like the other weapons and fired by the right trigger; the shot leaves along the hand's aim and picks the racer ahead about it. The left trigger boosts, and on the board the trigger neither recalls a weapon nor makes the board weapon the one recalled. These changes require headset confirmation; no tests or gameplay scripts were run.
+
+
+## Hoverboard: the stick back, the lean like the stick
+
+The rate steering above also changed the stick, which played well before and became hard to control. The stick is back on the native turn spring as in the first VR board change (its target off the board's own heading by the stick's x, at the native rate times it), and the lean now goes the same way: it adds to the stick's x, so a lean turns the board exactly as that much stick does. Unlike the stick, a lean also steers below the native fifth of the input, so a small lean turns gently and the board stops turning as soon as the player is back within 1.5 cm. The lean's response (1.5 cm to 12 cm, gentle at first) and its drifting reference stay. These changes require headset confirmation; no tests or gameplay scripts were run.

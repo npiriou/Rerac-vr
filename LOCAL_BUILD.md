@@ -764,3 +764,10 @@ Build: `X:\codex\worktreeserac-vr-build\workruild-20261025-175634.log`. SHA-2
 In VR the board's turn is a rate set by the stick's x plus the lean (from 1.5 cm, full at 12 cm, gentle at first), eased over 0.06 s, so it straightens as soon as both return to centre; the race start and respawns take the body's heading as the board's front; Kalebo III's board weapon is held in the right hand and fired by the right trigger, the left trigger boosts. These changes require headset confirmation; no tests or gameplay scripts were run.
 
 Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-182923.log`. SHA-256: `9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B`.
+
+
+## Hoverboard: the stick back, the lean like the stick
+
+The stick steers the board through the native turn spring again, as in the first VR board change, and the lean adds to the stick's x through the same spring (a small lean also steers, the board stops turning back within 1.5 cm). These changes require headset confirmation; no tests or gameplay scripts were run.
+
+Build: `X:\codex\worktrees\rerac-vr-build\work\vr\build-20261025-184248.log`. SHA-256: `EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473`.

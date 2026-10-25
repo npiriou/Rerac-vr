@@ -603,5 +603,19 @@
     "binary_sha256": "9BB5FC2DF4F2A7A0A48771763E6AA30C32289242DDFB8DB9D7C9F7E4B36C477B",
     "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-182923.log",
     "headset_tested": false
+  },
+  "hoverboard_stick_lean": {
+    "reported_behavior": "In the headset: after the rate steering, the stick became unplayable although it played well before; the lean should turn at the same rate as the stick.",
+    "changes": [
+      "The stick is back on the native turn spring as in the first VR board change: its target off the board's own heading by the stick's x, at the native rate times it (the eased turn rate is removed, with Tracked::board_turn).",
+      "The lean adds to the stick's x through the same spring, so a lean turns the board exactly as that much stick does; unlike the stick it also steers below the native fifth of the input, so a small lean turns gently and the board stops turning back within 1.5 cm.",
+      "The lean's response (from 1.5 cm, as a full stick at 12 cm, gentle at first) and its drifting reference are unchanged."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release: non-VR cargo check, VR cargo check and the Windows release build passed. The package's manifest was re-applied on the upstream blobs and matches the build checkout (five unrelated files differ only by CRLF line endings in the checkout). No tests or gameplay scripts were run.",
+    "remaining_confirmation": "The stick as in the first VR board change; the lean's feel through the same spring; the race start heading; the board weapon and the left-trigger boost.",
+    "recorded_utc": "2026-10-25T11:46:43.634530+00:00",
+    "binary_sha256": "EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-build\\work\\vr\\build-20261025-184248.log",
+    "headset_tested": false
   }
 }
