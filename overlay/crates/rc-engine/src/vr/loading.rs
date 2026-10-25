@@ -1,6 +1,9 @@
 //! Prepare the destination underneath the native flight, then cut to its ready landing.
 //! Keep the departure simulation alive for flight actors while the destination uploads and warms
 //! its pipelines. Non-flight level changes use a black-frame handshake before replacing the world.
+//! During the flight the destination's meshes, images and tie/shrub entities arrive over many frames
+//! (crate::level_stream); the voyage may finish only once all of them are in and uploaded. Slow
+//! frames during a transition are logged as `VR_HITCH frame` with its phase (crate::vr::timing).
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
@@ -73,6 +76,20 @@ enum Phase {
     Landing,
     FadeIn,
 }
+
+fn phase_name(p: Phase) -> &'static str {
+    match p {
+        Phase::Idle => "",
+        Phase::FadeOut => "fade_out",
+        Phase::AwaitBlack => "await_black",
+        Phase::FlightWorld => "flight_world",
+        Phase::FlightReady => "flight_ready",
+        Phase::World => "world",
+        Phase::FirstPose => "first_pose",
+        Phase::Landing => "landing",
+        Phase::FadeIn => "fade_in",
+    }
+}
 #[derive(Resource, Clone, Default, ExtractResource)]
 pub(super) struct Hold {
     phase: Phase,
@@ -85,6 +102,8 @@ pub(super) struct Hold {
 }
 impl Hold {
     pub(super) fn opacity(&self) -> f32 { self.alpha }
+    /// The transition phase slow frames are reported under (`VR_HITCH frame`); None when idle.
+    pub(super) fn hitch_phase(&self) -> Option<&'static str> { (self.phase != Phase::Idle).then(|| phase_name(self.phase)) }
     fn warmup(&mut self, phase: Phase) {
         self.phase = phase;
         self.epoch = self.epoch.wrapping_add(1);
@@ -135,6 +154,7 @@ pub(crate) fn before_level_swap(world: &mut World) -> bool {
     }
     false
 }
+#[allow(clippy::too_many_arguments)]
 fn prepare(
     mut commands: Commands,
     mut h: ResMut<Hold>,
@@ -146,14 +166,22 @@ fn prepare(
     images: Res<Assets<Image>>,
     meshes: Query<&Mesh3d>,
     play: Option<Res<crate::gameplay::Play>>,
+    stream: Res<crate::level_stream::LevelStream>,
 ) {
     // An upload stall must not consume the entire reveal fade in one update.
     let dt = time.delta_secs().min(0.05);
     match h.phase {
         Phase::Idle => return,
+        // Assets and entities still streaming in: readiness is measured again once the last one is in.
+        Phase::FlightWorld if stream.pending() => h.warmup(Phase::FlightWorld),
         Phase::FlightWorld if h.ready.load(Ordering::Acquire) == h.epoch && play.is_some() => {
             h.phase = Phase::FlightReady;
             DESTINATION_READY.store(true, Ordering::Release);
+            let s = stream.stats();
+            println!(
+                "VR_HITCH stream meshes={} images={} mib={:.1} jobs={} frames={} job_ms={:.1}",
+                s.meshes, s.images, s.bytes as f64 / (1 << 20) as f64, s.jobs, s.frames, s.job_time.as_secs_f64() * 1e3
+            );
             println!("VR_GAME flight_preload destination GPU ready; voyage may finish");
         }
         Phase::FlightReady if FINISH_FLIGHT.swap(false, Ordering::AcqRel) => {
@@ -169,9 +197,7 @@ fn prepare(
             STREAMING.store(false, Ordering::Release);
             // The departure world (a whole level and its simulation) is freed on a worker, not in this frame.
             commands.queue(|w: &mut World| {
-                if let Some(departure) = w.remove_resource::<FlightWorld>() {
-                    let _ = std::thread::Builder::new().name("departure drop".into()).spawn(move || drop(departure));
-                }
+                if let Some(departure) = w.remove_resource::<FlightWorld>() { crate::level_stream::drop_later(departure); }
             });
             travel.enter_preloaded(&mut commands);
             flight.active = false;
