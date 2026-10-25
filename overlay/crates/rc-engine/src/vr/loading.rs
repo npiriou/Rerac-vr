@@ -2,8 +2,10 @@
 //! Keep the departure simulation alive for flight actors while the destination uploads and warms
 //! its pipelines. Non-flight level changes use a black-frame handshake before replacing the world.
 //! During the flight the destination's meshes, images and tie/shrub entities arrive over many frames
-//! (crate::level_stream); the voyage may finish only once all of them are in and uploaded. Slow
-//! frames during a transition are logged as `VR_HITCH frame` with its phase (crate::vr::timing).
+//! (crate::level_stream); the voyage may finish only once all of them are in and uploaded. The
+//! destination's play state, Ratchet's attachments, the menus' 3D models and the vendor are set up at
+//! the cut, under black (`streaming()` holds their set-ups). Slow frames during a transition are
+//! logged as `VR_HITCH frame` with its phase (crate::vr::timing).
 use bevy::{
     asset::RenderAssetUsages,
     prelude::*,
@@ -165,7 +167,6 @@ fn prepare(
     audio: Option<ResMut<crate::audio_out::AudioOut>>,
     images: Res<Assets<Image>>,
     meshes: Query<&Mesh3d>,
-    play: Option<Res<crate::gameplay::Play>>,
     stream: Res<crate::level_stream::LevelStream>,
 ) {
     // An upload stall must not consume the entire reveal fade in one update.
@@ -174,7 +175,9 @@ fn prepare(
         Phase::Idle => return,
         // Assets and entities still streaming in: readiness is measured again once the last one is in.
         Phase::FlightWorld if stream.pending() => h.warmup(Phase::FlightWorld),
-        Phase::FlightWorld if h.ready.load(Ordering::Acquire) == h.epoch && play.is_some() => {
+        // The destination's play state is not needed here: its set-up (with Ratchet's attachments) runs at the cut,
+        // under black (crate::gameplay, crate::moby_attach).
+        Phase::FlightWorld if h.ready.load(Ordering::Acquire) == h.epoch => {
             h.phase = Phase::FlightReady;
             DESTINATION_READY.store(true, Ordering::Release);
             let s = stream.stats();

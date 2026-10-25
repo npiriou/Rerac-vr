@@ -20,9 +20,9 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "728DB33874D2C67D75CEA0DE34032C8EFB95DD0879C8430641DF83DE4133D7A9",
+  "latest_build_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
   "validation_record": "STARTUP_READINESS.json",
-  "latest_build_physical_validation": "The remaining flight freeze with the menus' 3D models and the vendor deferred (expected about 95 ms); the pause pages' 3D preview and the vendors after landing; the destination complete at the landing (ties, shrubs, mobys, textures).",
+  "latest_build_physical_validation": "Pausing during a flight after the level change (the destination's play state is not set up yet); longer play after landing on more destinations (vendors, the pause pages' 3D preview).",
   "performance_visibility": {
     "status": "rolled_back_after_user_reported_worse_headset_lag",
     "binary_sha256": "D3914197C4FEE54FEF186719CAC0184AC43787732047DFBD2C3F250690947CED",
@@ -548,14 +548,14 @@
       "At the swap the old ties are hidden and despawned a few hundred per frame; the level's unloaded resources, the replaced Level, fog and spawn states and the old level's lumps are freed on a cleanup thread (every level change).",
       "The voyage may finish only once the stream is empty and the destination uploaded; a new level change first completes a stream still running.",
       "VR_HITCH stream (what was streamed, frames, job time) and VR_HITCH frame (any main or render frame of 20 ms or more during a transition, with its phase and its time per main schedule); VR_PERF main now includes the level change's frame; `level setup:` times the set-ups of a level's first frame (gameplay step by step, Ratchet's attachments, the menus' 3D models, the vendor).",
-      "A flight streaming the destination leaves the menus' 3D models (62 ms) and the vendor (5 ms) for the cut to the landing, under black."
+      "A flight streaming the destination leaves the gameplay set-up, Ratchet's attachments, the menus' 3D models and the vendor for the cut to the landing, under black; the voyage (travel post_tick), the VR camera (follow_game_camera) and the flight's audio use the departure's play state until then, and the pipeline warm-up view is the level's Ratchet instance."
     ],
-    "measured": "Headset, 2026-10-25, Kerwan to level 08 and level 08 to level 01: change frame 34-41 ms (was 170-225 ms), upload 31-45 MiB over 50-70 frames, then one frame of 142-162 ms (pre_update 140 ms: menus' 3D models 62, gameplay 31, Ratchet's attachments 24, vendor 5, menus 4) before the deferral.",
-    "validation": "Non-VR cargo check, VR cargo check, clippy (no new warning) and the Windows release build passed. The branch's package applied to a fresh upstream checkout reproduces the build checkout exactly. Headset sessions measured the earlier builds of this branch; no tests or gameplay scripts were run.",
-    "remaining_confirmation": "The remaining flight freeze with the menus' 3D models and the vendor deferred (expected about 95 ms); the pause pages' 3D preview and the vendors after landing; the destination complete at the landing (ties, shrubs, mobys, textures).",
-    "recorded_utc": "2026-10-25T08:54:13.728299+00:00",
-    "binary_sha256": "728DB33874D2C67D75CEA0DE34032C8EFB95DD0879C8430641DF83DE4133D7A9",
-    "build_log": "X:\\codex\\worktrees\\rerac-vr-streaming\\work\\vr\\build-20261025-154651.log",
+    "measured": "Headset, 2026-10-25. Kerwan to 08 / 08 to 01 (first build): change frame 34-41 ms (was 170-225 ms), then one frame of 142-162 ms (menus' 3D models 62, gameplay 31, attachments 24, vendor 5, menus 4). Kerwan to 10 (final build, set-ups at the cut): change frame 40 ms, the next frames at most 27 ms, upload 35 MiB over 52 frames; worst flight frame about 245 ms before this branch, 40 ms now.",
+    "validation": "Non-VR cargo check, VR cargo check, clippy (no new warning) and the Windows release build passed. The branch's package applied to a fresh upstream checkout reproduces the build checkout exactly. The final build was flown in the headset (Kerwan to level 10) and confirmed by the user; no tests or gameplay scripts were run.",
+    "remaining_confirmation": "Pausing during a flight after the level change (the destination's play state is not set up yet); longer play after landing on more destinations (vendors, the pause pages' 3D preview).",
+    "recorded_utc": "2026-10-25T10:12:48.447582+00:00",
+    "binary_sha256": "6815E721EC019A760B364EAB14B4EA5064B9EAF7C9960EF3633B1CE66BFFB37D",
+    "build_log": "X:\\codex\\worktrees\\rerac-vr-streaming\\work\\vr\\build-20261025-170117.log",
     "headset_tested": false
   }
 }
