@@ -1149,6 +1149,10 @@
         {
           "old": "    if *done { return; }\n    let Some(mut occl) = occl else { return };\n    *done = true;\n    let mut timer = crate::level_stream::SetupTimer::start(\"gameplay\");\n",
           "new": "    if *done { return; }\n    let Some(mut occl) = occl else { return };\n    // A VR flight streaming this level (crate::vr::loading): set up at the cut to the landing, under black, rather\n    // than in the flight's frame right after the level change (the voyage runs on the departure's play state).\n    #[cfg(feature = \"vr\")]\n    if crate::vr::loading::streaming() { return; }\n    *done = true;\n    let mut timer = crate::level_stream::SetupTimer::start(\"gameplay\");\n"
+        },
+        {
+          "old": "    p.svc.groups = statics.groups(&lv.gameplay);\n    p.svc.hits = Default::default();\n    // The \"use\" system's talk slots",
+          "new": "    p.svc.groups = statics.groups(&lv.gameplay);\n    p.svc.hits = Default::default();\n    // The draw callbacks of the death's tick (the next moby loop runs them first, `draw_callbacks::run_frame`): the game's\n    // frames of the fade drew and cleared them; kept, they ran on whatever moby the compacted table put at their old ids\n    // (Quartu's arc keeper 1331, its arc on Ratchet at a zapper death, read its texture words from a moby without pvars:\n    // a panic).\n    p.svc.draw_callbacks = Default::default();\n    // The \"use\" system's talk slots"
         }
       ]
     },
