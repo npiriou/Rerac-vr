@@ -1,6 +1,7 @@
 //! Clank's and Giant Clank's fists in first person: a punch of either tracked hand strikes where that hand actually
 //! is, with the body's original attack sphere and damage (`rc_game::hero::bodies`: Clank's kick sphere, Giant Clank's
-//! fist), like Ratchet's physical wrench. Nothing plays the native punch animation.
+//! fist, plus his punch's ground sweep toward the strike), like Ratchet's physical wrench. Nothing plays the native
+//! punch animation.
 use super::{
     Settings,
     embodied::{Motion, game_point, gameplay},
@@ -41,8 +42,9 @@ struct Fists {
 const SPEED: f32 = 2.0;
 const STROKE: f32 = 0.12;
 const STILL: f32 = 0.65;
-/// The native hit windows last a few ticks (Clank's kick keys 3..6).
-const WINDOW: u8 = 4;
+/// The strike is detected mid-stroke; its window covers the rest of the stroke and the arm held at full extension,
+/// where the target is (Giant Clank's native fist keys 7..14, its sweep the whole punch).
+const WINDOW: u8 = 10;
 
 fn strike(
     play: Option<ResMut<crate::gameplay::Play>>,
@@ -101,8 +103,8 @@ fn strike(
             continue;
         }
         f.active -= 1;
-        // A retracting arm ends the strike: it cannot hit on the way back.
-        if speed < STILL || f.velocity.dot(f.direction) < speed * 0.3 {
+        // A retracting arm ends the strike: it cannot hit on the way back. Slowing at full extension does not.
+        if f.velocity.dot(f.direction) < -STILL {
             f.active = 0;
             continue;
         }
