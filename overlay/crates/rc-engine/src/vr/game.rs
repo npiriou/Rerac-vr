@@ -96,6 +96,7 @@ pub(super) struct Rig {
     yaw: f32,
     world_yaw: f32,
     turn: f32,
+    /// The neck's pivot ([`neck_pivot`], tracking space): above the hero's position.
     head: Option<Vec3>,
     previous_head: Option<Vec3>,
     snap_held: bool,
@@ -319,6 +320,9 @@ struct Audit {
 
 pub fn prepare_game() -> anyhow::Result<()> {
     let s = Settings::from_env()?;
+    // New games (the debug boots' and the menus' New Game) start with the helpdesk's voice and text off; a save keeps
+    // its own setting, and Options turns it back on.
+    rc_game::game_state::NEW_GAME_HELPDESK.store(false, std::sync::atomic::Ordering::Relaxed);
     // Before any original plugin is built. Keep 60 Hz logic, let xrWaitFrame pace rendering.
     unsafe {
         std::env::set_var("RC_FRAME_CAP", "0");
@@ -347,7 +351,18 @@ pub fn prepare_game() -> anyhow::Result<()> {
         // Port Options owns AA quality, including its High default and persisted user changes.
         std::env::set_var("RC_FRONTEND", if s.mode.debug() { "0" } else { "1" });
         if s.mode.debug() {
-            std::env::set_var("RC_LEVEL", if s.scene == "kerwan" { "3" } else { "1" });
+            // The body launches: Orxon (10) hands the hero to Clank without the O2 Mask (super::blaster::grant
+            // withholds it); Quartu (15) starts on Giant Clank's pad (class 1451, its placed instance).
+            let level = match s.mode {
+                super::LaunchMode::DebugClank => "10",
+                super::LaunchMode::DebugGiant => "15",
+                _ if s.scene == "kerwan" => "3",
+                _ => "1",
+            };
+            std::env::set_var("RC_LEVEL", level);
+            if s.mode == super::LaunchMode::DebugGiant && std::env::var_os("RC_HERO_AT").is_none() {
+                std::env::set_var("RC_HERO_AT", "130.51,222.42,26.5");
+            }
             std::env::set_var("RC_SCENE", "0");
             let planets = (0..rc_game::travel::LEVEL_COUNT)
                 .map(|i| i.to_string())
@@ -441,6 +456,7 @@ pub fn install_game(app: &mut App) -> anyhow::Result<()> {
         .add_plugins(super::spatial_menu::SpatialMenuPlugin)
         .add_plugins(super::menu_pointer::MenuPointerPlugin)
         .add_plugins(super::weapon_screen::WeaponScreenPlugin)
+        .add_systems(First, super::body::sync_option)
         .insert_resource(frames.clone())
         .insert_resource(draw.clone())
         .insert_resource(MonitorCadence {
@@ -888,6 +904,13 @@ fn rig_transform(base: Transform, center: Vec3, yaw: f32, scale: f32) -> Transfo
         scale: Vec3::splat(scale),
     }
 }
+/// The neck's pivot (tracking space): super::body's offsets behind and below the eyes in the head's frame. Room-scale
+/// steps and the view's placement above the hero follow it, not the headset, so turning, tipping or nodding the head
+/// moves the eyes about the neck as a real head does instead of walking Ratchet; a lean from the hips still moves it.
+fn neck_pivot(head: Transform) -> Vec3 {
+    head.translation + head.rotation * Vec3::new(0.0, -super::body::NECK_DOWN, super::body::NECK_BACK)
+}
+
 fn align_body(
     settings: Res<Settings>,
     views: Option<Res<OxrViews>>,
@@ -904,7 +927,8 @@ fn align_body(
     let Some(head) = pose(views.as_deref()) else {
         return;
     };
-    rig.head = Some(head.translation);
+    let neck = neck_pivot(head);
+    rig.head = Some(neck);
     if rig.center.is_none() || !mode.free_movement() {
         rig.previous_head = None;
         return;
@@ -917,7 +941,7 @@ fn align_body(
     }
     let previous = rig
         .previous_head
-        .replace(head.translation)
+        .replace(neck)
         .or(rig.rail_center.take());
     let Some(previous) = previous else {
         // Rebase after focus/menu changes instead of moving the avatar from an old desk/room pose.
@@ -927,7 +951,7 @@ fn align_body(
         rig.revision = rig.revision.wrapping_add(1);
         return;
     };
-    let mut delta = head.translation - previous;
+    let mut delta = neck - previous;
     delta.y = 0.0;
     if delta.length() > 0.5 {
         rig.revision = rig.revision.wrapping_add(1);
@@ -1015,8 +1039,8 @@ fn follow_game_camera(
         rig.rail_pitch = 0.0;
         rig.rail_position = None;
         rig.board_center = None;
-        rig.head = Some(head.translation);
-        rig.previous_head = Some(head.translation);
+        rig.head = Some(neck_pivot(head));
+        rig.previous_head = rig.head;
         rig.revision = rig.revision.wrapping_add(1);
         println!(
             "VR_GAME recentered from focused headset pose: center={:?} yaw={:.3}",
@@ -1130,6 +1154,11 @@ fn follow_game_camera(
         if turret.is_some() && pilot.is_none() && actor_eye.is_none() {
             center.y = anchor.y;
         }
+        // Seen through an actor's eyes (a scene's actor, a ship sequence's pilot): the eye stays in its head wherever
+        // the player's head moves in the room, only its rotation is free (its body is drawn, super::body).
+        if pilot.is_some() || actor_eye.is_some() || (spectator.is_none() && turret.is_none()) {
+            center = head.translation;
+        }
         rig.cinematic_root = Some(Transform {
             translation: eye - rotation * (center * view_scale),
             rotation,
@@ -1158,7 +1187,7 @@ fn follow_game_camera(
         } else {
             // Preserve entry gaze: only subsequent gradual path changes rotate the VR origin.
             rig.rail_heading = Some(rail);
-            rig.rail_center = Some(head.translation);
+            rig.rail_center = Some(neck_pivot(head));
         }
     } else {
         // `rail_center` stays until `align_body` turns the lean around the rail into a room-scale step.

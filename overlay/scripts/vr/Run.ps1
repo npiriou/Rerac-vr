@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidateSet('normal','debug','debug-gold')][string]$Mode='normal',
+param([ValidateSet('normal','debug','debug-gold','debug-clank','debug-giant','debug-hologuise')][string]$Mode='normal',
     [ValidateSet('calibration','novalis','kerwan')][string]$Scene='kerwan',[string]$DataDir,
     [ValidateRange(0.1,10.0)][double]$UnitsPerMetre=1.0,[string]$SpawnGame,[switch]$Release,
     [switch]$DesktopPreview,[ValidateRange(0,600)][int]$SmokeTestSeconds=0)
@@ -21,7 +21,7 @@ if ($Scene -ne 'calibration' -and (-not $DataDir -or -not (Test-Path -LiteralPat
 }
 $Out=Join-Path $Root 'work/vr';[IO.Directory]::CreateDirectory($Out)|Out-Null
 $Surface=if ($DesktopPreview) {'preview'} else {'headset'}
-$BootScene=if ($Scene -eq 'calibration') {'calibration'} elseif ($Mode -eq 'normal') {'frontend'} else {$Scene}
+$BootScene=if ($Scene -eq 'calibration') {'calibration'} elseif ($Mode -eq 'normal') {'frontend'} elseif ($Mode -eq 'debug-clank') {'orxon'} elseif ($Mode -eq 'debug-giant') {'quartu'} else {$Scene}
 $Log=Join-Path $Out ("$Mode-$BootScene-$Surface-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'.log')
 $Names=@('RC_VR_MODE','RC_SAVE_DIR','RC_GIVE_ITEMS','RC_GIVE_ITEMS_EQUIP','RC_GIVE_HYDROPACK','RC_GIVE_BOLTS','RC_GIVE_GOLD_BOLTS','RC_GIVE_GOLD_WEAPONS','RC_GAME_BEATEN','RC_SKIP_LOGOS','RC_PLAY_FLY','RC_VR','RC_VR_SCENE','RC_VR_UNITS_PER_METRE','RC_VR_SPAWN_GAME','RC_LEVEL','RC_UNLOCK_PLANETS','RC_AUDIO','RC_VR_DESKTOP_PREVIEW','RC_VR_PREVIEW_SECONDS','RC_FRONTEND','RC_SCENE','RC_PLAY','RC_FRAME_CAP','RC_OCCL','RC_MSAA','RC_SCREENSHOT','RC_SCREENSHOT_FRAME')
 $Old=@{};foreach ($Name in $Names) {$Old[$Name]=[Environment]::GetEnvironmentVariable($Name,'Process')}
@@ -40,7 +40,8 @@ try {
         Remove-Item -LiteralPath Env:RC_UNLOCK_PLANETS -ErrorAction SilentlyContinue
         $env:RC_FRONTEND='1'
     } else {
-        $env:RC_LEVEL=if ($Scene -eq 'kerwan') {'3'} else {'1'}
+        # The body launches (the game sets the same): Orxon (10) as Clank, Quartu (15) on Giant Clank's pad.
+        $env:RC_LEVEL=if ($Mode -eq 'debug-clank') {'10'} elseif ($Mode -eq 'debug-giant') {'15'} elseif ($Scene -eq 'kerwan') {'3'} else {'1'}
         $env:RC_UNLOCK_PLANETS=(0..18) -join ','
         $env:RC_FRONTEND='0'
     }

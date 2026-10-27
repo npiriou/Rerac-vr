@@ -37,6 +37,11 @@ pub(super) struct HandInput {
     pub pack_jump: bool,
     pub menu_click: bool,
     pub menu_held: bool,
+    /// The open menu page has pointer targets (super::menu_pointer, the last tick): pointing selects there, so the
+    /// sticks do not navigate it, and A clicks like the trigger.
+    pub menu_targets: bool,
+    /// A is held (its press confirms in menus like the trigger's).
+    menu_cross: bool,
     pub utility_cancel: bool,
     menu_ready: bool,
     menu_active: bool,
@@ -120,16 +125,15 @@ pub(super) struct JumpInput {
     disguised: bool,
     salute: Salute,
 }
-/// The right hand's salute (the Hologuise's ○): the controller beside the right brow, the hand open, the palm facing
-/// forward or down, held 8 frames; it lets go with some slack.
+/// The right hand's salute (the Hologuise's ○): the right hand raised open, at shoulder height or above, within 0.75 of
+/// the head and not across to the left (a salute at the brow, or a wave), held 5 frames; it lets go with some slack.
 #[derive(Default)]
 pub(super) struct Salute {
     frames: u8,
     active: bool,
 }
 impl Salute {
-    /// `head` and `hand` in tracking space. Head-local metres: +x right, +y up, −z forward. The OpenXR right grip's
-    /// −X leaves the palm and −Z runs along the fist.
+    /// `head` and `hand` in tracking space. Head-local metres: +x right, +y up, −z forward.
     fn update(&mut self, head: Option<Transform>, hand: Option<Transform>, grip: f32) -> bool {
         let (Some(head), Some(hand)) = (head, hand) else {
             *self = Salute::default();
@@ -137,24 +141,15 @@ impl Salute {
         };
         let inv = head.rotation.inverse();
         let p = inv * (hand.translation - head.translation);
-        let palm = inv * (hand.rotation * Vec3::NEG_X);
-        let fist = inv * (hand.rotation * Vec3::NEG_Z);
-        let pose = |m: f32, k: f32| {
-            grip < 0.5
-                && (0.04 - m..=0.24 + m).contains(&p.x)
-                && (-0.04 - m..=0.18 + m).contains(&p.y)
-                && (-0.08 - m..=0.20 + m).contains(&-p.z)
-                && p.length() < 0.28 + m
-                && (-palm.z).max(-palm.y) > 0.35 - k
-                && -fist.x > -k
-        };
+        // Any raised open right hand: at the brow, or up and waving.
+        let pose = |m: f32| grip < 0.6 + m && p.y > -0.15 - m && p.x > -0.15 - m && p.length() < 0.75 + m;
         if self.active {
-            self.active = pose(0.05, 0.25);
-        } else if pose(0.0, 0.0) {
+            self.active = pose(0.1);
+        } else if pose(0.0) {
             self.frames = self.frames.saturating_add(1);
-            self.active = self.frames >= 8;
+            self.active = self.frames >= 5;
             if self.active {
-                println!("VR_GAME salute at={p:?} palm={palm:?}");
+                println!("VR_GAME salute at={p:?}");
             }
         } else {
             self.frames = 0;
@@ -489,6 +484,7 @@ pub(super) fn sample(
         hand.firing = false;
         hand.menu_click = false;
         hand.menu_held = false;
+        hand.menu_cross = false;
         hand.menu_ready = false;
         hand.menu_active = false;
         hand.menu_consumed = true;
@@ -771,7 +767,7 @@ pub(super) fn sample(
         {
             buttons |= button::CIRCLE;
         }
-        // The disguise also salutes when the right hand does: raised to the brow, open, palm out.
+        // The disguise also salutes when the right hand does: raised open, to the brow or waving.
         let right = tracked.iter().find_map(|(h, pose, f)| {
             (h.0 == 1 && f.pos_valid() && f.pos_tracked() && f.rot_valid() && f.rot_tracked()).then_some(*pose)
         });
@@ -857,7 +853,19 @@ pub(super) fn sample(
             mode.state.mode,
             rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
         ) {
-            buttons |= menu_directions(movement, camera);
+            // A confirms as the trigger does: a click on what the right hand points at (super::menu_pointer, which
+            // sends the native ✕ on a page without pointer targets). Pointing is the selection: the sticks only
+            // navigate a page the pointer cannot.
+            let cross = buttons & button::CROSS != 0;
+            if cross && !hand.menu_cross {
+                hand.menu_click = true;
+            }
+            hand.menu_held |= cross;
+            hand.menu_cross = cross;
+            buttons &= !button::CROSS;
+            if !hand.menu_targets {
+                buttons |= menu_directions(movement, camera);
+            }
             // The page shoulders (the map's previous / next page, the planet lists, shoulder-stepped lists): the left
             // grip is L1, the left trigger R1 as in play.
             if *left_squeeze {
@@ -904,6 +912,15 @@ pub(super) fn sample(
             }
         }
     }
+    if hand.menu_targets
+        && matches!(
+            mode.state.mode,
+            rc_game::menus::mode::Mode::Menu | rc_game::menus::mode::Mode::Freeze
+        )
+    {
+        // Pointing selects on this page: the sticks stay out of it.
+        (movement, camera) = (Vec2::ZERO, Vec2::ZERO);
+    }
     out.pad = encode(movement, camera, buttons);
     if buttons != *previous {
         println!("VR_GAME controller_buttons={buttons:#06x} move={movement:?} camera={camera:?}");
@@ -918,10 +935,14 @@ fn hand_select_menu(
     mut hand: ResMut<HandInput>,
     saved: Option<ResMut<crate::gameplay::Persistent>>,
     menu: Option<ResMut<crate::menu_render::MenuRt>>,
-    mut page: Local<usize>,
+    (mut page, mut was_open): (Local<usize>, Local<bool>),
 ) {
     let change = std::mem::take(&mut hand.quick_page);
-    if change != 0 {
+    // The ring always opens on its first page, not on the one last used.
+    let open = menu.as_ref().and_then(|m| m.qs.as_ref()).is_some_and(|q| q.open && !q.command_page);
+    let reopened = open && !*was_open && *page != 0;
+    *was_open = open;
+    if change != 0 || reopened {
         if let (Some(mut saved), Some(mut menu)) = (saved, menu) {
             if let Some(qs) = menu.qs.as_mut().filter(|q| q.open && !q.command_page) {
                 let owned: Vec<i32> = super::blaster::SELECTABLE
@@ -929,6 +950,9 @@ fn hand_select_menu(
                     .filter(|&id| saved.0.global.owned[id as usize] != 0)
                     .collect();
                 let pages = owned.len().div_ceil(8).max(1);
+                if reopened {
+                    *page = 0;
+                }
                 *page = (*page as isize + change as isize).rem_euclid(pages as isize) as usize;
                 for slot in 0..8 {
                     let id = owned.get(*page * 8 + slot).copied().unwrap_or(0);

@@ -1,11 +1,11 @@
 {
-  "checked_utc": "2026-10-25T11:46:43.634530+00:00",
+  "checked_utc": "2026-10-27T03:10:46.378782+00:00",
   "implementation": "Original VR game with native headset heading, local-surface locomotion, physical spatial listener and rail-following camera",
-  "status": "hoverboard_stick_lean_build_ready",
+  "status": "release_0_1_2_ready",
   "build": {
     "profile": "release",
-    "executable_sha256": "EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473",
-    "completed_utc": "2026-10-25T11:46:25.3104466Z",
+    "executable_sha256": "D377EB6BBEFFBEE4D66B5D5AE4E09E3F5B60F708A21E32D95EBC01D49258B041",
+    "completed_utc": "2026-10-27T03:06:49.9490466Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1529,5 +1529,31 @@
     "binary_sha256": "EF81BA7003B89AADB8DE2C6FBBFD53A9667C5DE3E8B9E58BD64F08C82CBDC473",
     "build_log": "work/vr/build-20261025-184248.log",
     "headset_tested": false
+  },
+  "release_0_1_2": {
+    "reported_behavior": "Requested in the headset: the body seen in cutscenes (then an option for it, its head hidden), the eye kept in the head in scenes and ship sequences, the ship take-off and landing views, menus clipping into floors and walls, simpler menu input, the quick select page, the Hologuise salute, the vendor prompt, the Walloper delay, VR Options scrolling, the helpdesk default, debug launches per body.",
+    "changes": [
+      "VR Options -> Player body (Off by default, Cutscenes, Always): the body seen through drawn with its head joint collapsed (Ratchet, Clank, Giant Clank, the Hologuise disguise); Off still shows Ratchet's animated hands in scenes and ship sequences; in play the forearms collapse too and the body follows the neck pivot.",
+      "Scenes and ship sequences see from between Ratchet's eye joints, the eye locked in the actor's head (rotation free); his drawn actor is carried so its drawn eyes are the view's.",
+      "Room-scale and the play view follow the neck pivot (10 cm behind, 15 cm below the eyes); the body heading measures the hands' reach from it.",
+      "With the camera flip off the double jump's roll is not drawn (its sound and timing kept).",
+      "The flyaway's hull and canopy glass are driven again after the travel moves the ship (they were a tick behind the riders and the view).",
+      "Menus open level and clear of walls and floors; pointing selects, A and the trigger confirm (the native cross with nothing pointed or on pages without targets); the sticks only navigate pages without pointer targets.",
+      "The quick select always opens on its first page; VR Options shows all its rows; new VR games start with the helpdesk off.",
+      "The Hologuise salute is any raised open right hand; the vendor shows the trigger for the cross; a physical Walloper punch skips the lunge's windup, keeping its animation, arcs and pace.",
+      "Run.ps1 -Mode debug-clank / debug-giant / debug-hologuise start each body."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release (non-VR cargo check, VR cargo check, Windows release build) and scripts/vr/Package.ps1 -Version 0.1.2 passed in a fresh build checkout (rerac-vr-cutscene-body) the package reproduces (manifest re-applied on the upstream blobs, overlay compared byte for byte). Desktop previews: debug-clank boots as Clank and debug-giant on Quartu's pad; Kerwan's take-off and the landing on planet 1 scripted with RC_PLAY_SCRIPT and traced with RC_VR_PILOT_TRACE=1 (Ratchet's drawn eyes are the view to the hundredth but for the sunk landing shots). Headset sessions by the user through the iterations. No tests were run.",
+    "remaining_confirmation": "The flyaway's glass in the headset; Giant Clank's pad from debug-giant; the Walloper's pace.",
+    "recorded_utc": "2026-10-27T03:10:46.378782+00:00",
+    "binary_sha256": "D377EB6BBEFFBEE4D66B5D5AE4E09E3F5B60F708A21E32D95EBC01D49258B041",
+    "build_log": "work/vr/build-20261027-100322.log",
+    "release": {
+      "version": "0.1.2",
+      "zip": "dist/RatchetVR-0.1.2.zip",
+      "zip_sha256": "339C493B13A9187332A5ADAE7EB3CE75376D6B868B1FC4F7DC20F6E1BBF1DD45",
+      "package_log": "work/vr/package-20261027-101004.log"
+    },
+    "headset_tested": true
   }
 }

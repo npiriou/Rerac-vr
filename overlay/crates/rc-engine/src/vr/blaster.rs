@@ -169,7 +169,8 @@ fn grant(
         saved.0.global.gold_weapons[id as usize]
             == (settings.mode == super::LaunchMode::DebugGold) as u8
     });
-    let weapons: Vec<usize> = (1..=35).collect();
+    // Clank's launch withholds the O2 Mask (item 6): Orxon hands the hero to Clank only without it.
+    let weapons: Vec<usize> = (1..=35).filter(|&id| !(settings.mode == super::LaunchMode::DebugClank && id == 6)).collect();
     if *failed || (*filled && gold_ready && weapons.iter().all(|&id| saved.0.global.owned[id] != 0))
     {
         return;
@@ -193,6 +194,10 @@ fn grant(
                     .global
                     .quick_select
                     .copy_from_slice(&SELECTABLE[..8]);
+                // The Hologuise's launch puts it (item 31) first.
+                if settings.mode == super::LaunchMode::DebugHologuise {
+                    saved.0.global.quick_select[0] = 31;
+                }
                 let mut reserves = Vec::new();
                 for (id, record) in tables.records.iter().enumerate() {
                     if saved.0.global.owned[id] == 0 || !record.has_ammo() {

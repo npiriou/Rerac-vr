@@ -65,8 +65,10 @@ fn body_target(head: Transform, hands: [Option<Transform>; 2]) -> (f32, f32) {
             if shoulder.dot(h) > -0.3 {
                 sum += shoulder * SHOULDER_W * smooth(0.2, 0.4, across.length());
             }
-            // The hands' midpoint ahead of the head.
-            let reach = ((l.translation + r.translation) * 0.5 - head.translation).with_y(0.0);
+            // The hands' midpoint ahead of the neck's pivot (a head turning in place swings the headset about it, so
+            // a glance does not move this).
+            let neck = head.translation - h * super::body::NECK_BACK;
+            let reach = ((l.translation + r.translation) * 0.5 - neck).with_y(0.0);
             if reach.normalize_or_zero().dot(h) > 0.0 {
                 sum += reach.normalize_or_zero() * REACH_W * smooth(0.08, 0.25, reach.length());
             }

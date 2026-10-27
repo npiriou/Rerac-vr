@@ -713,6 +713,42 @@
         {
           "old": "        }\n    }\n    // RegisterDrawCallback2(0x2d1768, item): the draw (and its flicker draw at the frame's end) on Ratchet's moby.\n    w.drawn = Some(env.frame as u64);\n    w.fist = [it.position, row1];\n    let hm = env.hero_moby;\n    hits.world(table, hero, rng, env.frame as u64, &mut |wo| wo.svc.draw_callbacks.register2(crate::moby_update::classes::draw_callbacks::Callback::Walloper, hm));\n}\n\n",
           "new": "        }\n    }\n    // RegisterDrawCallback2(0x2d1768, item): the draw (and its flicker draw at the frame's end) on Ratchet's moby.\n    w.drawn = Some(env.frame as u64);\n    w.fist = [tracked_fist.map_or(it.position, |f| sub3(f, scale3(row1, FIST_BACK))), row1];\n    let hm = env.hero_moby;\n    hits.world(table, hero, rng, env.frame as u64, &mut |wo| wo.svc.draw_callbacks.register2(crate::moby_update::classes::draw_callbacks::Callback::Walloper, hm));\n}\n\n"
+        },
+        {
+          "old": "    pub tracked_yaw: Option<f32>,\n    pub arcs: [Arc; ARCS],\n",
+          "new": "    pub tracked_yaw: Option<f32>,\n    /// VR: the lunge a physical punch started, whose windup the arm already threw ([`tracked_fire`]).\n    pub tracked_quick: bool,\n    pub arcs: [Arc; ARCS],\n"
+        },
+        {
+          "old": "/// Physical punches enter the original lunge, retaining its windup, horizontal speed,\n/// attack window, broad collision volumes, sounds and effects.\n",
+          "new": "/// Physical punches enter the original lunge past its windup (the arm threw it: the lunge's 10 still ticks before\n/// it moves and hits read as lag after a real punch), retaining its horizontal speed, attack window, broad collision\n/// volumes, sounds and effects.\n"
+        },
+        {
+          "old": "    h.set_state(c,LUNGE,true);\n    h.fx.item_sounds.push(SWING_SOUND);\n    true\n}\n",
+          "new": "    h.walloper.tracked_quick = true;\n    h.set_state(c,LUNGE,true);\n    // Past the windup: it moves and hits from the next tick.\n    h.timer = ticks(10);\n    h.fx.item_sounds.push(SWING_SOUND);\n    true\n}\n\n/// VR: Ratchet's lunge frame past the windup, where a physical punch starts it ([`entry`]).\nconst QUICK_FRAME: i32 = 10;\n"
+        },
+        {
+          "old": "    h.walloper.tracked_yaw = h.items.tracked.then(|| tracked_lunge_yaw(h, tracked_aim_yaw(h)));\n    h.set_state(c, LUNGE, true);\n",
+          "new": "    h.walloper.tracked_yaw = h.items.tracked.then(|| tracked_lunge_yaw(h, tracked_aim_yaw(h)));\n    h.walloper.tracked_quick = false;\n    h.set_state(c, LUNGE, true);\n"
+        },
+        {
+          "old": "        h.set_anim(c.anim, c.rng, Pf::b(0xbf80_0000), HERO_SEQ, 4);\n",
+          "new": "        let frame = if std::mem::take(&mut h.walloper.tracked_quick) && h.items.tracked { QUICK_FRAME } else { 4 };\n        h.set_anim(c.anim, c.rng, Pf::b(0xbf80_0000), HERO_SEQ, frame);\n"
+        },
+        {
+          "old": "    /// VR: the lunge a physical punch started, whose windup the arm already threw ([`tracked_fire`]).\n",
+          "new": "    /// VR: the lunge is one a physical punch started, whose windup the arm already threw ([`tracked_fire`]).\n"
+        },
+        {
+          "old": "/// it moves and hits read as lag after a real punch), retaining its horizontal speed, attack window, broad collision\n/// volumes, sounds and effects.\npub(super) fn tracked_fire(h: &mut Hero,c: &mut Ctx) -> bool {\n    // The punch stays offered until a lunge takes it (the VR adapter expires it): a punch thrown during a lunge\n    // chains once its hit window is over.\n    let Some(punch) = h.walloper.tracked_punch.filter(|p|p.begin) else {return false};\n    let chain = h.state == LUNGE && h.timer > ticks(22);\n",
+          "new": "/// it moves and hits read as lag after a real punch), retaining its animation and length (the fist's arcs and glow\n/// follow its keys), horizontal speed, attack window, broad collision volumes, sounds and effects, and its pace: the\n/// next punch chains 22 ticks after this one began, as a native lunge's does.\npub(super) fn tracked_fire(h: &mut Hero,c: &mut Ctx) -> bool {\n    // The punch stays offered until a lunge takes it (the VR adapter expires it): a punch thrown during a lunge\n    // chains once its hit window is over.\n    let Some(punch) = h.walloper.tracked_punch.filter(|p|p.begin) else {return false};\n    // A physical punch's lunge started with its timer past the windup: the same 22 ticks from its start.\n    let chain = h.state == LUNGE && h.timer > ticks(22) + if h.walloper.tracked_quick { ticks(10) } else { 0 };\n"
+        },
+        {
+          "old": "/// VR: Ratchet's lunge frame past the windup, where a physical punch starts it ([`entry`]).\nconst QUICK_FRAME: i32 = 10;\n",
+          "new": ""
+        },
+        {
+          "old": "        let frame = if std::mem::take(&mut h.walloper.tracked_quick) && h.items.tracked { QUICK_FRAME } else { 4 };\n        h.set_anim(c.anim, c.rng, Pf::b(0xbf80_0000), HERO_SEQ, frame);\n",
+          "new": "        h.set_anim(c.anim, c.rng, Pf::b(0xbf80_0000), HERO_SEQ, 4);\n"
         }
       ]
     },
@@ -869,6 +905,14 @@
         {
           "old": "            direction_body: menu.port_value(Setting::Direction).map_or(o.direction_body, |v| v == 0),\n        };\n",
           "new": "            direction_body: menu.port_value(Setting::Direction).map_or(o.direction_body, |v| v == 0),\n            board_lean: menu.port_value(Setting::BoardLean).map_or(o.board_lean, |v| v == 0),\n        };\n"
+        },
+        {
+          "old": "        menu.set_port_value(Setting::BoardLean, !o.board_lean as u8);\n    }\n",
+          "new": "        menu.set_port_value(Setting::BoardLean, !o.board_lean as u8);\n        menu.set_port_value(Setting::Body, o.body.index());\n    }\n"
+        },
+        {
+          "old": "            board_lean: menu.port_value(Setting::BoardLean).map_or(o.board_lean, |v| v == 0),\n        };\n",
+          "new": "            board_lean: menu.port_value(Setting::BoardLean).map_or(o.board_lean, |v| v == 0),\n            body: menu.port_value(Setting::Body).map_or(o.body, crate::render_settings::VrBody::from_index),\n        };\n"
         }
       ]
     },
@@ -1153,6 +1197,90 @@
         {
           "old": "    p.svc.groups = statics.groups(&lv.gameplay);\n    p.svc.hits = Default::default();\n    // The \"use\" system's talk slots",
           "new": "    p.svc.groups = statics.groups(&lv.gameplay);\n    p.svc.hits = Default::default();\n    // The draw callbacks of the death's tick (the next moby loop runs them first, `draw_callbacks::run_frame`): the game's\n    // frames of the fade drew and cleared them; kept, they ran on whatever moby the compacted table put at their old ids\n    // (Quartu's arc keeper 1331, its arc on Ratchet at a zapper death, read its texture words from a moby without pvars:\n    // a panic).\n    p.svc.draw_callbacks = Default::default();\n    // The \"use\" system's talk slots"
+        },
+        {
+          "old": "/// body, Clank's rotor and his antenna glow (only drawing changes: the game still reads whether the body is shown).\n",
+          "new": "/// body (unless the Player body option draws it headless, [`vr_headless_body`]), Clank's rotor and his antenna glow\n/// (only drawing changes: the game still reads whether the body is shown).\n"
+        },
+        {
+          "old": "        return [b.moby, b.rotor, b.glow];\n",
+          "new": "        let drawn = vr_headless_body(p).map(|(id, _)| id);\n        return [b.moby.filter(|&m| Some(m) != drawn), b.rotor, b.glow];\n"
+        },
+        {
+          "old": "    [None; 3]\n}\n",
+          "new": "    [None; 3]\n}\n\n/// VR, the Player body option in play: the body moby drawn with its head and forearms collapsed (crate::vr::body).\nfn vr_headless_body(p: &Play) -> Option<(MobyId, [u8; 3])> {\n    #[cfg(feature = \"vr\")]\n    if crate::vr::body::in_play() && p.svc.game_mode == 0 && matches!(p.game.hero.mode, 1..=3) {\n        let id = p.game.hero.bodies.moby?;\n        return Some((id, crate::vr::body::play_joints(p.game.mobys.mobys.get(id)?.o_class)?));\n    }\n    #[cfg(not(feature = \"vr\"))]\n    let _ = p;\n    None\n}\n\n/// Moby `id`'s joint modifiers as drawn: with the [`vr_headless_body`] joints collapsed when it is that body.\nfn vr_body_mods(headless: Option<(MobyId, [u8; 3])>, id: MobyId, mods: &[moby_anim::JointModifier]) -> std::borrow::Cow<'_, [moby_anim::JointModifier]> {\n    #[cfg(feature = \"vr\")]\n    if let Some((_, joints)) = headless.filter(|h| h.0 == id) {\n        return crate::vr::body::collapse(mods, &joints).into();\n    }\n    #[cfg(not(feature = \"vr\"))]\n    let _ = (headless, id);\n    mods.into()\n}\n"
+        },
+        {
+          "old": "    promote_statics(p);\n    let first_person = vr_body_parts(p);\n    let table = &p.game.mobys;\n    let lighting = lv.mobys.lighting.as_ref();\n",
+          "new": "    promote_statics(p);\n    let first_person = vr_body_parts(p);\n    let headless = vr_headless_body(p);\n    let table = &p.game.mobys;\n    let lighting = lv.mobys.lighting.as_ref();\n"
+        },
+        {
+          "old": "            a.drive(k, m.anim, p.svc.snapshots.get(id).and_then(|s| s.as_ref()), &m.joint_mods);\n",
+          "new": "            a.drive(k, m.anim, p.svc.snapshots.get(id).and_then(|s| s.as_ref()), &vr_body_mods(headless, id, &m.joint_mods));\n"
+        },
+        {
+          "old": "    let f = moby_anim::evaluate_posed(class, &p.ratchet.state, p.ratchet.snapshot.as_ref(), &layers, &hm.joint_mods);\n",
+          "new": "    // VR, the Player body option in play: his head and forearms collapsed (crate::vr::body; his meshes are drawn to the\n    // eyes then, crate::vr::embodied).\n    #[cfg(feature = \"vr\")]\n    let headless = crate::vr::body::in_play().then(|| (p.hero_id, crate::vr::body::play_joints(0).unwrap_or_default()));\n    #[cfg(not(feature = \"vr\"))]\n    let headless = None;\n    let f = moby_anim::evaluate_posed(class, &p.ratchet.state, p.ratchet.snapshot.as_ref(), &layers, &vr_body_mods(headless, p.hero_id, &hm.joint_mods));\n"
+        },
+        {
+          "old": "    let first_person = vr_body_parts(p);\n    let table = &p.game.mobys;\n",
+          "new": "    let first_person = vr_body_parts(p);\n    let headless = vr_headless_body(p);\n    let table = &p.game.mobys;\n"
+        },
+        {
+          "old": "        let f = moby_anim::evaluate_posed(&m.anim[ci], &mo.anim, snap, &[], &mo.joint_mods);\n",
+          "new": "        let f = moby_anim::evaluate_posed(&m.anim[ci], &mo.anim, snap, &[], &vr_body_mods(headless, id, &mo.joint_mods));\n"
+        },
+        {
+          "old": "    None\n}\n",
+          "new": "    None\n}\n\n/// VR, the Player body option in play: Ratchet's drawn body and the items placed on him move by this (game x / y) so\n/// his neck stays under the eye, which is above his position (crate::vr::body::head_offset); zero otherwise.\nfn vr_ratchet_shift(p: &Play, lv: &crate::level_load::LoadedLevel) -> [f32; 2] {\n    #[cfg(feature = \"vr\")]\n    if crate::vr::body::in_play() {\n        let Some(class) = lv.mobys.anim.get(p.class) else { return [0.0; 2] };\n        let hm = &p.game.mobys.mobys[p.hero_id];\n        let layers = rc_game::hero::anim::pose_layers_with(&p.game.hero.weapons.layers, &p.layer_joints, &p.ratchet.hold);\n        let rows = rows3(&hm.rows);\n        let [x, y] = crate::vr::body::head_offset(class, &p.ratchet.state, p.ratchet.snapshot.as_ref(), &layers, &hm.joint_mods, crate::vr::body::RATCHET_HEAD, rows, p.scale);\n        return [-x, -y];\n    }\n    #[cfg(not(feature = \"vr\"))]\n    let _ = (p, lv);\n    [0.0; 2]\n}\n"
+        },
+        {
+          "old": "    if p.svc.travel.adopted && !crate::level_load::ship_adopted() { crate::level_load::set_ship_adopted(); }\n    let hm = &p.game.mobys.mobys[p.hero_id];\n",
+          "new": "    if p.svc.travel.adopted && !crate::level_load::ship_adopted() { crate::level_load::set_ship_adopted(); }\n    let shift = vr_ratchet_shift(p, &level.0);\n    let hm = &p.game.mobys.mobys[p.hero_id];\n"
+        },
+        {
+          "old": "    if let Some(a) = attach.as_mut() { a.set_host(rows_bits(&hm.rows), [hm.position[0], hm.position[1], hm.position[2]]); }\n",
+          "new": "    if let Some(a) = attach.as_mut() { a.set_host(rows_bits(&hm.rows), [hm.position[0] + shift[0], hm.position[1] + shift[1], hm.position[2]]); }\n"
+        },
+        {
+          "old": "    let model = moby_render::extra_model(rows3(&hm.rows), p.scale, [hm.position[0], hm.position[1], hm.position[2]]);\n",
+          "new": "    let shift = vr_ratchet_shift(&p, lv);\n    let model = moby_render::extra_model(rows3(&hm.rows), p.scale, [hm.position[0] + shift[0], hm.position[1] + shift[1], hm.position[2]]);\n"
+        },
+        {
+          "old": "/// his neck stays under the eye, which is above his position (crate::vr::body::head_offset); zero otherwise.\n",
+          "new": "/// his neck stays at the player's neck, behind the eye, which is above his position (crate::vr::body::head_offset,\n/// eye_to_neck); zero otherwise.\n"
+        },
+        {
+          "old": "        return [-x, -y];\n",
+          "new": "        let [nx, ny] = crate::vr::body::eye_to_neck(p.game.hero.tracked.view.as_ref());\n        return [nx - x, ny - y];\n"
+        },
+        {
+          "old": "\n/// VR, the Player body option in play: Ratchet's drawn body and the items placed on him move by this (game x / y) so\n",
+          "new": "\n/// Ratchet's pose as drawn (his palette, the items placed on him): VR's double jump without its roll while the camera\n/// flip is off (crate::vr::body::drawn_state); else his pose.\nfn vr_drawn_state(p: &Play) -> moby_anim::AnimState {\n    #[cfg(feature = \"vr\")]\n    return crate::vr::body::drawn_state(p.game.hero.state, p.ratchet.state);\n    #[cfg(not(feature = \"vr\"))]\n    p.ratchet.state\n}\n\n/// VR, the Player body option in play: Ratchet's drawn body and the items placed on him move by this (game x / y) so\n"
+        },
+        {
+          "old": "        let [x, y] = crate::vr::body::head_offset(class, &p.ratchet.state, p.ratchet.snapshot.as_ref(), &layers, &hm.joint_mods, crate::vr::body::RATCHET_HEAD, rows, p.scale);\n",
+          "new": "        let [x, y] = crate::vr::body::head_offset(class, &vr_drawn_state(p), p.ratchet.snapshot.as_ref(), &layers, &hm.joint_mods, crate::vr::body::RATCHET_HEAD, rows, p.scale);\n"
+        },
+        {
+          "old": "    let mut s = p.ratchet.state;\n",
+          "new": "    let mut s = vr_drawn_state(p);\n"
+        },
+        {
+          "old": "    let f = moby_anim::evaluate_posed(class, &p.ratchet.state, p.ratchet.snapshot.as_ref(), &layers, &vr_body_mods(headless, p.hero_id, &hm.joint_mods));\n",
+          "new": "    let f = moby_anim::evaluate_posed(class, &vr_drawn_state(&p), p.ratchet.snapshot.as_ref(), &layers, &vr_body_mods(headless, p.hero_id, &hm.joint_mods));\n"
+        },
+        {
+          "old": "/// his neck stays at the player's neck, behind the eye, which is above his position (crate::vr::body::head_offset,\n/// eye_to_neck); zero otherwise.\n",
+          "new": "/// his neck stays at the player's neck, which is above his position (crate::vr::body::head_offset); zero otherwise.\n"
+        },
+        {
+          "old": "        let [nx, ny] = crate::vr::body::eye_to_neck(p.game.hero.tracked.view.as_ref());\n        return [nx - x, ny - y];\n",
+          "new": "        return [-x, -y];\n"
+        },
+        {
+          "old": "\n/// The back items' classes: `(back item id, o_class, class)` per pack, and Clank; the head items' (5..7, their\n",
+          "new": "\n/// The ship's static instance placed where the travel left it: the take-off's flyaway moves the ship after the tick\n/// (crate::travel_render's post-tick), past the statics' drive, which drew the hull one tick behind its riders (Ratchet,\n/// Clank) and the view, a gap growing with its speed.\npub(crate) fn drive_ship(p: &Play, occl: &mut MobyOcclusion) {\n    let Some((id, ii)) = p.ship else { return };\n    let Some(m) = p.game.mobys.mobys.get(id) else { return };\n    let hidden = m.state >= 0x80 || m.mode & 0x81 != 0 || m.alpha == 0;\n    occl.drive(ii, pos3(m), rows3(&m.rows), m.scale, None, hidden);\n}\n\n/// The back items' classes: `(back item id, o_class, class)` per pack, and Clank; the head items' (5..7, their\n"
         }
       ]
     },
@@ -1337,6 +1465,110 @@
         {
           "old": "    }\n    // HudDraw 0x24fb50 draws no slot while 0x15f404 is set.\n    layer.hide_hud = active.running || flag;\n    layer.prims.clear();\n    if !active.running && rt.letterbox > 0 { layer.prims = letterbox_prims(rt.letterbox); }\n    // The census units' 2-D draw callbacks (Veldin's countdown 586, `0x2d8098`: `DrawUIFrame` and\n    // `font_print_center_large`, `rc_game::moby_update::classes::units::veldin_pads::countdown_draw`). The page menus\n    // (`PageMenuModeRender` 0x21ab50) draw none of them: the escape and air timers stayed over the pause menu and map.\n    let menu = hook.is_some_and(|h| h.replace_hud);\n",
           "new": "    }\n    // HudDraw 0x24fb50 draws no slot while 0x15f404 is set.\n    layer.hide_hud = active.running || flag;\n    layer.prims.clear();\n    #[cfg(not(feature = \"vr\"))]\n    let vr = false;\n    #[cfg(feature = \"vr\")]\n    let vr = crate::vr::game_requested();\n    if !active.running && rt.letterbox > 0 && !vr { layer.prims = letterbox_prims(rt.letterbox); }\n    // The census units' 2-D draw callbacks (Veldin's countdown 586, `0x2d8098`: `DrawUIFrame` and\n    // `font_print_center_large`, `rc_game::moby_update::classes::units::veldin_pads::countdown_draw`). The page menus\n    // (`PageMenuModeRender` 0x21ab50) draw none of them: the escape and air timers stayed over the pause menu and map.\n    let menu = hook.is_some_and(|h| h.replace_hud);\n"
+        },
+        {
+          "old": "    vr_clank_lift: Option<f32>,\n    /// The mobys the scene hid (the talker 0x179588: mode |= 1; classes 74 / 203: mode |= 0x80) and the bit.\n",
+          "new": "    vr_clank_lift: Option<f32>,\n    /// VR: the actor seen through (index in `actors`), drawn with its head collapsed; None outside VR.\n    #[cfg(feature = \"vr\")]\n    vr_view_actor: Option<usize>,\n    /// The mobys the scene hid (the talker 0x179588: mode |= 1; classes 74 / 203: mode |= 0x80) and the bit.\n"
+        },
+        {
+          "old": "                vr_clank_lift: None,\n                hid: Vec::new(),\n",
+          "new": "                vr_clank_lift: None,\n                #[cfg(feature = \"vr\")]\n                vr_view_actor: None,\n                hid: Vec::new(),\n"
+        },
+        {
+          "old": "    { rt.vr_eye = None; rt.vr_gaze = None; }\n",
+          "new": "    { rt.vr_eye = None; rt.vr_gaze = None; rt.vr_view_actor = None; }\n"
+        },
+        {
+          "old": "    { rt.vr_clank_lift = None; rt.vr_eye = None; rt.vr_gaze = None; }\n",
+          "new": "    { rt.vr_clank_lift = None; rt.vr_eye = None; rt.vr_gaze = None; rt.vr_view_actor = None; }\n"
+        },
+        {
+          "old": "    let (mut ratchet_eye, mut clank_eye) = (None, None);\n    let mut palette = crate::moby_anim::identity_palette(rt.palette_len);\n",
+          "new": "    let (mut ratchet_eye, mut clank_eye) = (None, None);\n    #[cfg(feature = \"vr\")]\n    let (vr, inside_clank) = (crate::vr::game_requested(), clank_view(rt));\n    let mut palette = crate::moby_anim::identity_palette(rt.palette_len);\n"
+        },
+        {
+          "old": "    for (a, pose) in rt.actors.iter_mut().zip(&out.actors) {\n",
+          "new": "    for (k, (a, pose)) in rt.actors.iter_mut().zip(&out.actors).enumerate() {\n"
+        },
+        {
+          "old": "        let f = moby_anim::evaluate_posed(&a.anim, &s, None, &[], mods);\n",
+          "new": "        #[cfg(not(feature = \"vr\"))]\n        let _ = k;\n        // VR: the head joint of the actor seen through, collapsed in its drawn pose.\n        #[cfg(feature = \"vr\")]\n        let mut headless = None;\n"
+        },
+        {
+          "old": "                        ratchet_eye = Some((eye, gaze));\n",
+          "new": "                        ratchet_eye = Some((eye, gaze, k));\n                        headless = chain.last().copied();\n"
+        },
+        {
+          "old": "                        clank_eye = Some((eye, gaze));\n",
+          "new": "                        clank_eye = Some((eye, gaze, k));\n                        if inside_clank { headless = chain.last().copied(); }\n"
+        },
+        {
+          "old": "        }\n        let at = a.base as usize * 64;\n",
+          "new": "        }\n        // VR: the head joint scaled to 0 after the actor's own modifiers; its children (ears, eyes, antenna) inherit\n        // the scale, so the body is drawn up to the neck while the eye and gaze above keep the real head.\n        #[cfg(feature = \"vr\")]\n        let collapsed: Vec<moby_anim::JointModifier>;\n        #[cfg(feature = \"vr\")]\n        let mods = match headless.filter(|_| vr) {\n            Some(joint) => {\n                let node = moby_anim::JointModifier { scale: [0.0; 3], ..moby_anim::JointModifier::compose(joint) };\n                collapsed = mods.iter().copied().chain([node]).collect();\n                collapsed.as_slice()\n            }\n            None => mods,\n        };\n        let f = moby_anim::evaluate_posed(&a.anim, &s, None, &[], mods);\n        let at = a.base as usize * 64;\n"
+        },
+        {
+          "old": "        rt.vr_eye = seen.map(|(eye, _)| eye);\n        rt.vr_gaze = seen.and_then(|(_, gaze)| gaze);\n",
+          "new": "        rt.vr_eye = seen.map(|(eye, _, _)| eye);\n        rt.vr_gaze = seen.and_then(|(_, gaze, _)| gaze);\n        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|_| vr);\n"
+        },
+        {
+          "old": "    let inside_clank = clank_view(rt);\n",
+          "new": "    let (inside_clank, view_actor) = (clank_view(rt), rt.vr_view_actor);\n"
+        },
+        {
+          "old": "                // Ratchet's head items too (the Sonic Summoner, the O2 Mask, the Pilot's Helmet): VR draws the worn\n                // helmet on the player's head instead.\n",
+          "new": "                // The actor seen through is drawn headless (`pose_actors`), any other Ratchet / Clank we would see\n                // through is hidden. Ratchet's head items too (the Sonic Summoner, the O2 Mask, the Pilot's Helmet):\n                // VR draws the worn helmet on the player's head instead.\n"
+        },
+        {
+          "old": "                    && (a.o_class == 0\n                        || (inside_clank && matches!(a.o_class, 10 | 0x555))\n",
+          "new": "                    && (((a.o_class == 0 || (inside_clank && matches!(a.o_class, 10 | 0x555))) && view_actor != Some(k))\n"
+        },
+        {
+          "old": "    /// VR: the actor seen through (index in `actors`), drawn with its head collapsed; None outside VR.\n",
+          "new": "    /// VR: the actor seen through (index in `actors`), drawn with its head collapsed (crate::vr::body); None when the\n    /// option keeps it hidden.\n"
+        },
+        {
+          "old": "    let (vr, inside_clank) = (crate::vr::game_requested(), clank_view(rt));\n",
+          "new": "    let (body, inside_clank) = (crate::vr::body::in_scenes(), clank_view(rt));\n"
+        },
+        {
+          "old": "        // VR: the head joint scaled to 0 after the actor's own modifiers; its children (ears, eyes, antenna) inherit\n        // the scale, so the body is drawn up to the neck while the eye and gaze above keep the real head.\n",
+          "new": "        // VR: the head collapsed in the drawn pose (crate::vr::body), so the body is drawn up to the neck while the eye\n        // and gaze above keep the real head.\n"
+        },
+        {
+          "old": "        let mods = match headless.filter(|_| vr) {\n",
+          "new": "        let mods = match headless.filter(|_| body) {\n"
+        },
+        {
+          "old": "                let node = moby_anim::JointModifier { scale: [0.0; 3], ..moby_anim::JointModifier::compose(joint) };\n                collapsed = mods.iter().copied().chain([node]).collect();\n",
+          "new": "                collapsed = crate::vr::body::collapse(mods, &[joint]);\n"
+        },
+        {
+          "old": "        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|_| vr);\n",
+          "new": "        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|_| body);\n"
+        },
+        {
+          "old": "/// gameplay eye (`rc_game::hero::tracked::RATCHET_EYE`, 1.1).\n",
+          "new": "/// gameplay eye (`rc_game::hero::tracked::RATCHET_EYE`, 1.1). Only when his eye joints cannot be posed\n/// (crate::vr::body::ratchet_eyes, which also puts the eye ahead of the head joint).\n"
+        },
+        {
+          "old": "                    let eye = [pose.position[0] + rel[0], pose.position[1] + rel[1], pose.position[2] + rel[2] + lift];\n",
+          "new": "                    let mut eye = [pose.position[0] + rel[0], pose.position[1] + rel[1], pose.position[2] + rel[2] + lift];\n                    // Ratchet sees from between his eyes, ahead of his head joint (crate::vr::body).\n                    if a.o_class == 0 {\n                        if let Some(e) = crate::vr::body::ratchet_eyes(&a.anim, &s, mods) {\n                            eye = std::array::from_fn(|c| pose.position[c] + e[c] * scale);\n                        }\n                    }\n"
+        },
+        {
+          "old": "    /// VR: the actor seen through (index in `actors`), drawn with its head collapsed (crate::vr::body); None when the\n    /// option keeps it hidden.\n",
+          "new": "    /// VR: the actor seen through (index in `actors`), drawn with its head collapsed, or with the body off only Ratchet's\n    /// hands (crate::vr::body); None when nothing of it is drawn.\n"
+        },
+        {
+          "old": "    let (body, inside_clank) = (crate::vr::body::in_scenes(), clank_view(rt));\n",
+          "new": "    let (vr, body, inside_clank) = (crate::vr::game_requested(), crate::vr::body::in_scenes(), clank_view(rt));\n"
+        },
+        {
+          "old": "        let f = moby_anim::evaluate_posed(&a.anim, &s, None, &[], mods);\n        let at = a.base as usize * 64;\n",
+          "new": "        let f = moby_anim::evaluate_posed(&a.anim, &s, None, &[], mods);\n        // VR with the body off: Ratchet's forearms and hands still show (crate::vr::body), as the VR hands do in play.\n        #[cfg(feature = \"vr\")]\n        let f = if vr && !body && a.o_class == 0 && headless.is_some() {\n            let mut f = f;\n            crate::vr::body::ratchet_hands_only(&a.anim, &s, mods, &mut f);\n            f\n        } else {\n            f\n        };\n        let at = a.base as usize * 64;\n"
+        },
+        {
+          "old": "        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|_| body);\n",
+          "new": "        // Drawn: the whole body (headless), or with it off Ratchet's hands.\n        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|&k| body || (vr && rt.actors.get(k).is_some_and(|a| a.o_class == 0)));\n"
         }
       ]
     },
@@ -1819,6 +2051,38 @@
         {
           "old": "    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n];\n",
           "new": "    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n    Entry { setting: Setting::BoardLean, label: text::BOARD_LEAN, values: &[text::ON, text::OFF] },\n];\n"
+        },
+        {
+          "old": "    pub const BOARD_LEAN: i32 = -0x216;\n\n",
+          "new": "    pub const BOARD_LEAN: i32 = -0x216;\n    pub const PLAYER_BODY: i32 = -0x217;\n    pub const CUTSCENES: i32 = -0x218;\n    pub const ALWAYS: i32 = -0x219;\n\n"
+        },
+        {
+          "old": "            BOARD_LEAN => b\"Hoverboard lean\",\n            _ => return None,\n",
+          "new": "            BOARD_LEAN => b\"Hoverboard lean\",\n            PLAYER_BODY => b\"Player body\",\n            CUTSCENES => b\"Cutscenes\",\n            ALWAYS => b\"Always\",\n            _ => return None,\n"
+        },
+        {
+          "old": "    BoardLean,\n}\n",
+          "new": "    BoardLean,\n    /// VR: the body seen from its eyes, without its head: value 0 off (the default), 1 in cutscenes, 2 always.\n    Body,\n}\n"
+        },
+        {
+          "old": "    Entry { setting: Setting::BoardLean, label: text::BOARD_LEAN, values: &[text::ON, text::OFF] },\n];\n",
+          "new": "    Entry { setting: Setting::BoardLean, label: text::BOARD_LEAN, values: &[text::ON, text::OFF] },\n    Entry { setting: Setting::Body, label: text::PLAYER_BODY, values: &[text::OFF, text::CUTSCENES, text::ALWAYS] },\n];\n"
+        },
+        {
+          "old": "//! **Scrolling** (port-only, beyond the camera list's look): the list shows [`VISIBLE`] rows; the game's arrow (icon\n",
+          "new": "//! **Scrolling** (port-only, beyond the camera list's look): the list shows [`VISIBLE`] rows (VR Options all of its\n//! rows, [`visible_of`]); the game's arrow (icon\n"
+        },
+        {
+          "old": "\n/// A port page: its addresses, texts and rows.\n",
+          "new": "\n/// The rows a port list shows at once: [`VISIBLE`], but every VR Options row (a headset's text is legible tighter).\npub fn visible_of(w: u32) -> usize {\n    if w == VR_LIST_W { VR_ENTRIES.len().max(VISIBLE) } else { VISIBLE }\n}\n\n/// A port page: its addresses, texts and rows.\n"
+        },
+        {
+          "old": "    p.top = p.top.clamp(p.cursor - VISIBLE as i32 + 1, p.cursor).max(0);\n",
+          "new": "    p.top = p.top.clamp(p.cursor - visible_of(w) as i32 + 1, p.cursor).max(0);\n"
+        },
+        {
+          "old": "    // The camera list's spacing for the rows shown (h/(n+1), n = VISIBLE).\n    let shown = rows.len().min(VISIBLE);\n",
+          "new": "    // The camera list's spacing for the rows shown (h/(n+1), n = the rows shown, [`visible_of`]).\n    let shown = rows.len().min(visible_of(w));\n"
         }
       ]
     },
@@ -1885,6 +2149,190 @@
         {
           "old": "    if crate::vr::loading::blocked() && !crate::vr::loading::streaming() {return;}\n    let t = &mut *t;\n    let Some(mut play) = play else { return };\n    #[cfg(feature = \"vr\")]\n    let (p, lv) = if let Some(departure) = departure.as_deref_mut().filter(|_| t.tr.is_some()) {\n        (&mut departure.play, &departure.level.0)\n    } else { (&mut *play, &level.0) };\n    #[cfg(not(feature = \"vr\"))]\n    let (p, lv) = (&mut *play, &level.0);\n    if let Some(mut tr) = t.tr.take() {\n        let done = transition_frame(t, &mut tr, p, &mut mm, gs.as_deref_mut(), session.as_deref_mut(), lv, &mut active, &mut change, &movie, audio.as_deref_mut(), &mut flight);\n",
           "new": "    if crate::vr::loading::blocked() && !crate::vr::loading::streaming() {return;}\n    let t = &mut *t;\n    let mut play = play;\n    // A VR flight streaming the destination runs on the departure's play state; the destination's is only set up at\n    // the cut (crate::vr::loading).\n    #[cfg(feature = \"vr\")]\n    let in_transition = t.tr.is_some();\n    #[cfg(feature = \"vr\")]\n    let (p, lv) = match (departure.as_deref_mut().filter(|_| in_transition), play.as_deref_mut()) {\n        (Some(departure), _) => (&mut departure.play, &departure.level.0),\n        (None, Some(play)) => (play, &level.0),\n        (None, None) => return,\n    };\n    #[cfg(not(feature = \"vr\"))]\n    let Some(p) = play.as_deref_mut() else { return };\n    #[cfg(not(feature = \"vr\"))]\n    let lv = &level.0;\n    if let Some(mut tr) = t.tr.take() {\n        let done = transition_frame(t, &mut tr, p, &mut mm, gs.as_deref_mut(), session.as_deref_mut(), lv, &mut active, &mut change, &movie, audio.as_deref_mut(), &mut flight);\n"
+        },
+        {
+          "old": "        let mods = pose.moby.and_then(|id| table.and_then(|t| t.mobys.get(id))).map(|m| m.joint_mods.as_slice()).unwrap_or(&[]);\n        let f = match pose.head {\n",
+          "new": "        let mods = pose.moby.and_then(|id| table.and_then(|t| t.mobys.get(id))).map(|m| m.joint_mods.as_slice()).unwrap_or(&[]);\n        // VR: Ratchet drawn without his head when the option shows his body (crate::vr::body).\n        #[cfg(feature = \"vr\")]\n        let collapsed: Vec<rc_formats::moby_anim::JointModifier>;\n        #[cfg(feature = \"vr\")]\n        let mods = if pose.class == 0 && crate::vr::body::in_scenes() {\n            collapsed = crate::vr::body::collapse(mods, &[crate::vr::body::RATCHET_HEAD]);\n            collapsed.as_slice()\n        } else {\n            mods\n        };\n        let f = match pose.head {\n"
+        },
+        {
+          "old": "        let pilot_hidden = crate::vr::game_requested() && pose.class == 0;\n",
+          "new": "        let pilot_hidden = crate::vr::game_requested() && pose.class == 0 && !crate::vr::body::in_scenes();\n"
+        },
+        {
+          "old": "            self.pilot_seated.store(false, Relaxed);\n            return None;\n",
+          "new": "            self.pilot_seated.store(false, Relaxed);\n            crate::vr::body::set_pilot_shift(None);\n            return None;\n"
+        },
+        {
+          "old": "        let boarding=(matches!(self.mode.sub, SUB_TAKEOFF | SUB_LANDING) && !in_cockpit).then(||self.boarding_eye(p)).flatten();\n",
+          "new": "        // Ratchet's own eyes; his drawn actor follows the view wherever it is not them (crate::vr::body::pilot_shift).\n        let actor = self.boarding_eye(p);\n        let boarding=(matches!(self.mode.sub, SUB_TAKEOFF | SUB_LANDING) && !in_cockpit).then_some(actor).flatten();\n"
+        },
+        {
+          "old": "            Some((head.lerp(seat, seated), heading.slerp(rotation, if flying { 1.0 } else { seated })))\n",
+          "new": "            let view = (head.lerp(seat, seated), heading.slerp(rotation, if flying { 1.0 } else { seated }));\n            set_pilot_shift(view.0, actor);\n            Some(view)\n"
+        },
+        {
+          "old": "        } else {\n            Some((seat, rotation))\n",
+          "new": "        } else {\n            set_pilot_shift(seat, actor);\n            Some((seat, rotation))\n"
+        },
+        {
+          "old": "    /// Follow the actual Ratchet actor through boarding, sitting and climbing back out.\n",
+          "new": "    /// Follow the actual Ratchet actor through boarding, sitting and climbing back out (his eyes, and their heading).\n"
+        },
+        {
+          "old": "        let head = moby_anim::evaluate_chains_posed(class, &state, None, &[chain.as_slice()], &[], mods).into_iter().next()?[3];\n        // Match the streamed actor's renderer, including its actual class scale.\n",
+          "new": "        let head = moby_anim::evaluate_chains_posed(class, &state, None, &[chain.as_slice()], &[], mods).into_iter().next()?[3];\n        // Between his eyes, ahead of the head joint (crate::vr::body); else above the head joint.\n        let (head, lift) = match crate::vr::body::ratchet_eyes(class, &state, mods) {\n            Some(e) => ([e[0], e[1], e[2], 1.0], 0.0),\n            None => (head, 0.15),\n        };\n        // Match the streamed actor's renderer, including its actual class scale.\n"
+        },
+        {
+          "old": "                   pose.position[2] + head[2] * scale + 0.15];\n",
+          "new": "                   pose.position[2] + head[2] * scale + lift];\n"
+        },
+        {
+          "old": "        // VR: Ratchet drawn without his head when the option shows his body (crate::vr::body).\n",
+          "new": "        // VR: Ratchet drawn without his head when the option shows his body in a ship sequence (crate::vr::body; not\n        // the front end's title world, which shares this draw), moved under the view.\n        #[cfg(feature = \"vr\")]\n        let body = pose.class == 0 && crate::vr::body::in_scenes() && !crate::saves::front_end_active();\n"
+        },
+        {
+          "old": "        let mods = if pose.class == 0 && crate::vr::body::in_scenes() {\n",
+          "new": "        let mods = if body {\n"
+        },
+        {
+          "old": "        let model = moby_render::extra_model(rows, pose.scale.unwrap_or(a.scale), pose.position);\n",
+          "new": "        #[cfg(not(feature = \"vr\"))]\n        let position = pose.position;\n        #[cfg(feature = \"vr\")]\n        let position = if body {\n            let d = crate::vr::body::pilot_shift();\n            std::array::from_fn(|c| pose.position[c] + d[c])\n        } else {\n            pose.position\n        };\n        let model = moby_render::extra_model(rows, pose.scale.unwrap_or(a.scale), position);\n"
+        },
+        {
+          "old": "        let pilot_hidden = crate::vr::game_requested() && pose.class == 0 && !crate::vr::body::in_scenes();\n",
+          "new": "        let pilot_hidden = crate::vr::game_requested() && pose.class == 0 && !body;\n"
+        },
+        {
+          "old": "\n/// Hidden wins over the occlusion system's visibility writes (the hero and his items while mode 6 hides them).\n",
+          "new": "\n/// VR: the ship sequence's view minus Ratchet's eyes (Bevy space in, game units out), so his drawn actor follows the view\n/// (crate::vr::body::pilot_shift); None without his actor.\n#[cfg(feature = \"vr\")]\nfn set_pilot_shift(view: bevy::math::Vec3, actor: Option<(bevy::math::Vec3, bevy::math::Quat)>) {\n    // game_to_bevy is (x, z, -y).\n    crate::vr::body::set_pilot_shift(actor.map(|(eye, _)| {\n        let d = view - eye;\n        [d.x, -d.z, d.y]\n    }));\n}\n\n/// Hidden wins over the occlusion system's visibility writes (the hero and his items while mode 6 hides them).\n"
+        },
+        {
+          "old": "            crate::vr::body::set_pilot_shift(None);\n",
+          "new": "            crate::vr::body::set_pilot_frame(None);\n"
+        },
+        {
+          "old": "        // Ratchet's own eyes; his drawn actor follows the view wherever it is not them (crate::vr::body::pilot_shift).\n",
+          "new": "        // Ratchet's own eyes; his drawn actor follows the view wherever it is not them (crate::vr::body::pilot_frame).\n"
+        },
+        {
+          "old": "            set_pilot_shift(view.0, actor);\n",
+          "new": "            set_pilot_frame(view, actor);\n"
+        },
+        {
+          "old": "            set_pilot_shift(seat, actor);\n",
+          "new": "            set_pilot_frame((seat, rotation), actor);\n"
+        },
+        {
+          "old": "        #[cfg(not(feature = \"vr\"))]\n        let position = pose.position;\n",
+          "new": "        let model = moby_render::extra_model(rows, pose.scale.unwrap_or(a.scale), pose.position);\n"
+        },
+        {
+          "old": "        let position = if body {\n            let d = crate::vr::body::pilot_shift();\n            std::array::from_fn(|c| pose.position[c] + d[c])\n        } else {\n            pose.position\n        };\n        let model = moby_render::extra_model(rows, pose.scale.unwrap_or(a.scale), position);\n",
+          "new": "        let model = if body { crate::vr::body::pilot_frame() * model } else { model };\n"
+        },
+        {
+          "old": "/// VR: the ship sequence's view minus Ratchet's eyes (Bevy space in, game units out), so his drawn actor follows the view\n/// (crate::vr::body::pilot_shift); None without his actor.\n",
+          "new": "/// VR: the ship sequence's view against Ratchet's eyes and heading (Bevy space), so his drawn actor follows the view\n/// (crate::vr::body::pilot_frame); None without his actor.\n"
+        },
+        {
+          "old": "fn set_pilot_shift(view: bevy::math::Vec3, actor: Option<(bevy::math::Vec3, bevy::math::Quat)>) {\n    // game_to_bevy is (x, z, -y).\n    crate::vr::body::set_pilot_shift(actor.map(|(eye, _)| {\n        let d = view - eye;\n        [d.x, -d.z, d.y]\n",
+          "new": "fn set_pilot_frame(view: (bevy::math::Vec3, bevy::math::Quat), actor: Option<(bevy::math::Vec3, bevy::math::Quat)>) {\n    crate::vr::body::set_pilot_frame(actor.map(|(eye, heading)| {\n        Mat4::from_translation(view.0) * Mat4::from_quat(view.1 * heading.inverse()) * Mat4::from_translation(-eye)\n"
+        },
+        {
+          "old": "    pilot_seated: std::sync::atomic::AtomicBool,\n    /// `RC_LANDING=1`: the boot's level runs `entry`'s landing too (done once).\n",
+          "new": "    pilot_seated: std::sync::atomic::AtomicBool,\n    /// VR: how far into the seat the take-off's view has come (the bits of an f32, 0..1).\n    #[cfg(feature = \"vr\")]\n    pilot_best: std::sync::atomic::AtomicU32,\n    /// `RC_LANDING=1`: the boot's level runs `entry`'s landing too (done once).\n"
+        },
+        {
+          "old": "            self.pilot_seated.store(false, Relaxed);\n            crate::vr::body::set_pilot_frame(None);\n",
+          "new": "            self.pilot_seated.store(false, Relaxed);\n            self.pilot_best.store(0, Relaxed);\n            crate::vr::body::set_pilot_frame(None);\n"
+        },
+        {
+          "old": "        if self.mode.sub != SUB_TAKEOFF { self.pilot_seated.store(false, Relaxed); }\n",
+          "new": "        if self.mode.sub != SUB_TAKEOFF {\n            self.pilot_seated.store(false, Relaxed);\n            self.pilot_best.store(0, Relaxed);\n        }\n"
+        },
+        {
+          "old": "                if flying || seated >= 1.0 { self.pilot_seated.store(true, Relaxed); }\n",
+          "new": "                // Seated once in the seat, or once his track, having come toward it, starts drifting away from it\n                // (forward, through the canopy, as the ship moves off).\n                let best = f32::from_bits(self.pilot_best.load(Relaxed));\n                if flying || seated >= 1.0 || (best > 0.5 && seated < best - 0.15) { self.pilot_seated.store(true, Relaxed); }\n                if seated > best { self.pilot_best.store(seated.to_bits(), Relaxed); }\n"
+        },
+        {
+          "old": "        let body = pose.class == 0 && crate::vr::body::in_scenes() && !crate::saves::front_end_active();\n        #[cfg(feature = \"vr\")]\n",
+          "new": "        let body = pose.class == 0 && crate::vr::body::in_scenes() && !crate::saves::front_end_active();\n        // With the body off, his forearms and hands still show (crate::vr::body), as the VR hands do in play.\n        #[cfg(feature = \"vr\")]\n        let hands = pose.class == 0 && crate::vr::game_requested() && !body && !crate::saves::front_end_active();\n        #[cfg(feature = \"vr\")]\n"
+        },
+        {
+          "old": "                moby_anim::evaluate_posed(&a.anim, &s, None, &[], mods)\n",
+          "new": "                #[allow(unused_mut)]\n                let mut f = moby_anim::evaluate_posed(&a.anim, &s, None, &[], mods);\n                #[cfg(feature = \"vr\")]\n                if hands { crate::vr::body::ratchet_hands_only(&a.anim, &s, mods, &mut f); }\n                f\n"
+        },
+        {
+          "old": "        let model = if body { crate::vr::body::pilot_frame() * model } else { model };\n",
+          "new": "        let model = if body || hands { crate::vr::body::pilot_frame() * model } else { model };\n"
+        },
+        {
+          "old": "        let pilot_hidden = crate::vr::game_requested() && pose.class == 0 && !body;\n",
+          "new": "        let pilot_hidden = crate::vr::game_requested() && pose.class == 0 && !body && !hands;\n"
+        },
+        {
+          "old": "#[derive(Resource, Default)]\npub struct Travel {\n    pub mode: space::ShipMode,\n    tr: Option<Transition>,\n    /// After a level change: `entry`'s landing once the set-up has built the play state.\n    entry_pending: bool,\n    #[cfg(feature = \"vr\")]\n    vr_preloaded: bool,\n    /// VR: Ratchet has sat down in the taking-off ship (the eye stays in its seat from then on).\n    #[cfg(feature = \"vr\")]\n    pilot_seated: std::sync::atomic::AtomicBool,\n    /// VR: how far into the seat the take-off's view has come (the bits of an f32, 0..1).\n    #[cfg(feature = \"vr\")]\n    pilot_best: std::sync::atomic::AtomicU32,\n",
+          "new": "/// VR, the take-off: the ship's position when it began and, once it has moved off, the ship's frame then and each\n/// actor's placement then (Bevy space). The actors' authored tracks outrun the ship as it leaves (Ratchet and Clank\n/// leave the hull through its canopy; the original's camera is outside), so from that moment each keeps its place in\n/// the ship's frame (crate::vr::body::ride).\n#[cfg(feature = \"vr\")]\n#[derive(Default)]\nstruct PilotRide {\n    start: Option<bevy::math::Vec3>,\n    latch: Option<(Mat4, Vec<(usize, Mat4)>)>,\n}\n\n#[derive(Resource, Default)]\npub struct Travel {\n    pub mode: space::ShipMode,\n    tr: Option<Transition>,\n    /// After a level change: `entry`'s landing once the set-up has built the play state.\n    entry_pending: bool,\n    #[cfg(feature = \"vr\")]\n    vr_preloaded: bool,\n    /// VR: the take-off's ride ([`PilotRide`]).\n    #[cfg(feature = \"vr\")]\n    pilot_ride: std::sync::Mutex<PilotRide>,\n"
+        },
+        {
+          "old": "        use std::sync::atomic::Ordering::Relaxed;\n        if self.mode.phase == Phase::Idle || !matches!(self.mode.sub, SUB_TAKEOFF | SUB_LANDING | SUB_FLYAWAY) {\n            self.pilot_seated.store(false, Relaxed);\n            self.pilot_best.store(0, Relaxed);\n            crate::vr::body::set_pilot_frame(None);\n            return None;\n        }\n        if self.mode.sub != SUB_TAKEOFF {\n            self.pilot_seated.store(false, Relaxed);\n            self.pilot_best.store(0, Relaxed);\n        }\n        // Landing: until ticks(0x168), the cut out of the canopy-opening shot, the authored actor track sinks Ratchet\n        // about 2.5 units under the pad (the game only turns his shadow on after it). Keep the native seat meanwhile.\n        let in_cockpit = self.mode.sub == SUB_LANDING && self.mode.tick <= p.svc.ticks(0x168);\n        // Ratchet's own eyes; his drawn actor follows the view wherever it is not them (crate::vr::body::pilot_frame).\n        let actor = self.boarding_eye(p);\n        let boarding=(matches!(self.mode.sub, SUB_TAKEOFF | SUB_LANDING) && !in_cockpit).then_some(actor).flatten();\n",
+          "new": "        if self.mode.phase == Phase::Idle || !matches!(self.mode.sub, SUB_TAKEOFF | SUB_LANDING | SUB_FLYAWAY) {\n            self.reset_ride();\n            return None;\n        }\n        if self.mode.sub != SUB_TAKEOFF { self.reset_ride(); }\n        // Landing: until ticks(0x168), the cut out of the canopy-opening shot, the authored actor track sinks Ratchet\n        // about 2.5 units under the pad (the game only turns his shadow on after it). Keep the native seat meanwhile.\n        let in_cockpit = self.mode.sub == SUB_LANDING && self.mode.tick <= p.svc.ticks(0x168);\n"
+        },
+        {
+          "old": "        if let Some((head, heading)) = boarding {\n            let flying = forward.y.abs() > 0.08;\n            let mut seated = ((1.5 - head.distance(seat)) / 0.55).clamp(0.0, 1.0);\n            // Seated, the eye is the hull's seat (from the ship's pose and root joint the hull is drawn with): Ratchet's\n            // own track is authored apart from the ship's and drifts out of it during the take-off.\n            if self.mode.sub == SUB_TAKEOFF {\n                // Seated once in the seat, or once his track, having come toward it, starts drifting away from it\n                // (forward, through the canopy, as the ship moves off).\n                let best = f32::from_bits(self.pilot_best.load(Relaxed));\n                if flying || seated >= 1.0 || (best > 0.5 && seated < best - 0.15) { self.pilot_seated.store(true, Relaxed); }\n                if seated > best { self.pilot_best.store(seated.to_bits(), Relaxed); }\n                if self.pilot_seated.load(Relaxed) { seated = 1.0; }\n            }\n            let view = (head.lerp(seat, seated), heading.slerp(rotation, if flying { 1.0 } else { seated }));\n            set_pilot_frame(view, actor);\n            Some(view)\n        } else {\n            set_pilot_frame((seat, rotation), actor);\n            Some((seat, rotation))\n        }\n",
+          "new": "        // Ratchet's own eyes (and the take-off's ride carrying them with the ship once it moves off).\n        let mut actor = self.boarding_eye(p);\n        if self.mode.sub == SUB_TAKEOFF {\n            // The ship's frame (Bevy space): its root's axes and position, game_to_bevy being (x, z, -y).\n            let c = bevy::math::Mat3::from_cols(bevy::math::Vec3::X, bevy::math::Vec3::NEG_Z, bevy::math::Vec3::Y);\n            let at = crate::tfrag_render::game_to_bevy(position);\n            let ship = Mat4::from_mat3_translation(c * axes * c.transpose(), at);\n            let ride = self.ride(ship, at).unwrap_or_default();\n            let ratchet = self.poses.iter().find(|a| a.class == 0 && !a.hidden).map(|a| a.actor);\n            if let (Some((eye, heading)), Some(d)) = (actor, ride.iter().find(|r| Some(r.0) == ratchet).map(|r| r.1)) {\n                actor = Some((d.transform_point3(eye), d.to_scale_rotation_translation().1 * heading));\n            }\n            crate::vr::body::set_ride(ride);\n        }\n        let view = match actor {\n            // The take-off: his eyes, from the boarding to the ride.\n            Some(a) if self.mode.sub == SUB_TAKEOFF => a,\n            // The landing, out of the cockpit: from the seat to his eyes as he climbs out.\n            Some((head, heading)) if self.mode.sub == SUB_LANDING && !in_cockpit => {\n                let flying = forward.y.abs() > 0.08;\n                let seated = ((1.5 - head.distance(seat)) / 0.55).clamp(0.0, 1.0);\n                (head.lerp(seat, seated), heading.slerp(rotation, if flying { 1.0 } else { seated }))\n            }\n            _ => (seat, rotation),\n        };\n        // His drawn actor is carried onto the view (crate::vr::body::carry_to_view).\n        crate::vr::body::set_pilot_view(actor.map(|_| view));\n        Some(view)\n    }\n\n    /// VR: the take-off's ride (crate::vr::body::ride): none until the ship has moved 0.3 from where the take-off began;\n    /// then each actor's correction keeping the place it had in the ship's frame (`ship`) at that moment.\n    #[cfg(feature = \"vr\")]\n    fn ride(&self, ship: Mat4, position: bevy::math::Vec3) -> Option<Vec<(usize, Mat4)>> {\n        let mut r = self.pilot_ride.lock().ok()?;\n        let start = *r.start.get_or_insert(position);\n        if r.latch.is_none() {\n            if start.distance(position) < 0.3 { return None; }\n            let placed = self.poses.iter()\n                .filter(|a| !(530..=533).contains(&a.class) && !a.hidden)\n                .filter_map(|a| Some((a.actor, self.placement(a)?)))\n                .collect();\n            r.latch = Some((ship.inverse(), placed));\n        }\n        let (inverse, placed) = r.latch.as_ref()?;\n        Some(placed.iter().filter_map(|&(k, then)| {\n            let now = self.placement(self.poses.iter().find(|a| a.actor == k)?)?;\n            Some((k, ship * *inverse * then * now.inverse()))\n        }).collect())\n    }\n\n    /// VR: an actor's placement as its draw makes it (its yaw, scale and position; Bevy space).\n    #[cfg(feature = \"vr\")]\n    fn placement(&self, a: &ActorPose) -> Option<Mat4> {\n        let scale = a.scale.unwrap_or(self.gfx.actors.get(a.actor)?.scale);\n        let (c, s) = (a.yaw.cos(), a.yaw.sin());\n        Some(moby_render::extra_model([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]], scale, a.position))\n    }\n\n    #[cfg(feature = \"vr\")]\n    fn reset_ride(&self) {\n        if let Ok(mut r) = self.pilot_ride.lock() { *r = PilotRide::default(); }\n        crate::vr::body::set_ride(Vec::new());\n        crate::vr::body::set_pilot_view(None);\n"
+        },
+        {
+          "old": "        };\n        let f = match pose.head {\n",
+          "new": "        };\n        #[cfg(feature = \"vr\")]\n        let mut eyes: Option<[f32; 3]> = None;\n        let f = match pose.head {\n"
+        },
+        {
+          "old": "                if hands { crate::vr::body::ratchet_hands_only(&a.anim, &s, mods, &mut f); }\n                f\n",
+          "new": "                if hands { crate::vr::body::ratchet_hands_only(&a.anim, &s, mods, &mut f); }\n                // VR: where his drawn eyes are (model space), to carry him onto the view.\n                #[cfg(feature = \"vr\")]\n                { eyes = (body || hands).then(|| crate::vr::body::ratchet_eyes(&a.anim, &s, mods)).flatten(); }\n                f\n"
+        },
+        {
+          "old": "        #[cfg(feature = \"vr\")]\n        let model = if body || hands { crate::vr::body::pilot_frame() * model } else { model };\n",
+          "new": "        // VR: Ratchet carried so his drawn eyes and heading are the view's; the take-off's ride carries the others.\n        #[cfg(feature = \"vr\")]\n        let model = match (crate::vr::body::pilot_view().filter(|_| body || hands), eyes) {\n            (Some(view), Some(e)) => {\n                let heading = bevy::math::Quat::from_rotation_y(pose.yaw - std::f32::consts::FRAC_PI_2);\n                crate::vr::body::carry_to_view(view, model.transform_point3(bevy::math::Vec3::from(e)), heading) * model\n            }\n            _ if crate::vr::game_requested() && !crate::saves::front_end_active() => crate::vr::body::ride(k).map_or(model, |d| d * model),\n            _ => model,\n        };\n"
+        },
+        {
+          "old": "/// VR: the ship sequence's view against Ratchet's eyes and heading (Bevy space), so his drawn actor follows the view\n/// (crate::vr::body::pilot_frame); None without his actor.\n#[cfg(feature = \"vr\")]\nfn set_pilot_frame(view: (bevy::math::Vec3, bevy::math::Quat), actor: Option<(bevy::math::Vec3, bevy::math::Quat)>) {\n    crate::vr::body::set_pilot_frame(actor.map(|(eye, heading)| {\n        Mat4::from_translation(view.0) * Mat4::from_quat(view.1 * heading.inverse()) * Mat4::from_translation(-eye)\n    }));\n}\n\n",
+          "new": ""
+        },
+        {
+          "old": "/// VR, the take-off: the ship's position when it began and, once it has moved off, the ship's frame then and each\n/// actor's placement then (Bevy space). The actors' authored tracks outrun the ship as it leaves (Ratchet and Clank\n/// leave the hull through its canopy; the original's camera is outside), so from that moment each keeps its place in\n/// the ship's frame (crate::vr::body::ride).\n#[cfg(feature = \"vr\")]\n#[derive(Default)]\nstruct PilotRide {\n    start: Option<bevy::math::Vec3>,\n    latch: Option<(Mat4, Vec<(usize, Mat4)>)>,\n}\n\n#[derive(Resource, Default)]\npub struct Travel {\n    pub mode: space::ShipMode,\n    tr: Option<Transition>,\n    /// After a level change: `entry`'s landing once the set-up has built the play state.\n    entry_pending: bool,\n    #[cfg(feature = \"vr\")]\n    vr_preloaded: bool,\n    /// VR: the take-off's ride ([`PilotRide`]).\n    #[cfg(feature = \"vr\")]\n    pilot_ride: std::sync::Mutex<PilotRide>,\n",
+          "new": "#[derive(Resource, Default)]\npub struct Travel {\n    pub mode: space::ShipMode,\n    tr: Option<Transition>,\n    /// After a level change: `entry`'s landing once the set-up has built the play state.\n    entry_pending: bool,\n    #[cfg(feature = \"vr\")]\n    vr_preloaded: bool,\n"
+        },
+        {
+          "old": "            self.reset_ride();\n            return None;\n        }\n        if self.mode.sub != SUB_TAKEOFF { self.reset_ride(); }\n",
+          "new": "            crate::vr::body::set_pilot_view(None);\n            return None;\n        }\n"
+        },
+        {
+          "old": "        // Ratchet's own eyes (and the take-off's ride carrying them with the ship once it moves off).\n        let mut actor = self.boarding_eye(p);\n        if self.mode.sub == SUB_TAKEOFF {\n            // The ship's frame (Bevy space): its root's axes and position, game_to_bevy being (x, z, -y).\n            let c = bevy::math::Mat3::from_cols(bevy::math::Vec3::X, bevy::math::Vec3::NEG_Z, bevy::math::Vec3::Y);\n            let at = crate::tfrag_render::game_to_bevy(position);\n            let ship = Mat4::from_mat3_translation(c * axes * c.transpose(), at);\n            let ride = self.ride(ship, at).unwrap_or_default();\n            let ratchet = self.poses.iter().find(|a| a.class == 0 && !a.hidden).map(|a| a.actor);\n            if let (Some((eye, heading)), Some(d)) = (actor, ride.iter().find(|r| Some(r.0) == ratchet).map(|r| r.1)) {\n                actor = Some((d.transform_point3(eye), d.to_scale_rotation_translation().1 * heading));\n            }\n            crate::vr::body::set_ride(ride);\n        }\n        let view = match actor {\n            // The take-off: his eyes, from the boarding to the ride.\n            Some(a) if self.mode.sub == SUB_TAKEOFF => a,\n            // The landing, out of the cockpit: from the seat to his eyes as he climbs out.\n            Some((head, heading)) if self.mode.sub == SUB_LANDING && !in_cockpit => {\n                let flying = forward.y.abs() > 0.08;\n                let seated = ((1.5 - head.distance(seat)) / 0.55).clamp(0.0, 1.0);\n                (head.lerp(seat, seated), heading.slerp(rotation, if flying { 1.0 } else { seated }))\n            }\n            _ => (seat, rotation),\n        };\n        // His drawn actor is carried onto the view (crate::vr::body::carry_to_view).\n        crate::vr::body::set_pilot_view(actor.map(|_| view));\n        Some(view)\n    }\n\n    /// VR: the take-off's ride (crate::vr::body::ride): none until the ship has moved 0.3 from where the take-off began;\n    /// then each actor's correction keeping the place it had in the ship's frame (`ship`) at that moment.\n    #[cfg(feature = \"vr\")]\n    fn ride(&self, ship: Mat4, position: bevy::math::Vec3) -> Option<Vec<(usize, Mat4)>> {\n        let mut r = self.pilot_ride.lock().ok()?;\n        let start = *r.start.get_or_insert(position);\n        if r.latch.is_none() {\n            if start.distance(position) < 0.3 { return None; }\n            let placed = self.poses.iter()\n                .filter(|a| !(530..=533).contains(&a.class) && !a.hidden)\n                .filter_map(|a| Some((a.actor, self.placement(a)?)))\n                .collect();\n            r.latch = Some((ship.inverse(), placed));\n        }\n        let (inverse, placed) = r.latch.as_ref()?;\n        Some(placed.iter().filter_map(|&(k, then)| {\n            let now = self.placement(self.poses.iter().find(|a| a.actor == k)?)?;\n            Some((k, ship * *inverse * then * now.inverse()))\n        }).collect())\n    }\n\n    /// VR: an actor's placement as its draw makes it (its yaw, scale and position; Bevy space).\n    #[cfg(feature = \"vr\")]\n    fn placement(&self, a: &ActorPose) -> Option<Mat4> {\n        let scale = a.scale.unwrap_or(self.gfx.actors.get(a.actor)?.scale);\n        let (c, s) = (a.yaw.cos(), a.yaw.sin());\n        Some(moby_render::extra_model([[c, s, 0.0], [-s, c, 0.0], [0.0, 0.0, 1.0]], scale, a.position))\n    }\n\n    #[cfg(feature = \"vr\")]\n    fn reset_ride(&self) {\n        if let Ok(mut r) = self.pilot_ride.lock() { *r = PilotRide::default(); }\n        crate::vr::body::set_ride(Vec::new());\n        crate::vr::body::set_pilot_view(None);\n",
+          "new": "        // Ratchet's own eyes. The take-off's ship stands still (its shots cut); the flyaway, which lifts it, seats the\n        // riders itself (the native seat, no actor).\n        let actor = self.boarding_eye(p);\n        let view = match actor {\n            // The take-off: his eyes, through the boarding and the sitting.\n            Some(a) if self.mode.sub == SUB_TAKEOFF => a,\n            // The landing: his eyes, but the hull's seat while his track sinks under the pad in the cockpit's shots.\n            Some(a) if self.mode.sub == SUB_LANDING && !(in_cockpit && a.0.distance(seat) > 1.0) => a,\n            _ => (seat, rotation),\n        };\n        // RC_VR_PILOT_TRACE=1: the ship sequence's frame per tick (the ship, Ratchet's track, his eyes, the view).\n        if std::env::var_os(\"RC_VR_PILOT_TRACE\").is_some() {\n            let ratchet = self.poses.iter().find(|a| a.class == 0);\n            println!(\n                \"VR_PILOT sub={} tick={} ship_root={:.2?} ship_pose={:.2?} ratchet={:.2?} hidden={:?} eyes={:.2?} seat={:.2?} view={:.2?}\",\n                self.mode.sub, self.mode.tick, position, pose.map(|a| a.position), ratchet.map(|a| a.position),\n                ratchet.map(|a| a.hidden), actor.map(|a| a.0), seat, view.0\n            );\n        }\n        // His drawn actor is carried onto the view (crate::vr::body::carry_to_view).\n        crate::vr::body::set_pilot_view(actor.map(|_| view));\n        Some(view)\n"
+        },
+        {
+          "old": "    #[cfg(feature = \"vr\")] mut departure: Option<ResMut<crate::vr::loading::FlightWorld>>,\n) {\n",
+          "new": "    #[cfg(feature = \"vr\")] mut departure: Option<ResMut<crate::vr::loading::FlightWorld>>,\n    occl: Option<ResMut<moby_render::MobyOcclusion>>,\n) {\n"
+        },
+        {
+          "old": "    let out = with_world_view(p, lv.collision.as_ref(), view.as_ref(), |w| t.mode.frame(w, pressed, world_ran));\n    // GameStateUpdate sub 3: `CameraUpdate` after the body (the tick ran without its camera update).\n",
+          "new": "    let out = with_world_view(p, lv.collision.as_ref(), view.as_ref(), |w| t.mode.frame(w, pressed, world_ran));\n    // The hull drawn where this frame left it, as its riders are (crate::gameplay::drive_ship).\n    if fly {\n        if let Some(mut o) = occl { crate::gameplay::drive_ship(p, &mut o); }\n    }\n    // GameStateUpdate sub 3: `CameraUpdate` after the body (the tick ran without its camera update).\n"
+        },
+        {
+          "old": "        let hands = pose.class == 0 && crate::vr::game_requested() && !body && !crate::saves::front_end_active();\n        #[cfg(feature = \"vr\")]\n",
+          "new": "        let hands = pose.class == 0 && crate::vr::game_requested() && !body && !crate::saves::front_end_active();\n        // His own modifiers, before the collapse: the eyes are the head's children and would collapse with it.\n        #[cfg(feature = \"vr\")]\n        let own_mods = mods;\n        #[cfg(feature = \"vr\")]\n"
+        },
+        {
+          "old": "                { eyes = (body || hands).then(|| crate::vr::body::ratchet_eyes(&a.anim, &s, mods)).flatten(); }\n",
+          "new": "                { eyes = (body || hands).then(|| crate::vr::body::ratchet_eyes(&a.anim, &s, own_mods)).flatten(); }\n"
+        },
+        {
+          "old": "        // VR: Ratchet carried so his drawn eyes and heading are the view's; the take-off's ride carries the others.\n        #[cfg(feature = \"vr\")]\n        let model = match (crate::vr::body::pilot_view().filter(|_| body || hands), eyes) {\n            (Some(view), Some(e)) => {\n                let heading = bevy::math::Quat::from_rotation_y(pose.yaw - std::f32::consts::FRAC_PI_2);\n                crate::vr::body::carry_to_view(view, model.transform_point3(bevy::math::Vec3::from(e)), heading) * model\n            }\n            _ if crate::vr::game_requested() && !crate::saves::front_end_active() => crate::vr::body::ride(k).map_or(model, |d| d * model),\n",
+          "new": "        // VR: Ratchet carried so his drawn eyes and heading are the view's.\n        #[cfg(feature = \"vr\")]\n        let model = match (crate::vr::body::pilot_view().filter(|_| body || hands), eyes) {\n            (Some(view), Some(e)) => {\n                let heading = bevy::math::Quat::from_rotation_y(pose.yaw - std::f32::consts::FRAC_PI_2);\n                let carried = crate::vr::body::carry_to_view(view, model.transform_point3(bevy::math::Vec3::from(e)), heading) * model;\n                if std::env::var_os(\"RC_VR_PILOT_TRACE\").is_some() {\n                    println!(\n                        \"VR_PILOT draw view={:.2?} drawn_eyes={:.2?} carried_eyes={:.2?} carried_feet={:.2?}\",\n                        view.0, model.transform_point3(bevy::math::Vec3::from(e)), carried.transform_point3(bevy::math::Vec3::from(e)),\n                        carried.transform_point3(bevy::math::Vec3::ZERO)\n                    );\n                }\n                carried\n            }\n"
+        },
+        {
+          "old": "    // The hull drawn where this frame left it, as its riders are (crate::gameplay::drive_ship).\n    if fly {\n        if let Some(mut o) = occl { crate::gameplay::drive_ship(p, &mut o); }\n",
+          "new": "    // The hull drawn where this frame left it, as its riders are (crate::gameplay::drive_ship), and its canopy glass:\n    // ShipUpdate took the glass's matrix in the tick, before this frame moved the ship.\n    if fly {\n        if let Some(mut o) = occl { crate::gameplay::drive_ship(p, &mut o); }\n        with_world(p, lv.collision.as_ref(), |w| {\n            if let Some(id) = w.svc.travel.moby.filter(|id| w.svc.draw_callbacks.matrices.contains_key(id)) {\n                let m = w.joint_matrix(id, 0);\n                w.svc.draw_callbacks.matrices.insert(id, m);\n            }\n        });\n"
         }
       ]
     },
@@ -2283,6 +2731,22 @@
         {
           "old": "        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n    }\n",
           "new": "        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n        save_key(\"vr_board_lean\", word(self.board_lean));\n    }\n"
+        },
+        {
+          "old": "    pub board_lean: bool,\n}\n",
+          "new": "    pub board_lean: bool,\n    /// The hero's body seen from its eyes, without its head (`vr_body = off | cutscenes | always`, off by default).\n    pub body: VrBody,\n}\n\n/// Where VR draws the body the player sees through (Ratchet, Clank, Giant Clank, the Hologuise disguise), its head\n/// collapsed (crate::vr::body).\n#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]\npub enum VrBody {\n    /// Never (the default): the body is hidden, only the hands are drawn in play.\n    Off,\n    /// In scenes and ship sequences.\n    Cutscenes,\n    /// In scenes, ship sequences and play (the forearms collapsed too: the VR hands are the hands).\n    Always,\n}\n\nimpl VrBody {\n    const KEYS: [&'static str; 3] = [\"off\", \"cutscenes\", \"always\"];\n    pub fn index(self) -> u8 { self as u8 }\n    pub fn from_index(v: u8) -> VrBody { [VrBody::Off, VrBody::Cutscenes, VrBody::Always][(v as usize).min(2)] }\n    fn key(self) -> &'static str { Self::KEYS[self as usize] }\n    #[cfg(feature = \"vr\")]\n    fn parse(s: &str) -> VrBody { Self::KEYS.iter().position(|k| *k == s.trim()).map_or(VrBody::Off, |i| Self::from_index(i as u8)) }\n}\n"
+        },
+        {
+          "old": "            board_lean: on(\"vr_board_lean\"),\n        }\n",
+          "new": "            board_lean: on(\"vr_board_lean\"),\n            body: load_key(\"vr_body\").map_or(VrBody::Off, |v| VrBody::parse(&v)),\n        }\n"
+        },
+        {
+          "old": "        save_key(\"vr_board_lean\", word(self.board_lean));\n    }\n",
+          "new": "        save_key(\"vr_board_lean\", word(self.board_lean));\n        save_key(\"vr_body\", self.body.key());\n    }\n"
+        },
+        {
+          "old": "    /// Never (the default): the body is hidden, only the hands are drawn in play.\n",
+          "new": "    /// Never (the default): only the hands are drawn, the VR hands in play and Ratchet's own in scenes and ship sequences.\n"
         }
       ]
     },
@@ -2491,6 +2955,26 @@
         {
           "old": "    // The lean records 3 / 0 / 1.\n    let v = if turn.is_none() && h.stick_mag < Pf::b(0x3e4c_cccd) { 0.0 } else { f(h.yaw_vel) };\n    {\n",
           "new": "    // The lean records 3 / 0 / 1.\n    let v = if steered { f(h.yaw_vel) } else { 0.0 };\n    {\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-game/src/game_state.rs",
+      "expectedBlobSha": "2e40d967fb6371c2f461d2e9dbe5f05a93489daa",
+      "replacements": [
+        {
+          "old": "impl GameState {\n    /// All chunks zero (the RAM before a restore).\n    pub fn zeroed(tables: ChunkTables) -> GameState {\n        GameState { tables, global: Global::zeroed(), levels: (0..LEVEL_SLOTS).map(|_| LevelState::zeroed()).collect(), raw: BTreeMap::new(), pads: BTreeMap::new() }\n    }\n\n    /// New game (`load_and_initialize_level_chunk` 0x209370): restore the disc template\n    /// (`SaveGameLump::template`), then `level = 0`.\n    pub fn new_game(tables: ChunkTables, template: &[u8]) -> Result<GameState> {\n        let mut s = GameState::zeroed(tables);\n        let r = s.load_card_file(template)?;\n        if r.total() != 0 { return Err(FormatError::Invalid(format!(\"save template restored with errors {:?}\", r.errors))); }\n        s.global.level = 0;\n",
+          "new": "/// A new game starts with the helpdesk's voice and text on, as the disc's template has them (the default); a port can\n/// turn them off for its new games (the engine's VR mode).\npub static NEW_GAME_HELPDESK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);\n\nimpl GameState {\n    /// All chunks zero (the RAM before a restore).\n    pub fn zeroed(tables: ChunkTables) -> GameState {\n        GameState { tables, global: Global::zeroed(), levels: (0..LEVEL_SLOTS).map(|_| LevelState::zeroed()).collect(), raw: BTreeMap::new(), pads: BTreeMap::new() }\n    }\n\n    /// New game (`load_and_initialize_level_chunk` 0x209370): restore the disc template\n    /// (`SaveGameLump::template`), then `level = 0`. Without [`NEW_GAME_HELPDESK`] the template's helpdesk voice and\n    /// text are turned off.\n    pub fn new_game(tables: ChunkTables, template: &[u8]) -> Result<GameState> {\n        let mut s = GameState::zeroed(tables);\n        let r = s.load_card_file(template)?;\n        if r.total() != 0 { return Err(FormatError::Invalid(format!(\"save template restored with errors {:?}\", r.errors))); }\n        s.global.level = 0;\n        if !NEW_GAME_HELPDESK.load(std::sync::atomic::Ordering::Relaxed) {\n            s.global.helpdesk_voice = 0;\n            s.global.helpdesk_text = 0;\n        }\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-engine/src/text_render.rs",
+      "expectedBlobSha": "6ad2658338f271009ced70532b5adfbd3d9b0a95",
+      "replacements": [
+        {
+          "old": "/// Draws the HUD's calls in order.\npub fn execute(out: &mut Hud2d, st: &mut TextState, glyphs: &[GlyphTable; 3], draws: &[Draw]) {\n",
+          "new": "/// The pad icon drawn for \u2715 (text code 0x10): 0x10 itself, or another icon code whose glyph stands in for it while a\n/// port's input confirms with that control (VR's vendor, where the trigger buys and A jumps: crate::vr::vendor).\npub static CROSS_ICON: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0x10);\n\n/// Draws the HUD's calls in order.\npub fn execute(out: &mut Hud2d, st: &mut TextState, glyphs: &[GlyphTable; 3], draws: &[Draw]) {\n    let cross = CROSS_ICON.load(std::sync::atomic::Ordering::Relaxed) as usize;\n    let swapped: [GlyphTable; 3];\n    let glyphs = if cross != 0x10 {\n        swapped = glyphs.clone().map(|mut t| {\n            t[0x10] = t[cross];\n            t\n        });\n        &swapped\n    } else {\n        glyphs\n    };\n"
         }
       ]
     }

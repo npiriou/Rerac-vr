@@ -1,5 +1,6 @@
 //! OpenXR integration into the original game. Calibration is an explicit diagnostic mode.
 mod blaster;
+pub(crate) mod body;
 mod body_fists;
 mod bomb_glove;
 mod embodied;
@@ -39,6 +40,12 @@ pub enum LaunchMode {
     Normal,
     Debug,
     DebugGold,
+    /// Orxon without the O2 Mask: its Clank section hands the hero to Clank on arrival.
+    DebugClank,
+    /// Quartu, on Giant Clank's pad: △ climbs into him.
+    DebugGiant,
+    /// Kerwan with the Hologuise first in the quick select.
+    DebugHologuise,
 }
 impl LaunchMode {
     pub fn name(self) -> &'static str {
@@ -46,6 +53,9 @@ impl LaunchMode {
             Self::Normal => "normal",
             Self::Debug => "debug",
             Self::DebugGold => "debug-gold",
+            Self::DebugClank => "debug-clank",
+            Self::DebugGiant => "debug-giant",
+            Self::DebugHologuise => "debug-hologuise",
         }
     }
     pub fn debug(self) -> bool {
@@ -71,7 +81,12 @@ impl Settings {
             "normal" => LaunchMode::Normal,
             "debug" => LaunchMode::Debug,
             "debug-gold" => LaunchMode::DebugGold,
-            value => anyhow::bail!("RC_VR_MODE must be normal, debug or debug-gold (got {value})"),
+            "debug-clank" => LaunchMode::DebugClank,
+            "debug-giant" => LaunchMode::DebugGiant,
+            "debug-hologuise" => LaunchMode::DebugHologuise,
+            value => anyhow::bail!(
+                "RC_VR_MODE must be normal, debug, debug-gold, debug-clank, debug-giant or debug-hologuise (got {value})"
+            ),
         };
         let scene = std::env::var("RC_VR_SCENE").unwrap_or_else(|_| "kerwan".into());
         ensure!(

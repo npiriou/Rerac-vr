@@ -74,12 +74,10 @@ fn ray(
         point: inside.then_some(pixel),
     })
 }
-fn target(
-    rt: &crate::menu_render::MenuRt,
-    saved: &crate::gameplay::Persistent,
-    point: Option<[f32; 2]>,
-) -> Option<Target> {
-    let point = point?;
+/// Every pointer target of the open page, the first match winning: the native dialog labels, then the page's own
+/// targets (topmost first), then the front end's whole-screen Start.
+fn targets(rt: &crate::menu_render::MenuRt, saved: &crate::gameplay::Persistent) -> Vec<Target> {
+    let mut out = Vec::new();
     let make = |rect: [f32; 4], key| Target {
         page: 0,
         widget: u32::MAX,
@@ -116,24 +114,17 @@ fn target(
                     ],
                     key,
                 );
-                if t.contains(point) {
-                    return Some(t);
-                }
+                out.push(t);
             }
         }
     }
-    rt.menu
-        .as_ref()
-        .and_then(|m| {
-            m.pointer_targets(&rt.assets, &saved.0)
-                .into_iter()
-                .rev()
-                .find(|t| t.contains(point))
-        })
-        .or_else(|| {
-            (crate::saves::front_end_active() && rt.menu.as_ref().is_none_or(|m| !m.active))
-                .then(|| make([0.0, 0.0, 512.0, 416.0], rc_game::pad::button::START))
-        })
+    if let Some(m) = rt.menu.as_ref() {
+        out.extend(m.pointer_targets(&rt.assets, &saved.0).into_iter().rev());
+    }
+    if crate::saves::front_end_active() && rt.menu.as_ref().is_none_or(|m| !m.active) {
+        out.push(make([0.0, 0.0, 512.0, 416.0], rc_game::pad::button::START));
+    }
+    out
 }
 #[allow(clippy::too_many_arguments)]
 fn interact(
@@ -150,6 +141,7 @@ fn interact(
     mut pad: ResMut<crate::input_map::PadFrame>,
 ) {
     let pressed = input.menu_click;
+    input.menu_targets = false;
     let Some(mut rt) = rt.take() else { return };
     if let Some(m) = rt.menu.as_mut() {
         m.pointer = None;
@@ -166,10 +158,29 @@ fn interact(
     let (Some(play), Some(saved)) = (play, saved) else {
         return;
     };
+    // A page the pointer cannot select on (a message, a prompt): the trigger and A confirm natively (✕) and the sticks
+    // navigate (super::game_input, from the next tick).
+    let all = targets(&rt, &saved);
+    input.menu_targets = !all.is_empty();
+    if !input.menu_targets {
+        if pressed {
+            pad.0.buttons |= rc_game::pad::button::CROSS as u16;
+        }
+        return;
+    }
+    // Pointing at nothing, the trigger and A confirm the native selection (✕): a page whose confirmation is not a
+    // pointer target (the planet page's travel prompt) still takes it.
     let Some(ray) = ray(&menu, &rig, &play, &settings, &motion) else {
+        if pressed {
+            pad.0.buttons |= rc_game::pad::button::CROSS as u16;
+        }
         return;
     };
-    let hit = target(&rt, &saved, ray.point);
+    let hit = all.into_iter().find(|t| ray.point.is_some_and(|p| t.contains(p)));
+    if hit.is_none() && pressed {
+        pad.0.buttons |= rc_game::pad::button::CROSS as u16;
+        return;
+    }
     if let Some(t) = hit.filter(|t| t.widget == u32::MAX) {
         if pressed {
             if let rc_game::menus::pause::pointer::Action::Key(key) = t.action {
@@ -231,7 +242,7 @@ fn present(
     let hit = rt
         .as_ref()
         .zip(saved.as_ref())
-        .and_then(|(rt, s)| target(rt, s, ray.point));
+        .and_then(|(rt, s)| targets(rt, s).into_iter().find(|t| ray.point.is_some_and(|p| t.contains(p))));
     let color = if hit.is_some_and(|t| t.enabled)
         || ((mode.spatial_vendor || play.as_ref().is_some_and(|p| super::game::native_panel(p)))
             && ray.point.is_some())

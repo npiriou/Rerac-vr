@@ -38,8 +38,8 @@ const FORWARD_CONE: f32 = 0.57;
 const AWAY: f32 = 0.2;
 /// The spine, behind the eyes (m).
 const SPINE: f32 = 0.15;
-/// The velocity window (s).
-const WINDOW: f64 = 0.08;
+/// The velocity window (s): short, so a punch registers early in the throw.
+const WINDOW: f64 = 0.05;
 impl Plugin for WalloperPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(

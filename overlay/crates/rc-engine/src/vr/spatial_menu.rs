@@ -62,6 +62,7 @@ fn anchor(
     settings: Res<super::Settings>,
     views: Option<Res<bevy_mod_openxr::resources::OxrViews>>,
     attach: Option<Res<crate::moby_attach::MobyAttach>>,
+    level: Res<crate::Level>,
 ) {
     if let Some(p) = play.as_ref().filter(|p| {
         mode.state.mode == rc_game::menus::mode::Mode::Gameplay && super::game::native_panel(p)
@@ -154,9 +155,35 @@ fn anchor(
             let mut world = root.mul_transform(head);
             // A menu stays put when looking around. Keep its upright direction relative to the current gravity.
             world.scale = Vec3::ONE;
+            // Level, along the head's heading: opened while looking down (or up) it does not sink into the floor.
+            let up = root.rotation * Vec3::Y;
+            let forward = *world.forward();
+            let flat = (forward - up * forward.dot(up))
+                .try_normalize()
+                .unwrap_or(root.rotation * Vec3::NEG_Z);
+            world.rotation = Transform::IDENTITY.looking_to(flat, up).rotation;
+            // Nearer walls and floors: closer and smaller in front of them, the same size to the eye.
+            if let Some(coll) = level.0.collision.as_ref() {
+                world.scale = Vec3::splat(clearance(coll, &world));
+            }
             menu.anchor = Some(world);
         }
     }
+}
+/// A menu's scale at `anchor` (the eye, the panel [`DEPTH`] ahead at scale 1) that keeps the panel in front of the
+/// level's collision: lines from the eye to the panel's centre, corners and bottom edge, the nearest hit with a margin.
+fn clearance(coll: &rc_formats::collision::Collision, anchor: &Transform) -> f32 {
+    use rc_game::collision_query::{QueryFlags, coll_line};
+    let (x, y) = (DEPTH * 0.63, DEPTH * 0.63 * 0.775);
+    let eye = super::embodied::game_point(anchor.translation);
+    let nearest = [(0.0, 0.0), (-x, -y), (x, -y), (-x, y), (x, y), (0.0, -y)]
+        .into_iter()
+        .filter_map(|(px, py)| {
+            let end = super::embodied::game_point(anchor.transform_point(Vec3::new(px, py, -DEPTH)));
+            coll_line(coll, eye, end, QueryFlags(0x20 | 0x10)).map(|hit| hit.best)
+        })
+        .fold(1.0f32, f32::min);
+    (nearest * 0.9).clamp(0.2, 1.0)
 }
 #[derive(Clone, Copy)]
 struct Vertex {

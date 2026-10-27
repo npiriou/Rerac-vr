@@ -243,12 +243,12 @@ impl PageMenu {
                 }
                 Data::Port(p) => {
                     let rows = port::entries_of(id).len();
-                    let shown = port::VISIBLE.min(rows);
+                    let shown = port::visible_of(id).min(rows);
                     let step = height / (shown as i32 + 1);
                     let top = (p.top.max(0) as usize).min(rows - shown);
                     for i in 0..shown {
                         push(
-                            row_rect((step * (i as i32 + 1)) as f32, 24.0),
+                            row_rect((step * (i as i32 + 1)) as f32, (step as f32).min(24.0)),
                             Action::Row((top + i) as i32),
                             true,
                         );
@@ -418,11 +418,12 @@ impl PageMenu {
             Action::Scroll(direction) if pointer.pressed => {
                 if let Data::Port(p) = &mut widget.data {
                     let rows = port::entries_of(target.widget).len();
-                    p.top = (p.top + direction).clamp(0, rows.saturating_sub(port::VISIBLE) as i32);
+                    let shown = port::visible_of(target.widget);
+                    p.top = (p.top + direction).clamp(0, rows.saturating_sub(shown) as i32);
                     p.cursor = if direction < 0 {
                         p.top
                     } else {
-                        (p.top + port::VISIBLE as i32 - 1).min(rows as i32 - 1)
+                        (p.top + shown as i32 - 1).min(rows as i32 - 1)
                     };
                     out.sounds.push(MenuSound::Cursor);
                 }

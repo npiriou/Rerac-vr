@@ -61,7 +61,7 @@ Please **don't report VR bugs to the ReRAC team**. They have nothing to do with 
 
 **Menus and feel**
 
-- The pause menu appears in front of you in the world. Point at an option and pull the trigger.
+- The pause menu appears in front of you in the world. Point at an option and pull the trigger (or press A).
 - Quick select: hold a button and reach toward the weapon you want.
 - The Visibomb's camera view shows up on a little screen built into the weapon.
 - On-screen hints show your controller's buttons instead of the PlayStation ones.
@@ -141,7 +141,7 @@ Button names are for Meta Quest / PICO controllers. On other controllers, use th
 | Pause | **Y** |
 | Skip a cutscene | **Y** |
 | Map | Click the **left stick** |
-| Use a menu | Point with your right hand and pull the **right trigger**. Sticks + **A** work too, **Y** goes back |
+| Use a menu | Point with your right hand, then pull the **right trigger** or press **A**. **Y** goes back |
 | Buy at a vendor | Browse with the right stick, **right trigger** to buy, right stick click to leave |
 | Turn a bolt crank | Hold the wrench on the bolt with **right grip** and walk around it |
 | Recenter the view | **F8** on the keyboard |
@@ -178,8 +178,9 @@ Open **Options → VR Options** from the main menu or the pause menu:
 | Camera flip | Your view spins with Ratchet's flips. Only for very strong stomachs! | Off |
 | Direction | What "forward" on the stick means: where your **body** faces, or where you **gaze** | Body |
 | Hoverboard lean | Steer the hoverboard by leaning | On |
+| Player body | See the body you play (Ratchet, Clank, Giant Clank or the Hologuise disguise) when you look down, without its head: **Cutscenes** in scenes and ship sequences, **Always** also while you play. **Off** still shows Ratchet's hands in scenes | Off |
 
-**Port Options** (right above) has the graphics settings. VR starts on the **High** preset.
+**Port Options** (right above) has the graphics settings. VR starts on the **High** preset. A new game starts with the helpdesk (the tips voice and text) off; turn it on in **Options**.
 
 ## Comfort tips
 

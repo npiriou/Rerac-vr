@@ -1450,7 +1450,7 @@ fn present_worn(
 
 fn present(
     mut commands: Commands,
-    body: Query<Entity, (With<crate::gameplay::RatchetMesh>, Without<RenderLayers>)>,
+    body: Query<(Entity, Has<RenderLayers>), With<crate::gameplay::RatchetMesh>>,
     play: Option<Res<crate::gameplay::Play>>,
     settings: Res<Settings>,
     rig: Res<Rig>,
@@ -1466,8 +1466,15 @@ fn present(
     (time, fixed, mut trace, input): (Res<Time<Real>>, Res<Time<Fixed>>, Local<WrenchTrace>, Res<HandInput>),
     mut flight_report: Local<Option<u8>>,
 ) {
-    for e in &body {
-        commands.entity(e).insert(RenderLayers::layer(61));
+    // Ratchet's body is on a layer no eye renders, unless the Player body option draws it in play (its head and
+    // forearms collapsed, super::body).
+    let body_drawn = super::body::in_play();
+    for (e, layered) in &body {
+        if !body_drawn && !layered {
+            commands.entity(e).insert(RenderLayers::layer(61));
+        } else if body_drawn && layered {
+            commands.entity(e).remove::<RenderLayers>();
+        }
     }
     let root = play
         .as_ref()

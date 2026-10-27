@@ -33,8 +33,15 @@ impl Plugin for VendorPlugin {
                 present
                     .after(crate::screen_canvas::apply)
                     .before(TransformSystems::Propagate),
-            );
+            )
+            .add_systems(Update, cross_icon);
     }
+}
+/// The vendor's prompts name the trigger for ✕ (it buys; A jumps there): ✕'s icon drawn as ○'s, the right trigger
+/// (super::pad_glyphs), while the spatial vendor is open.
+fn cross_icon(mode: Res<crate::menu_render::MenuMode>) {
+    let vendor = mode.spatial_vendor && mode.state.mode == rc_game::menus::mode::Mode::Vendor;
+    crate::text_render::CROSS_ICON.store(if vendor { 0x11 } else { 0x10 }, std::sync::atomic::Ordering::Relaxed);
 }
 fn input(
     pad: Option<Res<super::game_input::GamePad>>,
