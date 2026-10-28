@@ -6,6 +6,12 @@
   <a href="#whats-different-in-vr">What's different</a>
 </p>
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=rdMAJ2T1JdA">
+    <img src="https://img.youtube.com/vi/rdMAJ2T1JdA/maxresdefault.jpg" alt="Ratchet & Clank VR trailer" width="720">
+  </a>
+</p>
+
 ---
 
 ## What is this?

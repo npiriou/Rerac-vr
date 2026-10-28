@@ -1569,6 +1569,30 @@
         {
           "old": "        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|_| body);\n",
           "new": "        // Drawn: the whole body (headless), or with it off Ratchet's hands.\n        rt.vr_view_actor = seen.map(|(_, _, k)| k).filter(|&k| body || (vr && rt.actors.get(k).is_some_and(|a| a.o_class == 0)));\n"
+        },
+        {
+          "old": "    vr_view_actor: Option<usize>,\n    /// The mobys the scene hid (the talker 0x179588: mode |= 1; classes 74 / 203: mode |= 0x80) and the bit.\n",
+          "new": "    vr_view_actor: Option<usize>,\n    /// VR: the player was in a body (Clank, Giant Clank) when the scene started: a scene without Ratchet is then seen\n    /// through Clank's eyes. Otherwise Clank alone in a scene (Drek's countdown running out, Veldin's scene 7, poses him\n    /// under the arena) is watched from the scene's camera.\n    #[cfg(feature = \"vr\")]\n    vr_in_body: bool,\n    /// The mobys the scene hid (the talker 0x179588: mode |= 1; classes 74 / 203: mode |= 0x80) and the bit.\n"
+        },
+        {
+          "old": "                vr_clank_lift: None,\n                #[cfg(feature = \"vr\")]\n",
+          "new": "                vr_clank_lift: None,\n                #[cfg(feature = \"vr\")]\n                vr_in_body: false,\n                #[cfg(feature = \"vr\")]\n"
+        },
+        {
+          "old": "        );\n        if let Err(e) = spawn_actors(rt, &mut commands, &mut level.0, &scene, &mut meshes, &mut images, &mut materials, &mut buffers) {\n",
+          "new": "        );\n        #[cfg(feature = \"vr\")]\n        { rt.vr_in_body = play.as_ref().is_some_and(|p| p.game.hero.mode != 0); }\n        if let Err(e) = spawn_actors(rt, &mut commands, &mut level.0, &scene, &mut meshes, &mut images, &mut materials, &mut buffers) {\n"
+        },
+        {
+          "old": "/// VR: the scene has an actor to see through (Ratchet, or Clank's scene classes 10 / 0x555).\n#[cfg(feature = \"vr\")]\npub(crate) fn has_view_actor(rt: &SceneRuntime) -> bool {\n    rt.actors.iter().any(|a| matches!(a.o_class, 0 | 10 | 0x555))\n",
+          "new": "/// VR: the scene has an actor to see through (Ratchet, or in a body Clank's scene classes 10 / 0x555).\n#[cfg(feature = \"vr\")]\npub(crate) fn has_view_actor(rt: &SceneRuntime) -> bool {\n    rt.actors.iter().any(|a| a.o_class == 0 || (rt.vr_in_body && matches!(a.o_class, 10 | 0x555)))\n"
+        },
+        {
+          "old": "/// VR: a scene without Ratchet is seen through Clank's eyes (his scene classes 10 / 0x555).\n#[cfg(feature = \"vr\")]\nfn clank_view(rt: &SceneRuntime) -> bool {\n    !rt.actors.iter().any(|a| a.o_class == 0)\n",
+          "new": "/// VR: in a body, a scene without Ratchet is seen through Clank's eyes (his scene classes 10 / 0x555).\n#[cfg(feature = \"vr\")]\nfn clank_view(rt: &SceneRuntime) -> bool {\n    rt.vr_in_body && !rt.actors.iter().any(|a| a.o_class == 0)\n"
+        },
+        {
+          "old": "                    } else if clank_eye.is_none() {\n",
+          "new": "                    } else if inside_clank && clank_eye.is_none() {\n"
         }
       ]
     },
@@ -2975,6 +2999,34 @@
         {
           "old": "/// Draws the HUD's calls in order.\npub fn execute(out: &mut Hud2d, st: &mut TextState, glyphs: &[GlyphTable; 3], draws: &[Draw]) {\n",
           "new": "/// The pad icon drawn for \u2715 (text code 0x10): 0x10 itself, or another icon code whose glyph stands in for it while a\n/// port's input confirms with that control (VR's vendor, where the trigger buys and A jumps: crate::vr::vendor).\npub static CROSS_ICON: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0x10);\n\n/// Draws the HUD's calls in order.\npub fn execute(out: &mut Hud2d, st: &mut TextState, glyphs: &[GlyphTable; 3], draws: &[Draw]) {\n    let cross = CROSS_ICON.load(std::sync::atomic::Ordering::Relaxed) as usize;\n    let swapped: [GlyphTable; 3];\n    let glyphs = if cross != 0x10 {\n        swapped = glyphs.clone().map(|mut t| {\n            t[0x10] = t[cross];\n            t\n        });\n        &swapped\n    } else {\n        glyphs\n    };\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-game/src/moby_update/classes/units/veldin_cutaway.rs",
+      "expectedBlobSha": "0235e9df953e37d19f8d2a2fd81fc2dd160d41f8",
+      "replacements": [
+        {
+          "old": "                if w.hero.state == HELD {\n",
+          "new": "                // VR: the cutaway leaves the player in control (rc_game::tick drops its holds), so Ratchet is never\n                // in the hold; waiting for it kept the screen black for the whole glide.\n                if w.hero.state == HELD || w.hero.tracked.enabled {\n"
+        }
+      ]
+    },
+    {
+      "path": "crates/rc-game/src/moby_update/classes/units/veldin_pads.rs",
+      "expectedBlobSha": "f944535db91ae0012358b18718576ce9f823ee7e",
+      "replacements": [
+        {
+          "old": "            if on_it(w, id) && w.hero.state == PRESS {\n                w.mm(id).state = 3;\n                w.play_sound(0, 0, id);\n                release_voice(w, id);\n            } else if w.hero.state != 0x72 {\n",
+          "new": "            // VR: the camera directors leave the player in control (rc_game::tick drops their holds), so the\n            // countdown also stops while their letterbox is up, as it does for the held Ratchet.\n            let held = w.hero.state == 0x72 || (w.hero.tracked.enabled && w.svc.creatures.cutscene);\n            if on_it(w, id) && w.hero.state == PRESS {\n                println!(\"veldin: the countdown stopped by the button, {} ticks left\", c::pi32(w, id, button::COUNT));\n                w.mm(id).state = 3;\n                w.play_sound(0, 0, id);\n                release_voice(w, id);\n            } else if !held {\n"
+        },
+        {
+          "old": "    if w.m(id).state != 2 {\n        w.mm(id).state = 2;\n",
+          "new": "    if w.m(id).state != 2 {\n        println!(\"veldin: the countdown started, {t} ticks\");\n        w.mm(id).state = 2;\n"
+        },
+        {
+          "old": "        2 if w.m(id).pvars.len() >= button::SIZE && c::pi32(w, id, button::COUNT) == 0 => -1,\n",
+          "new": "        2 if w.m(id).pvars.len() >= button::SIZE && c::pi32(w, id, button::COUNT) == 0 => {\n            println!(\"veldin: the countdown ran out\");\n            -1\n        }\n"
         }
       ]
     }

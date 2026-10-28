@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-27T03:10:46.378782+00:00",
-  "delivery_status": "release_0_1_2_ready",
+  "updated_utc": "2026-10-28T09:05:11.636764+00:00",
+  "delivery_status": "release_0_1_3_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -24,8 +24,8 @@
   },
   "native_windows_build": {
     "profile": "release",
-    "executable_sha256": "D377EB6BBEFFBEE4D66B5D5AE4E09E3F5B60F708A21E32D95EBC01D49258B041",
-    "completed_utc": "2026-10-27T03:06:49.9490466Z",
+    "executable_sha256": "D1A068E1BDEDF2371A0126478B7CDD25DA619918C2B911A1ADE955BCAEC3A05E",
+    "completed_utc": "2026-10-28T02:17:17.0946469Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1545,6 +1545,27 @@
       "zip": "dist/RatchetVR-0.1.2.zip",
       "zip_sha256": "339C493B13A9187332A5ADAE7EB3CE75376D6B868B1FC4F7DC20F6E1BBF1DD45",
       "package_log": "work/vr/package-20261027-101004.log"
+    },
+    "headset_tested": true
+  },
+  "release_0_1_3": {
+    "reported_behavior": "Reported in the headset on Veldin's last platform (Drek): a black screen of 10 to 15 seconds on arrival, then being teleported into the button and dying almost at once, the game not finishable.",
+    "changes": [
+      "The countdown's camera shot (director 644) fades back in VR: it waited for Ratchet in the cinematics' hold 0x72, which VR never gives, so the view stayed black for the whole glide.",
+      "The countdown (586 in state 2) stops while a director's letterbox is up in VR, as it stops on the console while Ratchet is held.",
+      "A scene without Ratchet is seen through Clank's eyes only when the player is in a body (Clank, Giant Clank); otherwise from the scene's camera. Scene 7 (the countdown run out) posed Clank under the arena and VR showed it from inside his head.",
+      "The countdown logs its start, each press of the button with the ticks left, and its end (veldin: lines)."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release (non-VR cargo check, VR cargo check, Windows release build) and scripts/vr/Package.ps1 -Version 0.1.3 passed in the play build checkout (rerac-vr-build), which the package reproduces (manifest re-applied on the upstream blobs, overlay compared byte for byte). Desktop runs of level 18 with the countdown forced and the VR hero path enabled (the fade back in 15 ticks, the stomp stopping the countdown). Headset session by the user: nine countdowns logged, eight stopped by the button, the fight then reported working. No tests were run.",
+    "remaining_confirmation": "The scene-camera view of scene 7 in the headset.",
+    "recorded_utc": "2026-10-28T09:05:11.636764+00:00",
+    "binary_sha256": "D1A068E1BDEDF2371A0126478B7CDD25DA619918C2B911A1ADE955BCAEC3A05E",
+    "build_log": "work/vr/build-20261028-091342.log",
+    "release": {
+      "version": "0.1.3",
+      "zip": "dist/RatchetVR-0.1.3.zip",
+      "zip_sha256": "4C6946661D12FF0F6CD5748D7BFD82D4E540475860F529627EEA49AAEEF91E97",
+      "package_log": "work/vr/package-20261028-160444.log"
     },
     "headset_tested": true
   }
