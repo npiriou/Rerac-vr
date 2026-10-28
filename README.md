@@ -8,7 +8,7 @@
 
 <p align="center">
   <a href="https://www.youtube.com/watch?v=rdMAJ2T1JdA">
-    <img src="https://img.youtube.com/vi/rdMAJ2T1JdA/maxresdefault.jpg" alt="Ratchet & Clank VR trailer" width="720">
+    <img src="media/trailer.jpg" alt="Ratchet & Clank VR trailer (YouTube)" width="720">
   </a>
 </p>
 
