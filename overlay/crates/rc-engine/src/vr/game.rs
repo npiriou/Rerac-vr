@@ -140,16 +140,11 @@ pub(super) struct Rig {
     /// The hero's group and, on the hoverboard, his position of the last frame (its start and respawns teleport him).
     hero_group: i32,
     board_pos: Option<Vec3>,
-    /// On the hoverboard, the head's and the neck's room positions when the board was placed (or the view recentred):
-    /// the view stays anchored at the head's, as on a rail, and the lean is the neck's sideways offset from its own,
-    /// which follows a near-upright neck slowly ([`Rig::board_lean`]).
-    board_center: Option<(Vec3, Vec3)>,
-    /// This frame's lean on the hoverboard (−1 left .. 1 right).
-    board_lean: f32,
+    /// On the hoverboard, the head's room position when the board was placed (or the view recentred): the view stays
+    /// anchored there, as on a rail.
+    board_center: Option<Vec3>,
     /// Seconds left after the board was placed during which its front keeps easing to the player's body heading.
     board_align: f32,
-    /// Seconds left after the board was placed during which the lean's reference settles ([`BOARD_LEAN_SETTLE`]).
-    board_settle: f32,
     /// Ratchet's stance on the board (`super::body::stance_yaw` of the ride sequence) for the level it was measured on:
     /// the view on the board faces where his body does, side-on, not along the board.
     stance: Option<(u32, f32)>,
@@ -171,10 +166,9 @@ pub(crate) fn native_panel(play: &crate::gameplay::Play) -> bool {
         && !gold_bolt
 }
 impl Rig {
-    /// On the hoverboard, the player's lean (−1 left .. 1 right; 0 without lean steering): [`board_lean_of`] this
-    /// frame's neck offset.
-    pub(super) fn board_lean(&self, lean: bool) -> Option<f32> {
-        self.board_center.map(|_| if lean { self.board_lean } else { 0.0 })
+    /// On the hoverboard (once its view is anchored): the board steers about its own heading.
+    pub(super) fn board_heading(&self) -> bool {
+        self.board_center.is_some()
     }
     pub(super) fn cinematic_active(&self) -> bool {
         self.cinematic_root.is_some()
@@ -226,9 +220,9 @@ impl Rig {
         }
         let scale = scale * self.body_scale();
         let mut center = self.center?;
-        // With the Player body drawn in play, the eye stays on its head: on a rail or the board the lean steers but does
-        // not carry the view out of the body (it passed through the view).
-        let anchored = if super::body::in_play() { None } else { self.rail_center.or(self.board_center.map(|(head, _)| head)) };
+        // With the Player body drawn in play, the eye stays on its head: a lean on a rail or the board does not carry
+        // the view out of the body (it passed through the view).
+        let anchored = if super::body::in_play() { None } else { self.rail_center.or(self.board_center) };
         if let Some(head) = anchored.or(self.head) {
             center.x = head.x;
             center.z = head.z;
@@ -892,36 +886,10 @@ const BOARD_FOLLOW_RATE: f32 = 4.0;
 /// hands, not a glance) for this long (seconds), with this time constant.
 const BOARD_ALIGN_SECS: f32 = 2.0;
 const BOARD_ALIGN_FOLLOW: f32 = 0.25;
-/// The lean steering on the hoverboard: the neck's sideways offset (metres) below which the board goes straight and
-/// the offset that turns it at full rate, the response's linear share (the rest grows with the square, for gentle
-/// small leans), and the band (metres) within which the reference follows the neck (time constant, seconds), so an
-/// upright stance that drifted in the room does not steer.
-const BOARD_LEAN_DEAD: f32 = 0.015;
-const BOARD_LEAN_FULL: f32 = 0.12;
-const BOARD_LEAN_LINEAR: f32 = 0.45;
-const BOARD_LEAN_DRIFT: f32 = 0.03;
-const BOARD_LEAN_DRIFT_SECS: f32 = 3.0;
-/// Beyond that band the reference still follows the neck, slower (time constant, seconds): a held lean keeps turning
-/// the board through a curve, but a posture taken without meaning to steer (turning side-on to see ahead) returns to
-/// straight instead of steering one way for good.
-const BOARD_LEAN_HOLD_SECS: f32 = 6.0;
-/// After the board is placed (its start, a respawn), the player settles into the riding posture: for this long
-/// (seconds) the reference follows the neck closely (time constant, seconds) and the lean does not steer.
-const BOARD_LEAN_SETTLE: f32 = 1.0;
-const BOARD_LEAN_SETTLE_SECS: f32 = 0.15;
-/// The board's turn (−1 left .. 1 right) for a sideways neck offset (metres).
 /// VR Options' Play position, Seated: the view is lifted by this much (metres, about the eye's drop from standing to
 /// sitting), so that a seated player sees from Ratchet's standing eyes.
 const SEATED_LIFT: f32 = 0.45;
 
-fn board_lean_of(offset: f32) -> f32 {
-    let u = ((offset.abs() - BOARD_LEAN_DEAD) / (BOARD_LEAN_FULL - BOARD_LEAN_DEAD)).clamp(0.0, 1.0);
-    offset.signum() * (BOARD_LEAN_LINEAR * u + (1.0 - BOARD_LEAN_LINEAR) * u * u)
-}
-/// The neck, about which the head turns: looking around moves the eyes but barely the neck, leaning moves both.
-fn neck(head: &Transform) -> Vec3 {
-    head.translation + head.rotation * Vec3::new(0.0, -0.10, 0.08)
-}
 fn heading(rotation: Quat) -> f32 {
     let forward = rotation * Vec3::NEG_Z;
     (-forward.x).atan2(-forward.z)
@@ -977,7 +945,7 @@ fn align_body(
     }
     if play.as_ref().is_some_and(|p| matches!(p.game.hero.group, 0xf | rc_game::hero::hoverboard::GROUP)) {
         // Lean around the rail attachment; room-scale walking cannot push the capsule off its spline. On the hoverboard
-        // the lean steers (Rig::board_lean) and moves the eye, not the rider.
+        // a lean moves the eye, not the rider.
         rig.previous_head = None;
         return;
     }
@@ -1245,10 +1213,9 @@ fn follow_game_camera(
     }
     // The hoverboard: its start and its respawns place it along the course, so the player's body heading (not the
     // gaze of that instant) becomes the board's front, as a recentre does, and keeps easing to it for a moment. While
-    // riding, the view turns with the board (it steers about its own heading, `Tracked::board_lean`), so the player
+    // riding, the view turns with the board (it steers about its own heading, `Tracked::board_heading`), so the player
     // keeps facing the same way on the board without turning in the room. That way is Ratchet's body's: he rides
-    // side-on (`Rig::stance`), so the player looks over a shoulder to see ahead, and leans on the toes or the heels
-    // to turn.
+    // side-on (`Rig::stance`), so the player looks over a shoulder to see ahead.
     let group = play.game.hero.group;
     let on_board = group == rc_game::hero::hoverboard::GROUP;
     let index = crate::level_load::level_index();
@@ -1270,7 +1237,6 @@ fn follow_game_camera(
         rig.yaw = *rig.board_body.get_or_insert(body_yaw);
         rig.turn = 0.0;
         rig.board_center = None;
-        rig.board_settle = BOARD_LEAN_SETTLE;
         // Only the first ride eases to the body: the player has not taken a riding posture yet.
         rig.board_align = if first { BOARD_ALIGN_SECS } else { 0.0 };
         rig.revision = rig.revision.wrapping_add(1);
@@ -1289,27 +1255,11 @@ fn follow_game_camera(
             rig.board_body = Some(rig.yaw);
         }
     }
-    rig.board_lean = 0.0;
     if !on_board {
         rig.board_center = None;
         rig.board_align = 0.0;
     } else {
-        // The board's right in the room: the player's right turned back by the stance.
-        let side = Quat::from_rotation_y(rig.yaw - stance) * Vec3::X;
-        let at = neck(&head);
-        let settling = rig.board_settle > 0.0;
-        let (_, center) = rig.board_center.get_or_insert((head.translation, at));
-        let offset = (at - *center).dot(side);
-        let follow = if settling {
-            BOARD_LEAN_SETTLE_SECS
-        } else if offset.abs() < BOARD_LEAN_DRIFT {
-            BOARD_LEAN_DRIFT_SECS
-        } else {
-            BOARD_LEAN_HOLD_SECS
-        };
-        *center += (at - *center) * (1.0 - (-dt / follow).exp());
-        rig.board_settle = (rig.board_settle - dt).max(0.0);
-        rig.board_lean = if settling { 0.0 } else { board_lean_of(offset) };
+        rig.board_center.get_or_insert(head.translation);
     }
     rig.hero_group = group;
     rig.board_pos = on_board.then_some(board);

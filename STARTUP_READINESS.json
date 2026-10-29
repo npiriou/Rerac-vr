@@ -1,11 +1,11 @@
 {
-  "checked_utc": "2026-10-29T07:37:55.818647+00:00",
+  "checked_utc": "2026-10-29T16:12:18.300307+00:00",
   "implementation": "Original VR game with native headset heading, local-surface locomotion, physical spatial listener and rail-following camera",
-  "status": "vr_comfort_build_ready",
+  "status": "release_0_1_4_ready",
   "build": {
     "profile": "release",
-    "executable_sha256": "A87A00064B1416CF7A67F2DB5EED26E98331FB0B8519872D11EA4ED1E895EFF7",
-    "completed_utc": "2026-10-29T07:36:42.6269469Z",
+    "executable_sha256": "14EB3AB45FEEB4FC10F81C9FD4520A3F9F24CCF39236EFD2E8F5D8C37611ACB4",
+    "completed_utc": "2026-10-29T14:52:11.2183679Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1631,5 +1631,27 @@
     "binary_sha256": "A87A00064B1416CF7A67F2DB5EED26E98331FB0B8519872D11EA4ED1E895EFF7",
     "build_log": "work/vr/build-20261029-143245.log",
     "headset_tested": false
+  },
+  "release_0_1_4": {
+    "reported_behavior": "Player reports the hoverboard's lean steering unplayable, the race being made for the stick's quick corrections, then tries steering with the leading hand and finds it tiring: asks to remove the option and steer the hoverboard with the stick only. Then: Gaspar's cannons are harder to aim than Hoven's turret (Batalia's not tried yet): put them all on Hoven's model. Then: the hands show in the turret.",
+    "changes": [
+      "The hoverboard steers with the stick only: its x turns the board about its own heading at the native turn's rate times its amount (Tracked::board_heading, in place of Tracked::board_lean); the player's lean no longer steers.",
+      "VR Options' Hoverboard lean row is gone, with its setting (vr_board_lean, no longer read or written).",
+      "README: the hoverboard steers with the left stick; the lean and its option are no longer listed.",
+      "The manned turrets aimed with the right controller all turn at Hoven's turret's speeds (rc_game's hoven_turret::vr_yaw_speed and vr_pitch_speed: 150 deg/s across, accelerating at 240 and braking at 360 deg/s2; 70 deg/s up and down, 180 / 720): Gaspar's cannons turned at 100 deg/s across and 25 deg/s up and down, slowly reached (180 and 45 deg/s2), Batalia's turret at 180 and 60 deg/s. The stick, pushed, still turns each at its own speeds.",
+      "The hands and the held item are no longer drawn while a turret is manned (vr::embodied's present, as in a ship sequence)."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release (non-VR cargo check, VR cargo check, Windows release build) and scripts/vr/Package.ps1 -Version 0.1.4 passed in the play build checkout (rerac-vr-build), which the package reproduces. Played in the user's headset sessions (the hoverboard race, the turrets) before the release. No tests or gameplay scripts were run.",
+    "remaining_confirmation": "In the headset: Batalia's turret.",
+    "recorded_utc": "2026-10-29T16:12:18.300307+00:00",
+    "binary_sha256": "14EB3AB45FEEB4FC10F81C9FD4520A3F9F24CCF39236EFD2E8F5D8C37611ACB4",
+    "build_log": "work/vr/build-20261029-214935.log",
+    "release": {
+      "version": "0.1.4",
+      "zip": "dist/RatchetVR-0.1.4.zip",
+      "zip_sha256": "8C5813FB7FF2DD62B65465A5C6C3CC1B5D4B242867D824E1E0A70D87B0782EF6",
+      "package_log": "work/vr/package-20261029-231123.log"
+    },
+    "headset_tested": true
   }
 }

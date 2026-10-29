@@ -63,7 +63,7 @@ Please **don't report VR bugs to the ReRAC team**. They have nothing to do with 
 - **Swim with your arms,** breaststroke style.
 - **Turn bolt cranks for real:** put the wrench on the bolt, hold it and walk around it.
 - **Plug the Hydrodisplacer and Trespasser** into their slots by pushing them in.
-- **Ride the hoverboard by leaning** left and right (or use the stick).
+- **Ride the hoverboard side-on,** like Ratchet: the view follows the board as you steer with the stick.
 - On grind rails, the view follows the rail smoothly to stay comfortable.
 
 **Menus and feel**
@@ -160,7 +160,7 @@ Button names are for Meta Quest / PICO controllers. On other controllers, use th
 
 | Action | How |
 | --- | --- |
-| Steer | Lean left / right, or left stick |
+| Steer | Left stick, left / right |
 | Boost | **Left trigger** |
 | Shoot | **Right trigger** |
 | Jump | **A** |
@@ -187,7 +187,6 @@ Open **Options → VR Options** from the main menu or the pause menu:
 | Boots | See Ratchet's boots when you look down | On |
 | Camera flip | Your view spins with Ratchet's flips. Only for very strong stomachs! | Off |
 | Direction | What "forward" on the stick means: where your **body** faces, or where you **gaze** | Body |
-| Hoverboard lean | Steer the hoverboard by leaning | On |
 | Player body | See the body you play (Ratchet, Clank, Giant Clank or the Hologuise disguise) when you look down, without its head: **Cutscenes** in scenes and ship sequences, **Always** also while you play. **Off** still shows Ratchet's hands in scenes | Off |
 | Akimbo | A weapon in each hand. See **Akimbo** below | Off |
 | Play position | **Seated** lifts the view by about 45 cm, so you see from Ratchet's eyes sitting down. Your height is measured when play starts (or with F8): switch this when you sit down or stand up | Standing |

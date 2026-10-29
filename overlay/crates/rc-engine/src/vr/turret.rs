@@ -1,6 +1,7 @@
 //! The manned turrets in first person (Gaspar's cannons, Hoven's turret, Batalia's anti-aircraft turret): the turret
-//! turns toward where the right controller points (the gaze without it, the stick while it is pushed) at its own
-//! speeds (`rc_game::moby_update::creature::turn::aim_speed`), the trigger fires (super::game_input) and the eye sits
+//! turns toward where the right controller points (the gaze without it, the stick while it is pushed), all three at
+//! Hoven's turret's speeds (`rc_game::moby_update::classes::units::hoven_turret::vr_yaw_speed`), the trigger fires
+//! (super::game_input) and the eye sits
 //! at its seat, the view fixed while the turret turns beneath it (super::game).
 use super::{
     Settings,

@@ -24,10 +24,9 @@ pub struct Tracked {
     /// the motion carried once the stick is released): the native movement physics ran facing it
     /// ([`Hero::tracked_movement_facing`]).
     pub move_yaw: Option<Pf>,
-    /// VR on the hoverboard: the board steers about its own heading, by the stick's x plus this lean of the player's
-    /// body (−1 left .. 1 right; 0 without lean steering), not toward the stick's direction about the heading
-    /// (super::hoverboard). `None`: the native steering.
-    pub board_lean: Option<f32>,
+    /// VR on the hoverboard: the board steers about its own heading by the stick's x, not toward the stick's direction
+    /// about the camera's heading (super::hoverboard). `false`: the native steering.
+    pub board_heading: bool,
     pub view_origin: [f32; 3],
     pub hands: [Option<[f32; 3]>; 2],
     pub grips: [bool; 2],

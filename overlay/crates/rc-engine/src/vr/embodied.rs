@@ -1570,6 +1570,7 @@ fn present(
                     && p.game.hero.health > 0
                     && !p.death_pending
                     && super::game::ship_view(p).is_none()
+                    && super::turret::manned(p).is_none()
             });
     let bomb_glove = play.as_ref().and_then(|p| {
         let selected = rc_game::hero::items::is_glove(p.game.hero.items.slot.id);
