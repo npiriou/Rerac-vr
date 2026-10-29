@@ -102,6 +102,10 @@ pub(super) struct Rig {
     snap_held: bool,
     pub(super) revision: u64,
     reset_held: bool,
+    /// The height (`center.y`) is measured for this play (once: the first time play starts, then F8).
+    height_set: bool,
+    /// The VR Options' play position applied to `center.y` (true: seated, [`SEATED_LIFT`]).
+    seated: Option<bool>,
     eye_height: Option<f32>,
     /// How far the eye stays below the body during Clank's ledge climb (metres, see [`CLANK_CLIMB_RISE`]).
     climb_drop: f32,
@@ -352,12 +356,15 @@ pub fn prepare_game() -> anyhow::Result<()> {
         std::env::set_var("RC_FRONTEND", if s.mode.debug() { "0" } else { "1" });
         if s.mode.debug() {
             // The body launches: Orxon (10) hands the hero to Clank without the O2 Mask (super::blaster::grant
-            // withholds it); Quartu (15) starts on Giant Clank's pad (class 1451, its placed instance).
+            // withholds it); Quartu (15) starts on Giant Clank's pad (class 1451, its placed instance). The other debug
+            // launches start on `RC_VR_LEVEL` (Run.ps1's -Level), else Kerwan.
             let level = match s.mode {
-                super::LaunchMode::DebugClank => "10",
-                super::LaunchMode::DebugGiant => "15",
-                _ if s.scene == "kerwan" => "3",
-                _ => "1",
+                super::LaunchMode::DebugClank => "10".to_string(),
+                super::LaunchMode::DebugGiant => "15".to_string(),
+                _ => std::env::var("RC_VR_LEVEL")
+                    .ok()
+                    .filter(|v| v.trim().parse::<u32>().is_ok())
+                    .unwrap_or_else(|| if s.scene == "kerwan" { "3" } else { "1" }.to_string()),
             };
             std::env::set_var("RC_LEVEL", level);
             if s.mode == super::LaunchMode::DebugGiant && std::env::var_os("RC_HERO_AT").is_none() {
@@ -883,6 +890,10 @@ const BOARD_LEAN_LINEAR: f32 = 0.45;
 const BOARD_LEAN_DRIFT: f32 = 0.03;
 const BOARD_LEAN_DRIFT_SECS: f32 = 3.0;
 /// The board's turn (−1 left .. 1 right) for a sideways neck offset (metres).
+/// VR Options' Play position, Seated: the view is lifted by this much (metres, about the eye's drop from standing to
+/// sitting), so that a seated player sees from Ratchet's standing eyes.
+const SEATED_LIFT: f32 = 0.45;
+
 fn board_lean_of(offset: f32) -> f32 {
     let u = ((offset.abs() - BOARD_LEAN_DEAD) / (BOARD_LEAN_FULL - BOARD_LEAN_DEAD)).clamp(0.0, 1.0);
     offset.signum() * (BOARD_LEAN_LINEAR * u + (1.0 - BOARD_LEAN_LINEAR) * u * u)
@@ -919,7 +930,18 @@ fn align_body(
     play: Option<ResMut<crate::gameplay::Play>>,
     level: Res<crate::Level>,
     mut rig: ResMut<Rig>,
+    options: Option<Res<crate::render_settings::VrOptions>>,
 ) {
+    // A change of the play position lifts the view (seated) or lowers it back by SEATED_LIFT.
+    let seated = options.as_ref().is_some_and(|o| o.seated);
+    if let Some(was) = rig.seated.filter(|&was| was != seated) {
+        if let Some(center) = rig.center.as_mut() {
+            center.y += if was { SEATED_LIFT } else { -SEATED_LIFT };
+            rig.revision = rig.revision.wrapping_add(1);
+            println!("VR_GAME play position seated={seated}: view {}", if seated { "lifted" } else { "lowered" });
+        }
+    }
+    rig.seated = Some(seated);
     if !settings.desktop_preview && !focus.as_ref().is_some_and(|f| f.0) {
         rig.previous_head = None;
         return;
@@ -944,9 +966,15 @@ fn align_body(
         .replace(neck)
         .or(rig.rail_center.take());
     let Some(previous) = previous else {
-        // Rebase after focus/menu changes instead of moving the avatar from an old desk/room pose.
-        if let Some(center) = rig.center.as_mut() {
-            center.y = head.translation.y;
+        // Rebase after focus/menu changes instead of moving the avatar from an old desk/room pose. The height is measured
+        // once, the first time play starts (the headset may not be on at launch; then F8), so that ducking stays ducking
+        // and the play position's lift holds: the head of that moment is at Ratchet's eyes, seated or standing.
+        if !rig.height_set {
+            if let Some(center) = rig.center.as_mut() {
+                center.y = head.translation.y;
+            }
+            rig.height_set = true;
+            println!("VR_GAME height measured: head={:.2} seated={}", head.translation.y, rig.seated == Some(true));
         }
         rig.revision = rig.revision.wrapping_add(1);
         return;

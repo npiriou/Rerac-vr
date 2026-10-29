@@ -1,7 +1,8 @@
 //! Physical punches request the original horizontal Walloper lunge.
-//! A punch is the right hand thrown forward, relative to the head (the body walking or turning is not a punch), within
-//! about 55° of where the player faces and away from the body: an arm folding back, a sideways swing or a backward
-//! step never punches. The lunge itself goes where the player faces (rc-game `tracked_lunge_yaw`).
+//! A punch is the hand holding the Walloper thrown forward, relative to the head (the body walking or turning is not a
+//! punch), within about 55° of where the player faces and away from the body: an arm folding back, a sideways swing or
+//! a backward step never punches. The lunge itself goes where the player faces (rc-game `tracked_lunge_yaw`). With
+//! Akimbo the left hand's Walloper punches too (its lunge led by the left hand: rc_game::hero::off_hand).
 use super::{
     Settings,
     embodied::{Motion, game_point, gameplay},
@@ -14,7 +15,7 @@ use std::collections::VecDeque;
 pub(super) struct WalloperPlugin;
 #[derive(Default)]
 struct Punch {
-    /// The right hand relative to the head (tracking space), and when: its velocity is the arm's alone.
+    /// The hand relative to the head (tracking space), and when: its velocity is the arm's alone.
     samples: VecDeque<(f64, Vec3)>,
     /// Where the current stroke started (relative to the head).
     rest: Option<Vec3>,
@@ -57,41 +58,92 @@ fn update(
     settings: Res<Settings>,
     mode: Res<crate::menu_render::MenuMode>,
     time: Res<Time<Real>>,
-    mut punch: Local<Punch>,
-    input: Option<Res<super::game_input::HandInput>>,
+    mut punches: Local<[Punch; 2]>,
+    (input, pad): (Option<Res<super::game_input::HandInput>>, Option<Res<super::game_input::GamePad>>),
     views: Option<Res<OxrViews>>,
 ) {
     let Some(mut play) = play else { return };
     let p = &mut *play;
     // The game takes the punch when it enters the lunge; one still pending is offered again until it expires.
     if p.game.hero.walloper.tracked_punch.is_none() {
-        punch.queued = None;
+        for punch in punches.iter_mut() {
+            punch.queued = None;
+        }
     }
+    p.game.hero.walloper.tracked_until = 0;
     let root = rig.root_for(&p.game, settings.units_per_metre);
     let head = super::game::pose(views.as_deref());
-    let usable = !settings.desktop_preview
+    let hero = &p.game.hero;
+    let common = !settings.desktop_preview
         && gameplay(&mode)
-        && p.game.hero.mode == 0
-        && p.game.hero.health > 0
-        && matches!(p.game.hero.group, 0 | 1 | 2 | 4 | 5 | 6)
-        && !p.game.hero.tracked.grabbed.iter().any(|&g| g)
+        && hero.mode == 0
+        && hero.health > 0
+        && matches!(hero.group, 0 | 1 | 2 | 4 | 5 | 6)
+        && !hero.tracked.grabbed.iter().any(|&g| g)
         && !p.death_pending
-        && !p.game.hero.hand_hidden()
-        && p.game.hero.items.slot.id == rc_game::hero::walloper::WALLOPER
-        && p.game.hero.items.slot.state == 2
-        && p.game.hero.items.tracked_aim.is_some();
+        && !hero.hand_hidden();
+    let walloper = rc_game::hero::walloper::WALLOPER;
+    // The left hand's Walloper (Akimbo), the hand's.
+    let usable = [
+        common && hero.off_hand.held() == walloper && hero.off_hand.items.tracked_aim.is_some(),
+        common && hero.items.slot.id == walloper && hero.items.slot.state == 2 && hero.items.tracked_aim.is_some(),
+    ];
+    // Where the player faces (the heading the stick and the hero follow: the body or the gaze), in tracking space.
+    let facing = root.zip(head).map(|(root, head)| {
+        hero.tracked
+            .navigation
+            .map(|v| {
+                let f = rc_game::hero::physics::to_f32x3(v.rows[0]);
+                root.rotation.inverse() * Vec3::new(f[0], f[2], -f[1])
+            })
+            .unwrap_or(*head.forward())
+            .with_y(0.0)
+            .normalize_or_zero()
+    });
+    // Each hand's own trigger is its native lunge.
+    let triggers = [
+        pad.as_ref().is_some_and(|i| i.left_fire),
+        input.as_ref().and_then(|i| i.trigger).is_some_and(|v| v > 0.6),
+    ];
     let level = crate::level_load::level_index();
-    let (Some(root), Some(head), Some(hand), true) = (root, head, motion.hands[1], usable) else {
-        reset(&mut punch, p, &rig, level);
-        return;
-    };
-    if punch.revision != rig.revision || punch.level != level || p.game.counter < punch.last_tick {
-        reset(&mut punch, p, &rig, level);
-        return;
-    }
-    punch.last_tick = p.game.counter;
     let now = time.elapsed_secs_f64();
-    let relative = hand.translation - head.translation;
+    for side in 0..2 {
+        let punch = &mut punches[side];
+        let (Some(head), Some(hand), Some(facing), true) = (head, motion.hands[side], facing, usable[side]) else {
+            reset(punch, p.game.counter, &rig, level);
+            continue;
+        };
+        if punch.revision != rig.revision || punch.level != level || p.game.counter < punch.last_tick {
+            reset(punch, p.game.counter, &rig, level);
+            continue;
+        }
+        punch.last_tick = p.game.counter;
+        if facing != Vec3::ZERO {
+            stroke(punch, side, hand.translation - head.translation, facing, triggers[side], now);
+        }
+    }
+    // The newest punch not yet taken.
+    let offer = punches
+        .iter()
+        .enumerate()
+        .filter_map(|(side, punch)| punch.queued.filter(|&(until, _)| now < until).map(|(until, d)| (until, d, side)))
+        .max_by(|a, b| a.0.total_cmp(&b.0));
+    for punch in punches.iter_mut() {
+        if punch.queued.is_some_and(|(until, _)| now >= until) {
+            punch.queued = None;
+        }
+    }
+    p.game.hero.walloper.tracked_punch = offer.zip(root).map(|((_, direction, side), root)| {
+        rc_game::hero::walloper::TrackedPunch {
+            direction: game_point(root.rotation * direction),
+            begin: true,
+            left: side == 0,
+        }
+    });
+}
+
+/// One tick of a hand's stroke (`relative`: the hand relative to the head, tracking space): a punch is queued.
+fn stroke(punch: &mut Punch, side: usize, relative: Vec3, facing: Vec3, trigger: bool, now: f64) {
     // A gap or a jump in the poses (tracking loss, recentring): the stroke starts over.
     if punch
         .samples
@@ -113,24 +165,8 @@ fn update(
         Some(&(t, p)) if now - t > 0.008 => (relative - p) / (now - t) as f32,
         _ => Vec3::ZERO,
     };
-    // Where the player faces (the heading the stick and the hero follow: the body or the gaze), in tracking space.
-    let facing = p
-        .game
-        .hero
-        .tracked
-        .navigation
-        .map(|v| {
-            let f = rc_game::hero::physics::to_f32x3(v.rows[0]);
-            root.rotation.inverse() * Vec3::new(f[0], f[2], -f[1])
-        })
-        .unwrap_or(*head.forward())
-        .with_y(0.0)
-        .normalize_or_zero();
-    if facing == Vec3::ZERO {
-        return;
-    }
     // A trigger press is the native lunge: no gesture punch on top of it for 0.3 s.
-    if input.as_ref().and_then(|i| i.trigger).is_some_and(|v| v > 0.6) {
+    if trigger {
         punch.trigger.get_or_insert(now);
     } else {
         punch.trigger = None;
@@ -165,29 +201,18 @@ fn update(
         let direction = velocity.with_y(0.0).normalize_or(facing);
         punch.queued = Some((now + 0.45, direction));
         println!(
-            "VR_GAME walloper_physical_punch speed={speed:.2} along={:.2} away={:.2}",
+            "VR_GAME walloper_physical_punch side={side} speed={speed:.2} along={:.2} away={:.2}",
             along / speed,
             away / speed
         );
     }
-    p.game.hero.walloper.tracked_punch = match punch.queued {
-        Some((until, direction)) if now < until => Some(rc_game::hero::walloper::TrackedPunch {
-            direction: game_point(root.rotation * direction),
-            begin: true,
-        }),
-        _ => {
-            punch.queued = None;
-            None
-        }
-    };
 }
-fn reset(punch: &mut Punch, p: &mut crate::gameplay::Play, rig: &Rig, level: u32) {
+
+fn reset(punch: &mut Punch, tick: u64, rig: &Rig, level: u32) {
     *punch = Punch {
         revision: rig.revision,
         level,
-        last_tick: p.game.counter,
+        last_tick: tick,
         ..default()
     };
-    p.game.hero.walloper.tracked_punch = None;
-    p.game.hero.walloper.tracked_until = 0;
 }

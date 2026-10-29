@@ -87,7 +87,15 @@ fn targets(rt: &crate::menu_render::MenuRt, saved: &crate::gameplay::Persistent)
     };
     // Match the actual native dialog labels, so memory-card and confirmation buttons
     // keep their measured positions and original Cross/Circle/Triangle semantics.
+    // A label drawn in a page's panel (the overwrite confirmation's "Yes" / "No") is relative to the panel, as the
+    // menu layer draws it (crate::menu_render).
+    let (mut ox, mut oy) = (0, 0);
     for draw in &rt.draws {
+        match draw {
+            rc_game::menus::MenuDraw::PanelBegin { x, y, .. } => (ox, oy) = (*x, *y),
+            rc_game::menus::MenuDraw::PanelEnd => (ox, oy) = (0, 0),
+            _ => {}
+        }
         if let rc_game::menus::MenuDraw::Hud(rc_game::hud::Draw::Text {
             font, x, y, text, ..
         }) = draw
@@ -107,8 +115,8 @@ fn targets(rt: &crate::menu_render::MenuRt, saved: &crate::gameplay::Persistent)
             if let Some(key) = key {
                 let t = make(
                     [
-                        *x as f32 - 8.0,
-                        *y as f32 - 5.0,
+                        (*x + ox) as f32 - 8.0,
+                        (*y + oy) as f32 - 5.0,
                         rt.assets.width(*font, text) as f32 + 16.0,
                         26.0,
                     ],

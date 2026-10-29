@@ -35,6 +35,10 @@ pub(super) struct SupportGrip {
     revision: u64,
 }
 impl SupportGrip {
+    /// Whether the left hand at `left` (tracking space) holds, or would take, the two-handed weapon's foregrip.
+    pub(super) fn reaches(&self, right: Transform, left: Transform) -> bool {
+        self.held || (self.two_handed && left.translation.distance(support_point(right, self)) < 0.25)
+    }
     /// Forget the one-handed weapon's inertia.
     fn release(&mut self) {
         self.rotation = None;
@@ -55,7 +59,7 @@ const HEAVY_SAG: f32 = 0.015;
 /// Authored model coordinates in game units, measured on the original held meshes.
 /// Local X is top, -Y is forward, Z is lateral for gun-shaped items.
 /// Handheld panels have their own orientation below. Grip placement never follows animated output joints.
-fn grip(class: i16) -> Option<Vec3> {
+pub(super) fn grip(class: i16) -> Option<Vec3> {
     Some(match class {
         157 => Vec3::new(0.0, -0.04, 0.0), // Devastator: rear trigger hold, side handle stays available.
         163 => Vec3::new(0.0, -0.18, 0.0),
@@ -342,6 +346,7 @@ fn aim(
     mut support: ResMut<SupportGrip>,
     attach: Option<Res<crate::moby_attach::MobyAttach>>,
     mut contact: Local<super::solid_contact::History>,
+    akimbo: Res<super::akimbo::Akimbo>,
 ) {
     let Some(mut play) = play else { return };
     let p = &mut *play;
@@ -404,7 +409,9 @@ fn aim(
         .as_ref()
         .is_some_and(|d| d.def(id).b18 == 2);
     let left = motion.hands[0];
-    let grip = hand_input.as_ref().and_then(|i| i.left_grip).unwrap_or(0.0);
+    // Akimbo: a left hand holding its own item or a glove supports nothing.
+    let busy = p.game.hero.off_hand.item().is_some() || rc_game::hero::items::is_glove(akimbo.held);
+    let grip = if busy { 0.0 } else { hand_input.as_ref().and_then(|i| i.left_grip).unwrap_or(0.0) };
     if !two_handed || support.weapon != id || grip < 0.35 || left.is_none() {
         if support.weapon != id {
             support.release();

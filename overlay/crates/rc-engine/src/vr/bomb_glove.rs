@@ -1,4 +1,5 @@
-//! Trigger prepares one native Bomb Glove projectile; a tracked release supplies its launch velocity.
+//! Trigger prepares one native Bomb Glove projectile; a tracked release supplies its launch velocity. With Akimbo
+//! (super::akimbo) the left hand throws its own glove the same way, on the left trigger ([`LeftBomb`]).
 use super::{
     Settings,
     embodied::{BombGesture, Motion, game_point, gameplay, unobstructed},
@@ -24,6 +25,9 @@ pub(super) struct HeldBomb {
     level: u32,
     last_tick: u64,
 }
+/// The left hand's held bomb (Akimbo: the left hand's pick is a glove).
+#[derive(Resource, Default)]
+pub(super) struct LeftBomb(pub HeldBomb);
 #[derive(Default)]
 struct Recall {
     weapon: Option<i32>,
@@ -32,22 +36,33 @@ struct Recall {
 }
 impl Plugin for BombGlovePlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<HeldBomb>().add_systems(
-            FixedUpdate,
-            update.in_set(BombUpdate).before(crate::gameplay::GameTick),
-        );
+        app.init_resource::<HeldBomb>()
+            .init_resource::<LeftBomb>()
+            .add_systems(
+                FixedUpdate,
+                (update, left_update).in_set(BombUpdate).before(crate::gameplay::GameTick),
+            )
+            .add_systems(
+                PostUpdate,
+                follow_left
+                    .after(super::solid_contact::Presented)
+                    .before(crate::gameplay::upload),
+            );
     }
 }
 
 pub(super) fn palm_point(hand: Transform, root: Transform, scale: f32) -> Transform {
-    let mut world = root.mul_transform(hand);
-    // -X is the hollow of the right glove; move 8 cm farther forward from the inner wrist into the palm.
-    world.translation += world.rotation * Vec3::new(-0.135, 0.01, -0.125) * scale;
-    world
+    point(hand, root, scale, 1)
 }
 
-fn point(hand: Transform, root: Transform, scale: f32) -> Transform {
-    palm_point(hand, root, scale)
+/// The palm of the glove on controller `side` (0 left, 1 right).
+fn point(hand: Transform, root: Transform, scale: f32, side: usize) -> Transform {
+    let mut world = root.mul_transform(hand);
+    // -X is the hollow of the right glove (+X of the left one); move 8 cm farther forward from the inner wrist into the
+    // palm.
+    let x = if side == 1 { -0.135 } else { 0.135 };
+    world.translation += world.rotation * Vec3::new(x, 0.01, -0.125) * scale;
+    world
 }
 
 fn solid_point(
@@ -57,8 +72,9 @@ fn solid_point(
     root: Transform,
     scale: f32,
     history: &mut super::solid_contact::History,
+    side: usize,
 ) -> Transform {
-    let mut pose = point(hand, root, scale);
+    let mut pose = point(hand, root, scale, side);
     let palm = root.mul_transform(hand).translation;
     let eye =
         crate::tfrag_render::game_to_bevy(p.game.hero.position()) + root.rotation * Vec3::Y * super::game::RATCHET_EYE;
@@ -332,6 +348,7 @@ fn update(
         root,
         settings.units_per_metre,
         &mut recall.contact,
+        1,
     );
     let eye = rig.body_eye(&p.game);
     if !unobstructed(p, coll, eye, pose.translation) {
@@ -351,39 +368,12 @@ fn update(
         cancel(p, &mut held);
         return;
     };
-    let item = item_id as usize;
-    let object_class = object_class(item_id, gold_decoy(p));
     if held.id.is_none() && press.is_some() && (motion.bomb.held || release.is_some()) {
-        if saved.0.global.owned[item] == 0 || saved.0.global.ammo[item] <= 0 {
-            empty(p, game_point(pose.translation));
-            return;
-        }
-        if p.classes.info(object_class).is_none() {
-            return;
-        }
-        if let Some(id) = bomb::create_from_hero(
-            &mut p.game.mobys,
-            &mut p.svc,
-            &*p.classes,
-            object_class,
-            p.game.counter,
-        ) {
-            initialise(p, id, item_id, game_point(pose.translation));
-            let m = &mut p.game.mobys.mobys[id];
-            // While held, the XR hand owns the pose. Suspend the original update (including its glove-slot
-            // deletion check); release restores the native flight, fuse, collisions, explosion and damage.
-            m.mode |= mode::NO_UPDATE;
-            m.coll_disable = 1;
-            m.glow = 0xff9f_9f9f;
-            held.id = Some(id);
-            held.item = item_id;
-            println!(
-                "VR_GAME throw_glove_prepare item={item_id} moby={id} ammo={}",
-                saved.0.global.ammo[item]
-            );
-        }
+        prepare(p, &mut saved, &mut held, item_id, pose.translation);
     }
-    let Some(id) = held.id else { return };
+    if held.id.is_none() {
+        return;
+    }
     if let Some((hand, velocity, _)) = release {
         let launch = solid_point(
             p,
@@ -392,90 +382,281 @@ fn update(
             root,
             settings.units_per_metre,
             &mut recall.contact,
+            1,
         );
         if !unobstructed(p, coll, eye, launch.translation) {
             cancel(p, &mut held);
             return;
         }
-        // The original engine copies saved ammo into the hero before GameTick: update both mirrors now,
-        // and let its normal post-tick path persist the use-ammo statistics once.
-        let w = &mut p.game.hero.weapons;
-        w.ammo[item] = saved.0.global.ammo[item];
-        w.uses_ammo[item] = true;
-        if saved.0.global.owned[item] == 0 || !w.use_ammo(item_id, 1) {
-            cancel(p, &mut held);
-            return;
-        }
-        saved.0.global.ammo[item] = w.ammo[item];
-        w.throws += 1;
-        // Tracking motion determines direction and strength. Locomotion is inherited only after a valid
-        // release gesture, so moving the stick alone can never launch a bomb.
-        let v = (root.rotation * velocity * (3.0 * settings.units_per_metre))
-            .clamp_length_max(18.0 * settings.units_per_metre)
-            / 60.0;
-        let inherited = rc_game::hero::physics::to_f32x3(p.game.hero.disp);
-        let v = game_point(v);
-        let m = &mut p.game.mobys.mobys[id];
-        pvar::set_v4f(
-            &mut m.pvars,
-            if item_id == 25 {
-                decoy::pv::VEL
-            } else {
-                bomb::pv::VEL
-            },
-            [
-                v[0] + inherited[0],
-                v[1] + inherited[1],
-                v[2] + inherited[2],
-                0.0,
-            ],
-        );
-        // The XR gesture supplies the aim; suppress the flat game's automatic landing-preview reticle.
-        if item_id == BOMB_GLOVE {
-            pvar::set_i16(&mut m.pvars, bomb::pv::FLAG56, 1);
-        }
-        match item_id {
-            17 => mine::release(
-                &mut p.game.mobys,
-                id,
-                &mut p.game.rng,
-                game_point(launch.translation),
-            ),
-            20 => doom_canister::release(
-                &mut p.game.mobys.mobys[id],
-                game_point(launch.translation),
-                None,
-            ),
-            25 => decoy::release(
-                &mut p.game.mobys.mobys[id],
-                game_point(launch.translation),
-                None,
-            ),
-            _ => bomb::release(
-                &mut p.game.mobys.mobys[id],
-                game_point(launch.translation),
-                None,
-            ),
-        }
-        let m = &mut p.game.mobys.mobys[id];
-        // Native thrown bombs keep their passive collider disabled; fly() performs the explicit
-        // projectile sweep and explosion tests. Do not turn the bomb into a solid obstacle.
-        m.mode &= !mode::NO_UPDATE;
-        p.svc.build_matrix_in(&mut p.game.mobys, &*p.classes, id);
-        p.game.hero.fx.item_voices.push(SoundCmd::Voice {
-            index: rc_game::hero::weapons::THROW_VOICE,
-            flags: 0,
-        });
-        held.id = None;
-        println!(
-            "VR_GAME throw_glove_throw item={item_id} moby={id} ammo={} velocity={v:?}",
-            saved.0.global.ammo[item]
-        );
+        throw(p, &mut saved, &mut held, root, settings.units_per_metre, launch.translation, velocity);
     } else if motion.bomb.held {
-        p.tracked_bomb_pose(id, game_point(pose.translation), rotation(&pose));
+        hold(p, &level, held.id.unwrap(), game_point(pose.translation), rotation(&pose));
     } else {
         // Slow release cancels the preparation; ammunition is consumed only by an actual throw.
         cancel(p, &mut held);
+    }
+}
+
+/// The held projectile at the palm `point` with `rotation`. The Decoy Glove's ball is not modelled about its origin:
+/// the centre of its drawn pose (the mean of its joints' translations) is put at the palm instead. Not its sequence's
+/// bounding sphere: that one bounds the whole animation, the inflated decoy included, and put the ball far off.
+fn hold(p: &mut crate::gameplay::Play, level: &crate::Level, id: usize, point: [f32; 3], rotation: [f32; 3]) {
+    if !p.tracked_bomb_pose(id, point, rotation) {
+        return;
+    }
+    let m = &p.game.mobys.mobys[id];
+    if !matches!(m.o_class, decoy::CLASS | decoy::GOLD_CLASS) {
+        return;
+    }
+    let mobys = &level.0.mobys;
+    let Some(ci) = mobys.classes.iter().position(|c| c.o_class as i16 == m.o_class) else {
+        return;
+    };
+    let class = &mobys.anim[ci];
+    let joints = rc_game::collision_query::pose_joints(Some(class), &m.anim, None, class.joint_count);
+    if joints.is_empty() {
+        return;
+    }
+    let n = joints.len() as f32;
+    let s = [0, 1, 2].map(|k| joints.iter().map(|j| f32::from_bits(j[k])).sum::<f32>() / n);
+    let c = [0, 1, 2].map(|k| s[k] * m.scale / 1024.0);
+    let off = [0, 1, 2].map(|k| m.rows[0][k] * c[0] + m.rows[1][k] * c[1] + m.rows[2][k] * c[2]);
+    p.tracked_bomb_pose(id, [0, 1, 2].map(|k| point[k] - off[k]), rotation);
+}
+
+/// A glove's projectile created in the palm (at `at`, the world) and held there: none without its ammo (the empty
+/// click).
+fn prepare(p: &mut crate::gameplay::Play, saved: &mut crate::gameplay::Persistent, held: &mut HeldBomb, item_id: i32, at: Vec3) {
+    let item = item_id as usize;
+    let object_class = object_class(item_id, gold_decoy(p));
+    if saved.0.global.owned[item] == 0 || saved.0.global.ammo[item] <= 0 {
+        empty(p, game_point(at));
+        return;
+    }
+    if p.classes.info(object_class).is_none() {
+        return;
+    }
+    if let Some(id) = bomb::create_from_hero(
+        &mut p.game.mobys,
+        &mut p.svc,
+        &*p.classes,
+        object_class,
+        p.game.counter,
+    ) {
+        initialise(p, id, item_id, game_point(at));
+        let m = &mut p.game.mobys.mobys[id];
+        // While held, the XR hand owns the pose. Suspend the original update (including its glove-slot
+        // deletion check); release restores the native flight, fuse, collisions, explosion and damage.
+        m.mode |= mode::NO_UPDATE;
+        m.coll_disable = 1;
+        m.glow = 0xff9f_9f9f;
+        held.id = Some(id);
+        held.item = item_id;
+        println!(
+            "VR_GAME throw_glove_prepare item={item_id} moby={id} ammo={}",
+            saved.0.global.ammo[item]
+        );
+    }
+}
+
+/// The held projectile thrown from `launch` (the world) with the hand's tracking-space `velocity`: one ammo, the
+/// native flight.
+fn throw(
+    p: &mut crate::gameplay::Play,
+    saved: &mut crate::gameplay::Persistent,
+    held: &mut HeldBomb,
+    root: Transform,
+    units_per_metre: f32,
+    launch: Vec3,
+    velocity: Vec3,
+) {
+    let (Some(id), item_id) = (held.id, held.item) else { return };
+    let item = item_id as usize;
+    // The original engine copies saved ammo into the hero before GameTick: update both mirrors now,
+    // and let its normal post-tick path persist the use-ammo statistics once.
+    let w = &mut p.game.hero.weapons;
+    w.ammo[item] = saved.0.global.ammo[item];
+    w.uses_ammo[item] = true;
+    if saved.0.global.owned[item] == 0 || !w.use_ammo(item_id, 1) {
+        cancel(p, held);
+        return;
+    }
+    saved.0.global.ammo[item] = w.ammo[item];
+    w.throws += 1;
+    // Tracking motion determines direction and strength. Locomotion is inherited only after a valid
+    // release gesture, so moving the stick alone can never launch a bomb.
+    let v = (root.rotation * velocity * (3.0 * units_per_metre))
+        .clamp_length_max(18.0 * units_per_metre)
+        / 60.0;
+    let inherited = rc_game::hero::physics::to_f32x3(p.game.hero.disp);
+    let v = game_point(v);
+    let m = &mut p.game.mobys.mobys[id];
+    pvar::set_v4f(
+        &mut m.pvars,
+        if item_id == 25 {
+            decoy::pv::VEL
+        } else {
+            bomb::pv::VEL
+        },
+        [
+            v[0] + inherited[0],
+            v[1] + inherited[1],
+            v[2] + inherited[2],
+            0.0,
+        ],
+    );
+    // The XR gesture supplies the aim; suppress the flat game's automatic landing-preview reticle.
+    if item_id == BOMB_GLOVE {
+        pvar::set_i16(&mut m.pvars, bomb::pv::FLAG56, 1);
+    }
+    match item_id {
+        17 => mine::release(
+            &mut p.game.mobys,
+            id,
+            &mut p.game.rng,
+            game_point(launch),
+        ),
+        20 => doom_canister::release(
+            &mut p.game.mobys.mobys[id],
+            game_point(launch),
+            None,
+        ),
+        25 => decoy::release(
+            &mut p.game.mobys.mobys[id],
+            game_point(launch),
+            None,
+        ),
+        _ => bomb::release(
+            &mut p.game.mobys.mobys[id],
+            game_point(launch),
+            None,
+        ),
+    }
+    let m = &mut p.game.mobys.mobys[id];
+    // Native thrown bombs keep their passive collider disabled; fly() performs the explicit
+    // projectile sweep and explosion tests. Do not turn the bomb into a solid obstacle.
+    m.mode &= !mode::NO_UPDATE;
+    p.svc.build_matrix_in(&mut p.game.mobys, &*p.classes, id);
+    p.game.hero.fx.item_voices.push(SoundCmd::Voice {
+        index: rc_game::hero::weapons::THROW_VOICE,
+        flags: 0,
+    });
+    held.id = None;
+    println!(
+        "VR_GAME throw_glove_throw item={item_id} moby={id} ammo={} velocity={v:?}",
+        saved.0.global.ammo[item]
+    );
+}
+
+/// The left hand's throw (Akimbo, its pick a glove: super::akimbo): the left trigger prepares the projectile in the
+/// left palm, a tracked release of the trigger throws it, as the hand's above.
+#[allow(clippy::too_many_arguments)]
+fn left_update(
+    play: Option<ResMut<crate::gameplay::Play>>,
+    level: Res<crate::Level>,
+    settings: Res<Settings>,
+    rig: Res<Rig>,
+    mut motion: ResMut<Motion>,
+    mut left: ResMut<LeftBomb>,
+    mode: Res<crate::menu_render::MenuMode>,
+    saved: Option<ResMut<crate::gameplay::Persistent>>,
+    akimbo: Res<super::akimbo::Akimbo>,
+    time: Res<Time<Real>>,
+    mut contact: Local<super::solid_contact::History>,
+) {
+    let held = &mut left.0;
+    let Some(mut play) = play else {
+        held.id = None;
+        return;
+    };
+    let p = &mut *play;
+    let level_id = crate::level_load::level_index();
+    if held.level != level_id || p.game.counter < held.last_tick {
+        held.id = None;
+        held.level = level_id;
+    }
+    held.last_tick = p.game.counter;
+    if held.id.is_some_and(|id| !is_held(p, id)) {
+        held.id = None;
+    }
+    let item_id = akimbo.held;
+    let ready = gameplay(&mode)
+        && p.game.hero.mode == 0
+        && p.game.hero.health > 0
+        && !p.death_pending
+        && !p.game.hero.tracked.grabbed[0];
+    if !rc_game::hero::items::is_glove(item_id) || (held.id.is_some() && held.item != item_id) {
+        cancel(p, held);
+        motion.left_bomb = BombGesture::default();
+        return;
+    }
+    let Some((hand, root, coll)) = motion.hands[0]
+        .zip(rig.root_for(&p.game, settings.units_per_metre))
+        .zip(level.0.collision.as_ref())
+        .map(|((hand, root), coll)| (hand, root, coll))
+        .filter(|_| ready)
+    else {
+        cancel(p, held);
+        motion.left_bomb = BombGesture::default();
+        return;
+    };
+    contact.prepare(rig.revision, item_id);
+    let pose = solid_point(p, coll, hand, root, settings.units_per_metre, &mut contact, 0);
+    let eye = rig.body_eye(&p.game);
+    if !unobstructed(p, coll, eye, pose.translation) {
+        cancel(p, held);
+        motion.left_bomb.press = None;
+        motion.left_bomb.release = None;
+        return;
+    }
+    let now = time.elapsed_secs_f64();
+    let press = motion.left_bomb.press.take().filter(|t| now - t <= 0.12);
+    let release = motion.left_bomb.release.take().filter(|(_, _, t)| now - t <= 0.12);
+    let Some(mut saved) = saved else {
+        cancel(p, held);
+        return;
+    };
+    if held.id.is_none() && press.is_some() && (motion.left_bomb.held || release.is_some()) {
+        prepare(p, &mut saved, held, item_id, pose.translation);
+    }
+    let Some(id) = held.id else { return };
+    if let Some((hand, velocity, _)) = release {
+        let launch = solid_point(p, coll, hand, root, settings.units_per_metre, &mut contact, 0);
+        if !unobstructed(p, coll, eye, launch.translation) {
+            cancel(p, held);
+            return;
+        }
+        throw(p, &mut saved, held, root, settings.units_per_metre, launch.translation, velocity);
+    } else if motion.left_bomb.held {
+        hold(p, &level, id, game_point(pose.translation), rotation(&pose));
+    } else {
+        cancel(p, held);
+    }
+}
+
+/// The left hand's held bomb at the latest left hand, on render frames too (as [`follow_held`]).
+fn follow_left(
+    play: Option<ResMut<crate::gameplay::Play>>,
+    settings: Res<Settings>,
+    rig: Res<Rig>,
+    motion: Res<Motion>,
+    left: Res<LeftBomb>,
+    mode: Res<crate::menu_render::MenuMode>,
+    level: Res<crate::Level>,
+) {
+    let (Some(mut p), Some(id), Some(hand)) = (play, left.0.id, motion.hands[0]) else {
+        return;
+    };
+    if !gameplay(&mode) || left.0.level != crate::level_load::level_index() || !motion.left_bomb.held {
+        return;
+    }
+    let (Some(root), Some(coll)) = (rig.root_for(&p.game, settings.units_per_metre), level.0.collision.as_ref()) else {
+        return;
+    };
+    let pose = point(hand, root, settings.units_per_metre, 0);
+    let eye = rig.body_eye(&p.game);
+    if unobstructed(&p, coll, eye, pose.translation) {
+        hold(&mut p, &level, id, game_point(pose.translation), rotation(&pose));
     }
 }
 
@@ -499,13 +680,13 @@ pub(super) fn follow_held(
     let Some(root) = rig.root_for(&p.game, settings.units_per_metre) else {
         return;
     };
-    let mut pose = point(hand, root, settings.units_per_metre);
+    let mut pose = point(hand, root, settings.units_per_metre, 1);
     pose.translation += contacts.right_shift;
     let Some(coll) = level.0.collision.as_ref() else {
         return;
     };
     let eye = rig.body_eye(&p.game);
     if unobstructed(&p, coll, eye, pose.translation) {
-        p.tracked_bomb_pose(id, game_point(pose.translation), rotation(&pose));
+        hold(&mut p, &level, id, game_point(pose.translation), rotation(&pose));
     }
 }

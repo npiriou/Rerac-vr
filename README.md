@@ -50,6 +50,7 @@ Please **don't report VR bugs to the ReRAC team**. They have nothing to do with 
 - **Throw the wrench** by letting go mid-swing. It flies where you threw it and comes back.
 - **Hyper Strike:** in the air, slam the wrench downward.
 - **Guns aim where your hand points.** Big weapons (Devastator, R.Y.N.O., Suck Cannon…) can be held with both hands.
+- **Akimbo:** turn it on in VR Options to hold a weapon in each hand (see below).
 - **Bombs, mines and Decoys are really thrown.** Hold the trigger, make a throwing motion, let go.
 - **The Walloper** works with an actual punch.
 - **Clank fights with his fists:** punch for real.
@@ -114,13 +115,14 @@ Button names are for Meta Quest / PICO controllers. On other controllers, use th
 | Walk | Left stick (or walk around your room) |
 | Turn | Right stick left / right (turns in steps) |
 | Jump / double jump | **A** |
-| Crouch | Hold **left trigger** |
-| Long jump / high jump | Hold **left trigger** + **A** |
-| Side flip / back flip | Flick the left stick sideways or back + **A** while holding **left trigger** |
-| Hover / strafe with Clank's packs, Hydro-Pack boost | Hold **X** or **B** |
+| Crouch | Hold **left grip** (or the **left trigger** with Akimbo off) |
+| Long jump / high jump | Hold **left grip** + **A** |
+| Side flip / back flip | Flick the left stick sideways or back + **A** while holding **left grip** |
+| Hover / strafe with Clank's packs, Hydro-Pack boost | Hold **B** (or the **left grip**) |
 | Grab a ledge | Squeeze a **grip** near the edge as you fall |
 | Climb up a ledge | Push both hands down hard (or press **A**) |
 | Let go of a ledge | Release both grips |
+| Shoot while hanging | Hang with one hand: the other one keeps its weapon, can pick one and shoot, and its grip takes the wrench (away from the ledge) |
 | Swim | Breaststroke with your hands. Stroke upward to dive |
 
 ### Fighting
@@ -136,6 +138,7 @@ Button names are for Meta Quest / PICO controllers. On other controllers, use th
 | Throw a bomb, mine or Decoy | Hold **right trigger**, make a throwing motion, let go. Let go slowly to cancel |
 | Hold a big weapon with two hands | Squeeze **left grip** near the front of the weapon |
 | Back to your weapon after using the wrench | **Right trigger** |
+| Use the left hand's weapon (Akimbo) | **Left trigger**, aim with your left hand (throw a glove with a throwing motion, punch with the Walloper) |
 
 ### Weapons, menus and the rest
 
@@ -144,9 +147,10 @@ Button names are for Meta Quest / PICO controllers. On other controllers, use th
 | Talk / interact | Click the **right stick** |
 | Quick select | Hold the **right stick** click, move your right hand toward a weapon, let go |
 | Next quick-select page | Pull **right trigger** while holding the right stick click |
+| Left hand's quick select (Akimbo) | Hold the **left stick** click, move your left hand toward a weapon, let go. **Left trigger** for the next page. Pick the weapon it holds to empty it |
 | Pause | **Y** |
 | Skip a cutscene | **Y** |
-| Map | Click the **left stick** |
+| Map | **X** |
 | Use a menu | Point with your right hand, then pull the **right trigger** or press **A**. **Y** goes back |
 | Buy at a vendor | Browse with the right stick, **right trigger** to buy, right stick click to leave |
 | Turn a bolt crank | Hold the wrench on the bolt with **right grip** and walk around it |
@@ -185,6 +189,19 @@ Open **Options → VR Options** from the main menu or the pause menu:
 | Direction | What "forward" on the stick means: where your **body** faces, or where you **gaze** | Body |
 | Hoverboard lean | Steer the hoverboard by leaning | On |
 | Player body | See the body you play (Ratchet, Clank, Giant Clank or the Hologuise disguise) when you look down, without its head: **Cutscenes** in scenes and ship sequences, **Always** also while you play. **Off** still shows Ratchet's hands in scenes | Off |
+| Akimbo | A weapon in each hand. See **Akimbo** below | Off |
+| Play position | **Seated** lifts the view by about 45 cm, so you see from Ratchet's eyes sitting down. Your height is measured when play starts (or with F8): switch this when you sit down or stand up | Standing |
+
+**Akimbo.** Hold the **left stick** click: the left hand's quick select opens on the left, with the same pages as the
+right one (which moves to the right; both can be open at once). Move your left hand toward a weapon and let go; the
+**left trigger** uses it. Pick the weapon it already holds to empty your left hand. The left hand takes every weapon but
+the Visibomb, and the Swingshot: throw the gloves' bombs, mines and decoys with a throwing motion, punch for real with
+the Walloper, swing with the Swingshot; the Drone Device launches its drones. The same weapon can be in both hands, with
+the same ammo (one Suck Cannon at a time). While one hand swings, pulls, lunges, hangs from a ledge or turns a bolt, the
+other one keeps its weapon and can pick one and shoot. What the left hand cannot take is greyed in its quick select.
+The wrench and the other gadgets stay in the right hand. On the hoverboard the left weapon is put away (the left trigger
+boosts). The other buttons are the same with Akimbo on or off, except the left trigger: with Akimbo off it crouches like
+the left grip.
 
 **Port Options** (right above) has the graphics settings. VR starts on the **High** preset. A new game starts with the helpdesk (the tips voice and text) off; turn it on in **Options**.
 

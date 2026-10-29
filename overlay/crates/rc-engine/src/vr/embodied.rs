@@ -32,6 +32,7 @@ impl Plugin for EmbodiedPlugin {
                 super::body_fists::BodyFistsPlugin,
                 super::bomb_glove::BombGlovePlugin,
                 super::blaster::BlasterPlugin,
+                super::akimbo::AkimboPlugin,
                 super::gadget_socket::GadgetSocketPlugin,
                 super::traversal::TraversalPlugin,
                 super::orientation::OrientationPlugin,
@@ -73,6 +74,10 @@ impl Plugin for EmbodiedPlugin {
 pub(super) struct Motion {
     pub hands: [Option<Transform>; 2],
     pub bomb: BombGesture,
+    /// The left trigger's throw (Akimbo: the left hand's glove, super::bomb_glove), with the left hand's own motion.
+    pub left_bomb: BombGesture,
+    left_samples: VecDeque<(f64, Vec3)>,
+    left_velocity: Vec3,
     held: bool,
     grip_down: bool,
     grip_suppressed: bool,
@@ -171,6 +176,7 @@ pub(super) fn capture(
     tracked: Query<(&Hand, &Transform, &OxrSpaceLocationFlags)>,
     mut motion: ResMut<Motion>,
     play: Option<Res<crate::gameplay::Play>>,
+    pad: Option<Res<super::game_input::GamePad>>,
 ) {
     if !focus.as_ref().is_some_and(|f| f.0) {
         *motion = Motion::default();
@@ -202,6 +208,7 @@ pub(super) fn capture(
         let grip_down = motion.grip_down;
         let grip_suppressed = motion.grip_suppressed;
         let bomb_held = motion.bomb.held;
+        let left_held = motion.left_bomb.held;
         *motion = Motion {
             revision: rig.revision,
             level,
@@ -210,6 +217,10 @@ pub(super) fn capture(
             grip_suppressed,
             bomb: BombGesture {
                 held: bomb_held,
+                ..default()
+            },
+            left_bomb: BombGesture {
+                held: left_held,
                 ..default()
             },
             ..default()
@@ -221,6 +232,7 @@ pub(super) fn capture(
             motion.hands[hand.0] = Some(*pose);
         }
     }
+    capture_left(&mut motion, pad.as_ref().map(|p| p.left_fire), time.elapsed_secs_f64());
     let grip = input.as_ref().and_then(|i| i.grip);
     let trigger = input.as_ref().and_then(|i| i.trigger);
     let Some(hand) = motion.hands[1].filter(|_| grip.is_some() || trigger.is_some()) else {
@@ -286,15 +298,20 @@ pub(super) fn capture(
     }
     let value = grip.unwrap_or(0.0);
     // Another body (Clank's fists) or a right hand on a ledge: the right grip does not take the wrench.
+    // The left hand alone on a ledge, the right away from it: the right grip takes the wrench as usual.
+    let free = play.as_ref().is_some_and(|p| right_hand_free(&p.game.hero));
     let no_wrench = play.as_ref().is_some_and(|p| {
-        p.game.hero.mode != 0 || p.game.hero.tracked.grabbed[1] || matches!(p.game.hero.state, 0x18..=0x1b)
+        p.game.hero.mode != 0
+            || p.game.hero.tracked.grabbed[1]
+            || (matches!(p.game.hero.state, 0x18..=0x1b) && !free)
     });
     let reserved = no_wrench
-        || input
-            .as_ref()
-            .and_then(|i| i.left_grip)
-            .is_some_and(|v| v > 0.5)
-        || play.as_ref().is_some_and(|p| p.game.hero.f838 != 0);
+        || (!free
+            && (input
+                .as_ref()
+                .and_then(|i| i.left_grip)
+                .is_some_and(|v| v > 0.5)
+                || play.as_ref().is_some_and(|p| p.game.hero.f838 != 0)));
     // The wrench (a caught one too) is held only while the grip is squeezed (`held` latched by the press);
     // otherwise it is put away, as after a slow release.
     if value > 0.6 {
@@ -354,6 +371,63 @@ pub(super) fn capture(
         motion.release = None;
     }
     motion.serial = motion.serial.wrapping_add(1);
+}
+
+/// The left trigger's throw gesture (`fire`: the left hand's weapon trigger, None without the pad), as the right
+/// trigger's in [`capture`]: the press, and the release of a moving hand (1 m/s over the last 80 ms) with its velocity.
+fn capture_left(motion: &mut Motion, fire: Option<bool>, now: f64) {
+    let Some(hand) = motion.hands[0].filter(|_| fire.is_some()) else {
+        motion.left_samples.clear();
+        motion.left_velocity = Vec3::ZERO;
+        motion.left_bomb = BombGesture::default();
+        return;
+    };
+    if motion
+        .left_samples
+        .back()
+        .is_some_and(|(t, p)| now - t > 0.12 || hand.translation.distance(*p) > 0.5)
+    {
+        motion.left_samples.clear();
+        motion.left_bomb = BombGesture::default();
+    }
+    motion.left_samples.push_back((now, hand.translation));
+    while motion.left_samples.len() > 2 && now - motion.left_samples[0].0 > 0.08 {
+        motion.left_samples.pop_front();
+    }
+    motion.left_velocity = motion.left_samples.front().map_or(Vec3::ZERO, |(t, p)| {
+        let dt = (now - t) as f32;
+        if dt > 0.008 { (hand.translation - *p) / dt } else { Vec3::ZERO }
+    });
+    let velocity = motion.left_velocity;
+    let g = &mut motion.left_bomb;
+    if g.press.is_some_and(|t| now - t > 0.12) {
+        g.press = None;
+    }
+    if g.release.is_some_and(|(_, _, t)| now - t > 0.12) {
+        g.release = None;
+    }
+    if fire == Some(true) && !g.held {
+        g.release = None;
+        g.held = true;
+        g.press = Some(now);
+    }
+    if fire == Some(false) && g.held {
+        g.held = false;
+        if velocity.length() >= 1.0 {
+            g.release = Some((hand, velocity, now));
+        }
+    }
+}
+
+/// The left hand alone holds a ledge and the right hand is out of its reach (the native grab's reach: 1.05 along, 0.75
+/// up or down): the right hand is free, its grip the wrench's (rc_game::hero::off_hand leads the left hand meanwhile).
+pub(super) fn right_hand_free(h: &rc_game::hero::Hero) -> bool {
+    let t = &h.tracked;
+    if !t.grabbed[0] || t.grabbed[1] {
+        return false;
+    }
+    let a = h.tracked_ledge_anchor();
+    !t.hands[1].is_some_and(|hand| (hand[0] - a[0]).hypot(hand[1] - a[1]) < 1.05 && (hand[2] - a[2]).abs() < 0.75)
 }
 
 fn grip_frame(item: &HandItem, data: &ItemData) -> Option<rc_formats::moby_anim::Rows> {
@@ -735,9 +809,11 @@ fn interact(
         return;
     }
     // A fresh grip requests the wrench once; native quick-select requests remain authoritative afterward.
-    let using_hands = p.game.hero.f838 != 0
-        || p.game.hero.tracked.grabbed.iter().any(|&g| g)
-        || matches!(p.game.hero.group, 3 | 0x11 | 0x12);
+    let free = right_hand_free(&p.game.hero);
+    let using_hands = !free
+        && (p.game.hero.f838 != 0
+            || p.game.hero.tracked.grabbed.iter().any(|&g| g)
+            || matches!(p.game.hero.group, 3 | 0x11 | 0x12));
     if using_hands {
         if motion.equip_wrench {
             motion.held = false;
@@ -759,11 +835,11 @@ fn interact(
         motion.equip_wrench = false;
         motion.equip_ready_tick = None;
     }
-    if input.left_grip.is_some_and(|v| v > 0.5) {
+    if input.left_grip.is_some_and(|v| v > 0.5) && !free {
         motion.equip_wrench = false;
         motion.equip_ready_tick = None;
     }
-    if p.game.hero.tracked.grabbed[1] || matches!(p.game.hero.state, 0x18..=0x1b) {
+    if p.game.hero.tracked.grabbed[1] || (matches!(p.game.hero.state, 0x18..=0x1b) && !free) {
         motion.held = false;
         motion.grip_suppressed = motion.grip_down;
     }
@@ -1463,7 +1539,14 @@ fn present(
     support: Res<super::blaster::SupportGrip>,
     level: Res<crate::Level>,
     melee: Res<Melee>,
-    (time, fixed, mut trace, input): (Res<Time<Real>>, Res<Time<Fixed>>, Local<WrenchTrace>, Res<HandInput>),
+    (time, fixed, mut trace, input, akimbo, left_bomb): (
+        Res<Time<Real>>,
+        Res<Time<Fixed>>,
+        Local<WrenchTrace>,
+        Res<HandInput>,
+        Res<super::akimbo::Akimbo>,
+        Res<super::bomb_glove::LeftBomb>,
+    ),
     mut flight_report: Local<Option<u8>>,
 ) {
     // Ratchet's body is on a layer no eye renders, unless the Player body option draws it in play (its head and
@@ -1665,7 +1748,7 @@ fn present(
                 it.position = (Vec3::from_array(it.position) - wrench_middle(it, item_axes(it))).to_array();
             }
         }
-        let grips = [input.left_grip, input.grip].map(|g| g.unwrap_or(0.0));
+        let mut grips = [input.left_grip, input.grip].map(|g| g.unwrap_or(0.0));
         let docked = super::gadget_socket::docked(&play, attach);
         let plugged = docked.is_some();
         if let Some(docked) = docked {
@@ -1700,6 +1783,31 @@ fn present(
         }
         // A flying wrench can remain visible while the Bomb Glove replaces the right-hand mesh.
         attach.tracked_items(&shown);
+        // Akimbo: the left hand's item at the left controller (super::akimbo), placed again for this frame; the left
+        // hand closes on it. Its glove to throw (super::bomb_glove's left-hand throw) replaces the left hand, as the
+        // Walloper does, mirrored as the hand's glove.
+        let off = &play.game.hero.off_hand;
+        let left_hand = motion.hands[0]
+            .filter(|_| active && !play.game.hero.tracked.grabbed[0])
+            .map(|h| root.mul_transform(h));
+        let glove = if left_bomb.0.id.is_some() { left_bomb.0.item } else { akimbo.held };
+        let off_item = left_hand.zip(play.game.item_data.as_ref()).and_then(|(hand, data)| {
+            if rc_game::hero::items::is_glove(glove) {
+                let mut it = super::bomb_glove::appearance(hand, data, glove)?;
+                super::akimbo::mirror(&mut it, hand);
+                return Some(it);
+            }
+            let mut it = off.item().filter(|_| off.items.tracked_hand.is_some())?.clone();
+            super::akimbo::place_left(&mut it, hand, data)?;
+            Some(it)
+        });
+        let left_replaced = off_item.as_ref().is_some_and(|it| {
+            rc_game::hero::items::is_glove(glove) || it.o_class == rc_game::hero::walloper::CLASS
+        });
+        if off_item.is_some() {
+            grips[0] = 1.0;
+        }
+        attach.tracked_off_hand(off_item.as_ref(), off.hand_mods());
         let holding_weapon = (!play.game.hero.hand_hidden() || plugged)
             && !play.game.hero.tracked.grabbed[1]
             && item.as_ref().is_some_and(|i| {
@@ -1712,6 +1820,7 @@ fn present(
         attach.tracked_hands(
             [0, 1].map(|side| {
                 if !active
+                    || (side == 0 && left_replaced)
                     || (side == 1
                         && (bomb_glove.is_some()
                             || (holding_weapon

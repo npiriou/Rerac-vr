@@ -1,11 +1,13 @@
 [CmdletBinding()]
 param([ValidateSet('normal','debug','debug-gold','debug-clank','debug-giant','debug-hologuise')][string]$Mode='normal',
     [ValidateSet('calibration','novalis','kerwan')][string]$Scene='kerwan',[string]$DataDir,
-    [ValidateRange(0.1,10.0)][double]$UnitsPerMetre=1.0,[string]$SpawnGame,[switch]$Release,
+    [ValidateRange(0.1,10.0)][double]$UnitsPerMetre=1.0,[string]$SpawnGame,[switch]$Release,[ValidateRange(-1,18)][int]$Level=-1,
     [switch]$DesktopPreview,[ValidateRange(0,600)][int]$SmokeTestSeconds=0)
 $ErrorActionPreference='Stop'
 Set-StrictMode -Version Latest
 if ($SmokeTestSeconds -gt 0 -and -not $DesktopPreview) {throw '-SmokeTestSeconds requires -DesktopPreview.'}
+# -Level: the level index a debug launch starts on (Rilgar 5, ...); debug-clank and debug-giant keep their own.
+if ($Level -ge 0 -and $Mode -notin @('debug','debug-gold','debug-hologuise')) {throw '-Level applies to the debug, debug-gold and debug-hologuise launches.'}
 $Root=(Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $Profile=if ($Release) {'release'} else {'debug'}
 $Exe=Join-Path $Root "target/$Profile/rerac.exe"
@@ -21,9 +23,9 @@ if ($Scene -ne 'calibration' -and (-not $DataDir -or -not (Test-Path -LiteralPat
 }
 $Out=Join-Path $Root 'work/vr';[IO.Directory]::CreateDirectory($Out)|Out-Null
 $Surface=if ($DesktopPreview) {'preview'} else {'headset'}
-$BootScene=if ($Scene -eq 'calibration') {'calibration'} elseif ($Mode -eq 'normal') {'frontend'} elseif ($Mode -eq 'debug-clank') {'orxon'} elseif ($Mode -eq 'debug-giant') {'quartu'} else {$Scene}
+$BootScene=if ($Scene -eq 'calibration') {'calibration'} elseif ($Mode -eq 'normal') {'frontend'} elseif ($Mode -eq 'debug-clank') {'orxon'} elseif ($Mode -eq 'debug-giant') {'quartu'} elseif ($Level -ge 0) {"level$Level"} else {$Scene}
 $Log=Join-Path $Out ("$Mode-$BootScene-$Surface-"+(Get-Date -Format 'yyyyMMdd-HHmmss')+'.log')
-$Names=@('RC_VR_MODE','RC_SAVE_DIR','RC_GIVE_ITEMS','RC_GIVE_ITEMS_EQUIP','RC_GIVE_HYDROPACK','RC_GIVE_BOLTS','RC_GIVE_GOLD_BOLTS','RC_GIVE_GOLD_WEAPONS','RC_GAME_BEATEN','RC_SKIP_LOGOS','RC_PLAY_FLY','RC_VR','RC_VR_SCENE','RC_VR_UNITS_PER_METRE','RC_VR_SPAWN_GAME','RC_LEVEL','RC_UNLOCK_PLANETS','RC_AUDIO','RC_VR_DESKTOP_PREVIEW','RC_VR_PREVIEW_SECONDS','RC_FRONTEND','RC_SCENE','RC_PLAY','RC_FRAME_CAP','RC_OCCL','RC_MSAA','RC_SCREENSHOT','RC_SCREENSHOT_FRAME')
+$Names=@('RC_VR_MODE','RC_SAVE_DIR','RC_GIVE_ITEMS','RC_GIVE_ITEMS_EQUIP','RC_GIVE_HYDROPACK','RC_GIVE_BOLTS','RC_GIVE_GOLD_BOLTS','RC_GIVE_GOLD_WEAPONS','RC_GAME_BEATEN','RC_SKIP_LOGOS','RC_PLAY_FLY','RC_VR','RC_VR_SCENE','RC_VR_UNITS_PER_METRE','RC_VR_SPAWN_GAME','RC_VR_LEVEL','RC_LEVEL','RC_UNLOCK_PLANETS','RC_AUDIO','RC_VR_DESKTOP_PREVIEW','RC_VR_PREVIEW_SECONDS','RC_FRONTEND','RC_SCENE','RC_PLAY','RC_FRAME_CAP','RC_OCCL','RC_MSAA','RC_SCREENSHOT','RC_SCREENSHOT_FRAME')
 $Old=@{};foreach ($Name in $Names) {$Old[$Name]=[Environment]::GetEnvironmentVariable($Name,'Process')}
 Push-Location $Root
 try {
@@ -41,7 +43,8 @@ try {
         $env:RC_FRONTEND='1'
     } else {
         # The body launches (the game sets the same): Orxon (10) as Clank, Quartu (15) on Giant Clank's pad.
-        $env:RC_LEVEL=if ($Mode -eq 'debug-clank') {'10'} elseif ($Mode -eq 'debug-giant') {'15'} elseif ($Scene -eq 'kerwan') {'3'} else {'1'}
+        $env:RC_LEVEL=if ($Mode -eq 'debug-clank') {'10'} elseif ($Mode -eq 'debug-giant') {'15'} elseif ($Level -ge 0) {$Level.ToString()} elseif ($Scene -eq 'kerwan') {'3'} else {'1'}
+        if ($Level -ge 0) {$env:RC_VR_LEVEL=$Level.ToString()} else {Remove-Item -LiteralPath Env:RC_VR_LEVEL -ErrorAction SilentlyContinue}
         $env:RC_UNLOCK_PLANETS=(0..18) -join ','
         $env:RC_FRONTEND='0'
     }

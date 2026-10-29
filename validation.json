@@ -1,6 +1,6 @@
 {
-  "updated_utc": "2026-10-28T09:05:11.636764+00:00",
-  "delivery_status": "release_0_1_3_ready",
+  "updated_utc": "2026-10-29T07:00:32.844534+00:00",
+  "delivery_status": "akimbo_build_ready",
   "executed_checks": {
     "command": "py -3.13 -X utf8 -B -m unittest discover -s tests -v",
     "suite": "overlay package contracts",
@@ -24,8 +24,8 @@
   },
   "native_windows_build": {
     "profile": "release",
-    "executable_sha256": "D1A068E1BDEDF2371A0126478B7CDD25DA619918C2B911A1ADE955BCAEC3A05E",
-    "completed_utc": "2026-10-28T02:17:17.0946469Z",
+    "executable_sha256": "7F707F9A4B9F29A132E77279304D9B55E5AEBE07D6A6DECADB0565A26FDA64D2",
+    "completed_utc": "2026-10-29T07:00:23.2060301Z",
     "steps_passed": [
       "Check unchanged non-VR build path",
       "Check VR integration",
@@ -1568,5 +1568,42 @@
       "package_log": "work/vr/package-20261028-160444.log"
     },
     "headset_tested": true
+  },
+  "akimbo": {
+    "reported_behavior": "Requested: an Akimbo option, a weapon in each hand. The left stick clicks like the right one and opens a separate quick select for the left hand, the same ring as the right hand's; both can be shown at once, one on the right and one on the left; an unlocked weapon can be held in either hand or both; the wrench stays in the right hand (only the right grip takes it out). Then: the buttons must be the same with the option on or off, R1 on the left grip, the map on X (Y is the pause). In the headset the first build's left pick undid itself and no gun appeared; the second build's left Tesla Claw drew no bolt. Then: every missing weapon but the Visibomb, and the Swingshot, in the left hand. Then: equip and fire with one hand while the other swings, hangs from a ledge or turns a bolt; the left ring's unpickable items greyed; with Akimbo off the left trigger stays R1 (besides the grip).",
+    "changes": [
+      "VR Options -> Akimbo (Off by default, vr_akimbo): the left stick's click opens the left hand's ring and the left trigger uses its weapon.",
+      "The buttons, with Akimbo on or off: X is the map (Select; it held L2, also B's hover and the left grip's R1 for the Hydro-Pack), R1 (crouch, pack jumps, flips) is the left grip unless that hand holds a ledge or takes the right weapon's foregrip, the left stick's click no longer opens the map; the left trigger keeps the hoverboard's boost. Mounted, X keeps the missiles (circle).",
+      "rc_game::hero::off_hand: a second hand slot for the left hand. It keeps its own copy of what the hand-item code uses for the item in hand (the slot and item moby, the guns' pvars, the weapon arm's 0x1413f8 / 0x1413fa / 0x13f50c, the hand records, the item's sound loops), swaps it into the hero after the hand's item pass and runs the same creation, tracked placement, weapon-check draw and item update on it; its sounds play at its moby. Ratchet's animation requests from it are dropped. Ammo is shared.",
+      "The left hand's own item: the Suck Cannon (not while the hand holds one: the moby side keeps one cannon), Devastator, Taunter, Blaster, Pyrocitor, Tesla Claw, Morph-o-Ray and R.Y.N.O., and the Swingshot and the Walloper, whose use is a hero state: while the left hand uses one (its trigger held or a left punch offered, then through the pull's and swing's states, the hook out and back, or the lunge) it leads: off_hand::lead swaps its copy and its hand requests into the hero before the hero update, with the pad's circle (and its press history) from the left trigger, and unlead swaps the hand's back after the item pass; the hand's item waits meanwhile.",
+      "The gloves (Bomb, Mine, Decoy Gloves, Glove of Doom) are thrown by the left hand as by the right: the left trigger prepares the projectile in the left palm, a tracked release throws it (vr::bomb_glove's LeftBomb, the left trigger's gesture in vr::embodied's Motion). The Walloper's physical punch is detected for each hand holding one (TrackedPunch::left). The Drone Device picked in the left ring launches its drones, the left hand keeps its item.",
+      "The left hand's ring is a second copy of the native quick select with the hand's pages (owned items of the VR selectable list, 8 a page, the left trigger turning them), drawn at the native left anchor while the hand's moves to the right edge (HUD slot 4); the left hand picks by reaching; picking the item the left hand holds empties it. Only the pick of the ring's close counts (the native ring repeats its request through its fade-out).",
+      "One hand busy, the other free: in the states that keep one hand busy (a ledge, the bolt crank, the Swingshot's pull and swing, the Walloper's lunge) the native no-item flags (0x1413f7 / 0x1413fc / 0x1413fe) are the busy hand's; the free hand's pass runs as for Ratchet standing (group and state 0 for the pass): the left hand's beside the hand's, and while the left hand leads the hand's item beside it (off_hand::update_hand: the native swap rule UpdateWrenchSelected for its requests, its pad the hand's). A ledge held by the left hand alone makes the left hand lead, so that the hand's item stays out and fires; the hand's arm timer (0x13f50c, the Blaster's ticks(5) gate) counts in its own pass (the physics counts the leading hand's: the first build of this left the hand unable to fire), a weapon the ledge's entry put away comes back to it, and its grip takes the wrench while it is out of the ledge's reach.",
+      "The left ring greys the items the left hand cannot take (QuickSelect::greyed: drawn at a fifth of the alpha, passed over as empty slots, never picked); the Drone Device stays pickable. With Akimbo off the left trigger is R1 too (crouch, pack jumps, flips).",
+      "Drawing: a second set of the left hand's item classes on the left controller (moby_attach Slot::OffHand), the left hand closed on it; the gloves', the Walloper's and the Swingshot's right-handed models mirrored across the left controller's lateral plane, the gloves and the Walloper replacing the left hand; the left Tesla Claw's bolt, Taunter's rings, Morph-o-Ray's beam and Suck Cannon's vortex drawn from the left hand's copy, the Walloper's arcs for either hand; no support grip for the right weapon while the left holds an item or a glove; left-hand haptics on its shots."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release (non-VR cargo check, VR cargo check, Windows release build) passed in the play build checkout (rerac-vr-build), which the package reproduces (manifest re-applied on the upstream blobs, overlay compared byte for byte). Headset sessions of the earlier builds: the left ring opened and picked, the left gun shot, the left Tesla Claw drew no bolt (fixed here). No tests or gameplay scripts were run.",
+    "remaining_confirmation": "In the headset: firing and equipping with one hand while the other swings, hangs or cranks; the greyed left ring; the left trigger's R1 with Akimbo off; the left Tesla Claw's bolt, Taunter's rings, Morph-o-Ray's beam and Suck Cannon's vortex; the left gloves' throws; the left Walloper's punches and trigger lunge; the left Swingshot's pulls and swings (and the right weapon after them); the Drone Device from the left ring; the mirrored left models; X opening the map; R1 on the left grip around ledge grabs and two-handed weapons.",
+    "recorded_utc": "2026-10-29T07:00:32.844534+00:00",
+    "binary_sha256": "7F707F9A4B9F29A132E77279304D9B55E5AEBE07D6A6DECADB0565A26FDA64D2",
+    "build_log": "work/vr/build-20261029-135639.log",
+    "headset_tested": false
+  },
+  "player_feedback_fixes": {
+    "reported_behavior": "Player reports: the Decoy Glove's ball not centred in the hand; the hoverboard race start depending on where the player faced; saves that could not be overwritten (the warning showed, its confirm did nothing); a seated / standing option that adjusts the height.",
+    "changes": [
+      "The held Decoy Glove ball (vr::bomb_glove's hold): the decoy's model is not built about its origin; the centre of its drawn pose (the mean of its joints' translations) is put at the palm. A first build used its sequence's bounding sphere, which bounds the whole animation (the inflated decoy included): the headset showed the ball further off than before.",
+      "The hoverboard's mount (rc_game::hero::hoverboard's SetState 0x6b entry) in VR: Ratchet's facing is the player's until he mounts (tracked_face), so the board could start where the player faced (Rilgar's headset session: the mount took the player's facing, 3.0 rad, not the start's -2.1); mounted from foot or placed at the start (not from a crash, wall or water state), the board now starts along the race path where it is (the nearest point toward the next, as a respawn), on every level, and the view's existing snap to the board's front follows. Level 5's native start yaw (-2.1) faces back up the course: the original's camera-relative steering turned the board around at once, the VR steering (about the board's heading) kept it (a second headset session: the start at -2.1, the player riding the other way); the start now takes the path's direction there too (VR_GAME board_start logs it). The start set Ratchet's yaw but not his rotation rows, which the ride's slope alignment (align_up) rebuilds the Euler angles from: the next tick turned him back to the player's facing, and the view's snap to the board's front followed it (VR_GAME board_heading logged the player's facing). The rows now follow the yaw; a headset session then logged the view on the course's direction at all four starts.",
+      "Enemies the Walloper sparked on without damage, with either hand, standing still (the player's report): the moby loop runs a moby when it was drawn last frame (+0x31) or is within its update distance of the native camera, and VR took +0x31 from the native camera's culls alone. That camera follows behind Ratchet on its own (the headset never turns it), so in a fight on the spot, the player turned or snap-turned toward enemies it did not frame: they stood frozen, their hit records never read, while the lunge's spheres listed them (the sparkles). +0x31 is now also set for what the headset draws (moby_render for the level mobys, gameplay's upload for the created ones), outside a flight's streaming. Found by reading and not confirmed: enemies within reach of a punch are usually within their update distance of that camera too. A later Rilgar session traced every Walloper hit on the biters (class 623): each was listed, recorded and resolved for 3 damage on its first contact (the rest of the lunge in the resolver's cooldown, as in the original), with no hit lost; the report did not reproduce there.",
+      "The overwrite confirmation (and the New Game and challenge confirmations): its \"Yes\" / \"No\" hints are drawn inside the page's panel, but vr::menu_pointer placed their pointer targets without the panel's offset, so the trigger on \"Yes\" sent Cross, which the confirmation ignores. The targets now add the panel's offset.",
+      "scripts/vr/Run.ps1 -Level <index> (debug, debug-gold and debug-hologuise launches): the debug boot starts on that level (RC_VR_LEVEL, read by vr::game's debug launch, which set Kerwan alone), e.g. -Level 5 for Rilgar's hoverboard race.",
+      "VR Options -> Play position (vr_play_position: Standing by default, Seated). The height the view puts at Ratchet's eyes is measured once, when play first starts (and with F8), no more on every return from a menu, so a duck stays a duck; Seated lifts the view by 0.45 m (SEATED_LIFT, about the eye's drop from standing to sitting), switching it moves the view at once. (A first version re-measured the height on the switch, so it did nothing visible.)"
+    ],
+    "not_done": "Infobot videos on the bot's own screen: studied (the bot is hidden or deleted while the video plays, the world is frozen and not drawn in VR; it needs the scene's last pose held and a video quad on it, several days), not started.",
+    "validation": "Same build as the akimbo entry. No tests or gameplay scripts were run.",
+    "recorded_utc": "2026-10-29T07:00:32.844534+00:00",
+    "binary_sha256": "7F707F9A4B9F29A132E77279304D9B55E5AEBE07D6A6DECADB0565A26FDA64D2",
+    "build_log": "work/vr/build-20261029-135639.log",
+    "headset_tested": false
   }
 }

@@ -179,6 +179,9 @@ struct Snapshot {
     vendor: bool,
     bolts: i64,
     used: Vec<i64>,
+    /// Akimbo: the left hand's item and its uses (rc_game::hero::off_hand); its ammo is taken out of `used`.
+    off_item: i32,
+    off_fired: u64,
     bomb: Option<(usize, i32)>,
     gravity: i32,
     rail: Option<usize>,
@@ -250,6 +253,8 @@ pub(super) struct State {
     pack_beat: u64,
     bolt_next: f64,
     rail_next: f64,
+    /// The left hand's next shot pulse (its streams burn ammo every tick).
+    off_next: f64,
 }
 impl State {
     fn pulse(
@@ -589,8 +594,11 @@ pub(super) fn update(
             vendor: mode.spatial_vendor && mode.state.mode == rc_game::menus::mode::Mode::Vendor,
             bolts: saved.as_ref().map_or(0, |s| s.0.global.bolts as i64),
             used: saved.as_ref().map_or_else(Vec::new, |s| {
-                s.0.global.ammo_used.iter().map(|&v| v as i64).collect()
+                let off = &h.off_hand.used;
+                s.0.global.ammo_used.iter().enumerate().map(|(k, &v)| v as i64 - off.get(k).copied().unwrap_or(0) as i64).collect()
             }),
+            off_item: h.off_hand.held(),
+            off_fired: h.off_hand.fired,
             bomb: bomb.id.map(|id| (id, bomb.item)),
             gravity: h.gravity_mode as i32,
             rail: (h.group == 0xf && h.boots.off_rail == 0)
@@ -675,6 +683,17 @@ pub(super) fn update(
             }
             if n.blaster > o.blaster {
                 state.right(now, 0.35, 25, 160.0, 15);
+            }
+            // Akimbo: the left hand's shots, at most 20 a second.
+            if n.off_fired > o.off_fired && now >= state.off_next {
+                let (amp, ms, hz) = match n.off_item {
+                    11 => (0.90, 110, 55.0),
+                    23 => (0.80, 65, 70.0),
+                    15 => (0.35, 25, 160.0),
+                    _ => (0.28, 30, 140.0),
+                };
+                state.pulse(0, now, amp, ms, hz, 5, n.off_item);
+                state.off_next = now + 0.05;
             }
             for side in 0..2 {
                 if n.fist_hits[side] > o.fist_hits[side] {

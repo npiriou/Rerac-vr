@@ -24,6 +24,10 @@ pub struct GamePad {
     pub quick_select: Option<Vec2>,
     pub vendor: Option<PadInput>,
     pub skip_cutscene: bool,
+    /// Akimbo (super::akimbo): the left hand's ring is open (the left stick's click held), with where the left hand
+    /// points in it; the left trigger fires the left hand's weapon.
+    pub left_select: Option<Vec2>,
+    pub left_fire: bool,
 }
 #[derive(Resource, Default)]
 pub(super) struct Focused(pub bool);
@@ -34,6 +38,8 @@ pub(super) struct HandInput {
     pub trigger: Option<f32>,
     firing: bool,
     pack_modifier: bool,
+    /// The left trigger past its threshold (the pack modifier's hysteresis): the left hand's weapon fires (akimbo).
+    left_firing: bool,
     pub pack_jump: bool,
     pub menu_click: bool,
     pub menu_held: bool,
@@ -47,6 +53,8 @@ pub(super) struct HandInput {
     menu_active: bool,
     menu_consumed: bool,
     quick_page: i8,
+    /// The left trigger pressed with the left hand's ring open: its next page (taken by super::akimbo's tick).
+    pub left_page: bool,
 }
 #[derive(Component, Clone, Copy)]
 pub(super) struct Hand(pub usize);
@@ -108,6 +116,19 @@ impl HandSelect {
         }
     }
 }
+/// Akimbo: the left hand's ring pick, and a left trigger already used (the ring was open, a menu) that fires nothing
+/// until released.
+#[derive(Default)]
+pub(super) struct LeftHand {
+    select: HandSelect,
+    consumed: bool,
+    /// The left grip's squeeze last sample, and whether it took the right weapon's foregrip (no R1 then).
+    squeezed: bool,
+    support: bool,
+    /// The left trigger is held since it last turned the left ring's page.
+    page_held: bool,
+}
+
 #[derive(Default)]
 pub(super) struct SkipInput {
     media: Option<rc_game::menus::mode::Mode>,
@@ -233,10 +254,10 @@ fn create(instance: Res<OxrInstance>, mut commands: Commands) {
             movement: set.create_action("move", "Move Ratchet", &[])?,
             camera: set.create_action("camera", "Snap turn", &[])?,
             grip: set.create_action("grip", "Hold wrench / release to throw", &[])?,
-            left_grip: set.create_action("left_grip", "Support barrel / grab ledge", &[])?,
+            left_grip: set.create_action("left_grip", "R1 / support barrel / grab ledge", &[])?,
             left_trigger: set.create_action(
                 "pack_modifier",
-                "R1 / pack jumps / side flips",
+                "Left-hand weapon (Akimbo) or R1 / hoverboard boost",
                 &[],
             )?,
             trigger: set.create_action("bomb_trigger", "Hold bomb / release to throw", &[])?,
@@ -475,6 +496,12 @@ pub(super) fn sample(
     mut jump: Local<JumpInput>,
     mut skip: Local<SkipInput>,
     (mut utility_down, mut utility_consumed, mut left_squeeze): (Local<u32>, Local<bool>, Local<bool>),
+    (support, akimbo, mut left, options): (
+        Option<Res<super::blaster::SupportGrip>>,
+        Option<Res<super::akimbo::Akimbo>>,
+        Local<LeftHand>,
+        Option<Res<crate::render_settings::VrOptions>>,
+    ),
 ) {
     *out = GamePad::default();
     hand.grip = None;
@@ -489,6 +516,8 @@ pub(super) fn sample(
         hand.menu_active = false;
         hand.menu_consumed = true;
         hand.pack_modifier = false;
+        hand.left_firing = false;
+        *left = LeftHand::default();
         hand.pack_jump = false;
         hand.quick_page = 0;
         *jump = JumpInput::default();
@@ -580,8 +609,10 @@ pub(super) fn sample(
         .map(|s| s.current_state);
     if left_trigger.is_some_and(|v| v > 0.6) {
         hand.pack_modifier = true;
+        hand.left_firing = true;
     } else if left_trigger.is_none_or(|v| v < 0.35) {
         hand.pack_modifier = false;
+        hand.left_firing = false;
     }
     let movement = vector(&a.movement);
     let camera = vector(&a.camera);
@@ -666,11 +697,58 @@ pub(super) fn sample(
         *left_squeeze = false;
     }
     if gameplay {
-        if hand.pack_modifier {
+        // On the hoverboard (super::game turns the view with the board): no snap turn, the right stick holds the tricks,
+        // the left trigger boosts (not R1), the right trigger fires Kalebo III's board weapon (○, as the other weapons:
+        // super::blaster) and the left grip is L1.
+        let board = play
+            .as_ref()
+            .is_some_and(|p| p.game.hero.mode == 0 && p.game.hero.group == rc_game::hero::hoverboard::GROUP);
+        // The left hand, the same buttons whether Akimbo (super::akimbo) is on or not: the left stick's click opens its
+        // ring (with Akimbo; X is the map), the left trigger fires its weapon (off the board: there the trigger boosts)
+        // and pages its ring, and the left grip is R1 (crouch, pack jumps, flips) unless it holds a ledge or supports the
+        // right hand's weapon; with Akimbo off the left trigger is R1 as well.
+        let akimbo_on = options.as_ref().is_some_and(|o| o.akimbo) && !shopping;
+        let left_ring = akimbo_on && buttons & button::SELECT != 0;
+        buttons &= !button::SELECT;
+        let left_weapon = akimbo_on && !board && akimbo.as_ref().is_some_and(|a| a.left != 0);
+        if left_ring && hand.left_firing {
+            left.consumed = true;
+        } else if !hand.left_firing {
+            left.consumed = false;
+        }
+        // The left trigger turns the left ring's page, as the right one does in the hand's.
+        hand.left_page |= left_ring && hand.left_firing && !left.page_held;
+        left.page_held = left_ring && hand.left_firing;
+        out.left_fire = left_weapon && hand.left_firing && !left_ring && !left.consumed;
+        if left_ring {
+            // The left hand picks as the right does in its ring (from where it was at the click); the stick keeps walking.
+            left.select.held = true;
+            let at = tracked.iter().find_map(|(hand, pose, flags)| {
+                (hand.0 == 0 && flags.pos_valid() && flags.pos_tracked()).then_some(pose.translation)
+            });
+            out.left_select = Some(left.select.direction(at, super::game::pose(views.as_deref()), rig.revision));
+        } else if left.select.held {
+            left.select = HandSelect::default();
+        }
+        let ledge = play.as_ref().is_some_and(|p| {
+            p.game.hero.tracked.grabbed[0] || rc_game::hero::tracked::ledge_hold(p.game.hero.state)
+        });
+        // A squeeze that took the right weapon's foregrip is the support's until released.
+        if !*left_squeeze {
+            left.support = false;
+        } else if !left.squeezed {
+            let pose = |side: usize| tracked.iter().find_map(|(h, pose, _)| (h.0 == side).then_some(*pose));
+            left.support = support.as_ref().is_some_and(|s| pose(1).zip(pose(0)).is_some_and(|(r, l)| s.reaches(r, l)));
+        }
+        left.squeezed = *left_squeeze;
+        // With Akimbo off the left trigger is R1 too (it fires nothing).
+        let pack = (*left_squeeze && !ledge && !left.support && !support.as_ref().is_some_and(|s| s.held))
+            || (!akimbo_on && hand.left_firing);
+        if pack {
             buttons |= button::R1;
         }
-        // X and B, free in play, hold the native L2 and R2 (the hover and Clank strafes, hoverboard tricks, the
-        // first-person R.Y.N.O., the Hydro-Pack's boost, a ledge drop). Mounted or disguised they keep ○ and □.
+        // X, free in play, is the map (Select; Y is the pause), and B holds the native R2 (the hover strafe, the
+        // Hydro-Pack's boost). Mounted they keep ○ and □ (a flown ship's missiles), disguised B keeps □.
         let face = buttons;
         if shopping {
             // Purchases are the pointer's click (super::vendor); the stick pages.
@@ -700,15 +778,9 @@ pub(super) fn sample(
             jump.trigger_consumed = true;
         }
         jump.disguised = disguised;
-        // On the hoverboard (super::game turns the view with the board): no snap turn, the right stick holds the tricks,
-        // the left trigger boosts (not R1), the right trigger fires Kalebo III's board weapon (○, as the other weapons:
-        // super::blaster) and the left grip is L1.
-        let board = play
-            .as_ref()
-            .is_some_and(|p| p.game.hero.mode == 0 && p.game.hero.group == rc_game::hero::hoverboard::GROUP);
         let tricks = if board { board_tricks(camera) } else { 0 };
         let boost = board && hand.pack_modifier;
-        if down && !jump.pressed && hand.pack_modifier {
+        if down && !jump.pressed && pack {
             let pack_ready = play.as_ref().is_some_and(|p| {
                 let h = &p.game.hero;
                 h.mode == 0 && h.grounded() && matches!(h.state, 0 | 2 | 3 | 4 | 0x73)
@@ -825,11 +897,11 @@ pub(super) fn sample(
             | button::START
             | button::SELECT
             | square;
-        if mounted.is_none() && !disguised && !shopping {
+        if mounted.is_none() && !shopping {
             if face & button::CIRCLE != 0 {
-                buttons |= button::L2;
+                buttons |= button::SELECT;
             }
-            if face & button::SQUARE != 0 {
+            if face & button::SQUARE != 0 && !disguised {
                 buttons |= button::R2;
             }
         }
@@ -846,6 +918,8 @@ pub(super) fn sample(
     } else {
         *selection = HandSelect::default();
         *jump = JumpInput::default();
+        // A left trigger held into play (a menu's R1) fires the left hand's weapon only once released.
+        *left = LeftHand { consumed: hand.left_firing, ..default() };
         hand.pack_jump = false;
         hand.quick_page = 0;
         rig.hold_snap(camera.x);
