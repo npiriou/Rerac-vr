@@ -20,7 +20,7 @@
   ],
   "distribution": "Source overlay, guarded upstream patches, upstream Cargo/main test fixtures and pinned Cargo.lock. No game assets or binary.",
   "implementation": "Original game and level with tracked native arsenal/gadgets and native pack/ledge/swim gesture inputs",
-  "latest_build_sha256": "7F707F9A4B9F29A132E77279304D9B55E5AEBE07D6A6DECADB0565A26FDA64D2",
+  "latest_build_sha256": "A87A00064B1416CF7A67F2DB5EED26E98331FB0B8519872D11EA4ED1E895EFF7",
   "validation_record": "STARTUP_READINESS.json",
   "latest_build_physical_validation": "The trigger bringing the weapon back after a wrench throw; the whoosh only on big fast swings; quick-select pages with the right trigger; walking backward and sideways; Walloper punches only forward.",
   "performance_visibility": {
@@ -700,6 +700,24 @@
     "recorded_utc": "2026-10-29T07:00:32.844534+00:00",
     "binary_sha256": "7F707F9A4B9F29A132E77279304D9B55E5AEBE07D6A6DECADB0565A26FDA64D2",
     "build_log": "work/vr/build-20261029-135639.log",
+    "headset_tested": false
+  },
+  "vr_comfort_fixes": {
+    "reported_behavior": "Player reports: the VR Options rows are too close to pick one with the pointer; on the hoverboard with the Player body drawn the head does not follow the body, which often passes through the view; enabling Player body Always from the pause menu shows Ratchet's head while paused; the board's view faces where it goes, while a rider stands side-on and looks over a shoulder. Then, with the side-on view: every respawn and start turned the view to where the player already looked (the head turned to see ahead), a stiff neck's worth further, and re-taking the posture took seconds of the race. Then: VR Options must show every row at once, a line's worth apart (a first build showed five, scrolling); the body's arms swept through the view at every board jump; the lean steered the board left whatever the player did.",
+    "changes": [
+      "VR Options shows all its rows in a taller list panel: the menu frames (class 0x472) are skinned to their four corner joints, so moving a panel's bottom corners down (its top ones up for what the screen's bottom leaves no room for) stretches the drawn frame and its rect alike (rc_game::menus::pause::frame::FrameMobys::grow, the drawn pose's corner joints moved the same in menu_render). VR Options' list panel (port::frame_grow, VR_GROW) is 85% taller, its eight rows about as far apart as the camera list's four, without scrolling.",
+      "On the hoverboard, with the Player body drawn, Ratchet's arms are collapsed from the shoulders (vr::body::ratchet_play_joints), not only the forearms: the jumps and tricks swung them through the view. The VR hands stay.",
+      "The lean steered one way for good: its reference (the neck when the board was placed) followed the neck only within 3 cm of it, so a posture taken after the start (turning side-on to see ahead) read as a full lean that never returned. After each start and respawn the reference now settles on the neck for a second (the lean does not steer meanwhile), then keeps following it, within 3 cm with a 3 s time constant and beyond with 6 s: a held lean turns through a curve, a posture drifts back to straight.",
+      "Ratchet's palette (gameplay's upload) is uploaded again when the Player body's in-play mode changes, not only after a tick: in the pause menu no tick runs, so switching to Always drew the body with its head until play resumed.",
+      "With the Player body drawn in play, the eye stays on the body's head on a rail and on the hoverboard (vr::game's Rig::root_for no longer anchors the view to the head's room position there): the lean still steers, measured from the same neck reference, but no longer carries the view out of the body.",
+      "On the hoverboard the view faces where Ratchet's body does: his stance, the turn of his shoulder line in the ride sequence 0x52 from his idle's (vr::body::stance_yaw, VR_GAME board_stance logs it), is added to the board's heading for the view's snap and follow, and the lean is measured along the board's right as the room sees it (the toes or the heels), not the player's right.",
+      "The board's snap (its start and respawns) took the player's body heading estimated that instant (vr::orientation::body_yaw: the head, the shoulder line, the hands' reach and pointing), which follows the head once the player rides looking over a shoulder; the view then turned to the gaze plus the stance. The heading the board was first taken with (eased to the body for two seconds then, the player not yet in a riding posture) is now kept (Rig::board_body) for every later start and respawn; only the board's own heading changes the view. F8 forgets it."
+    ],
+    "validation": "scripts/vr/Build.ps1 -Release (non-VR cargo check, VR cargo check, Windows release build) passed in the play build checkout (rerac-vr-build), which the package reproduces. No tests or gameplay scripts were run.",
+    "remaining_confirmation": "In the headset: the stretched VR Options panel (its frame, its rows' spacing, nothing overlapping it); the arms gone on the board; the head never shown when switching Player body to Always while paused; the board's view staying in the body; the side-on stance's direction and the toe / heel steering.",
+    "recorded_utc": "2026-10-29T07:37:55.818647+00:00",
+    "binary_sha256": "A87A00064B1416CF7A67F2DB5EED26E98331FB0B8519872D11EA4ED1E895EFF7",
+    "build_log": "work/vr/build-20261029-143245.log",
     "headset_tested": false
   }
 }

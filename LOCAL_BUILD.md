@@ -814,3 +814,9 @@ Build: `work/vr/build-20261029-135639.log`. SHA-256: `7F707F9A4B9F29A132E7727930
 ## Player feedback: the decoy, the race start, saves, the play position
 
 The held Decoy Glove ball is centred in the palm (its model's centre, not its origin). On the hoverboard the board starts along the race path in VR, not where the player faced. The save overwrite confirmation's "Yes" works with the pointer (its target had no panel offset). VR Options gains Play position: the height is measured once, Seated lifts the view 45 cm. `Run.ps1 -Level <index>` starts a debug launch on another level (`-Level 5`: Rilgar). Infobot videos on the bot's screen were studied, not started. Same build as above; headset confirmation pending.
+
+## VR Options spacing, the body on the hoverboard, the side-on stance
+
+VR Options shows all its rows, further apart, in a taller panel, so the pointer can pick one. Switching Player body to Always in the pause menu no longer shows Ratchet's head until play resumes. With the body drawn, the view stays in its head on rails and on the hoverboard (the lean steers without moving the view out of the body). On the board the view faces where Ratchet's body does, side-on, and the lean steers with the toes and the heels; starts and respawns keep the player's riding posture, the lean's reference settles after them and drifts back to straight, and the body's arms are not drawn on the board (docs/vr/VR_POLISH_REVIEW.md). Non-VR and VR cargo checks and the Windows release build passed in the play build checkout the package reproduces. No tests or gameplay scripts were run; headset confirmation pending.
+
+Build: `work/vr/build-20261029-143245.log`. SHA-256: `A87A00064B1416CF7A67F2DB5EED26E98331FB0B8519872D11EA4ED1E895EFF7`.

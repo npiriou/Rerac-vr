@@ -89,6 +89,24 @@ fn chain_to(class: &MobyAnimClass, joint: u8) -> Vec<u8> {
 /// (crate::moby_attach: 74.. / 54..).
 const RATCHET_ARMS: [(u8, u8); 2] = [(74, 72), (54, 52)];
 
+/// Ratchet's stance in sequence `seq` (the hoverboard's ride): how far (radians, counterclockwise about the moby's up)
+/// his shoulders are turned from his idle's (sequence 0, where he faces the moby's front). He rides side-on: the view
+/// on the board faces where his body does, not where the board goes.
+pub(crate) fn stance_yaw(class: &MobyAnimClass, seq: u8) -> Option<f32> {
+    let chains = RATCHET_ARMS.map(|(_, shoulder)| chain_to(class, shoulder));
+    let refs = [chains[0].as_slice(), chains[1].as_slice()];
+    let line = |seq: u8| -> Option<f32> {
+        class.sequence(seq)?;
+        let s = AnimState { seq_a: seq, frame_a: 0, seq_b: seq, frame_b: 0, t: 0.0, speed: 0.0, rate: 0.0, flags: 0, trigger_count: 0, skip_advance: false };
+        let p = moby_anim::evaluate_chains_posed(class, &s, None, &refs, &[], &[]);
+        let (l, r) = (p.first()?[3], p.get(1)?[3]);
+        let d = [l[0] - r[0], l[1] - r[1]];
+        (d[0].hypot(d[1]) > 1e-3 && d.iter().all(|v| v.is_finite())).then(|| d[1].atan2(d[0]))
+    };
+    let a = line(seq)? - line(0)?;
+    Some(a.sin().atan2(a.cos()))
+}
+
 /// `joint` is `root` or below it.
 fn under(class: &MobyAnimClass, joint: usize, root: u8) -> bool {
     let mut j = Some(joint);
@@ -157,6 +175,13 @@ const BODIES: [(i16, u8, [u8; 2]); 4] = [
 /// The joints collapsed on a hero body of class `o_class` drawn in play: its head and forearms.
 pub(crate) fn play_joints(o_class: i16) -> Option<[u8; 3]> {
     BODIES.iter().find(|b| b.0 == o_class).map(|&(_, head, [l, r])| [head, l, r])
+}
+
+/// Ratchet's joints collapsed in play: his head and forearms, and on the hoverboard his whole arms from the shoulders
+/// (the jumps and tricks swung them through the view). The VR hands, drawn at the controllers, stay.
+pub(crate) fn ratchet_play_joints(board: bool) -> [u8; 3] {
+    let [head, l, r] = play_joints(0).unwrap_or_default();
+    if board { [head, RATCHET_ARMS[0].1, RATCHET_ARMS[1].1] } else { [head, l, r] }
 }
 
 /// The horizontal offset (game x / y, world units) from a body's position to its head joint in its current pose. In

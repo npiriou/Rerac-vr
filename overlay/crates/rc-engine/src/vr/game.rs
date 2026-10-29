@@ -148,6 +148,15 @@ pub(super) struct Rig {
     board_lean: f32,
     /// Seconds left after the board was placed during which its front keeps easing to the player's body heading.
     board_align: f32,
+    /// Seconds left after the board was placed during which the lean's reference settles ([`BOARD_LEAN_SETTLE`]).
+    board_settle: f32,
+    /// Ratchet's stance on the board (`super::body::stance_yaw` of the ride sequence) for the level it was measured on:
+    /// the view on the board faces where his body does, side-on, not along the board.
+    stance: Option<(u32, f32)>,
+    /// The player's body heading (tracking space) the board was first taken with: every later start and respawn keeps
+    /// it, since the player still stands as when riding, head already turned to see ahead (a new estimate then followed
+    /// the head, which turned the view further). F8 forgets it.
+    board_body: Option<f32>,
 }
 pub(crate) fn native_panel(play: &crate::gameplay::Play) -> bool {
     let gold_bolt = play
@@ -217,7 +226,10 @@ impl Rig {
         }
         let scale = scale * self.body_scale();
         let mut center = self.center?;
-        if let Some(head) = self.rail_center.or(self.board_center.map(|(head, _)| head)).or(self.head) {
+        // With the Player body drawn in play, the eye stays on its head: on a rail or the board the lean steers but does
+        // not carry the view out of the body (it passed through the view).
+        let anchored = if super::body::in_play() { None } else { self.rail_center.or(self.board_center.map(|(head, _)| head)) };
+        if let Some(head) = anchored.or(self.head) {
             center.x = head.x;
             center.z = head.z;
         }
@@ -889,6 +901,14 @@ const BOARD_LEAN_FULL: f32 = 0.12;
 const BOARD_LEAN_LINEAR: f32 = 0.45;
 const BOARD_LEAN_DRIFT: f32 = 0.03;
 const BOARD_LEAN_DRIFT_SECS: f32 = 3.0;
+/// Beyond that band the reference still follows the neck, slower (time constant, seconds): a held lean keeps turning
+/// the board through a curve, but a posture taken without meaning to steer (turning side-on to see ahead) returns to
+/// straight instead of steering one way for good.
+const BOARD_LEAN_HOLD_SECS: f32 = 6.0;
+/// After the board is placed (its start, a respawn), the player settles into the riding posture: for this long
+/// (seconds) the reference follows the neck closely (time constant, seconds) and the lean does not steer.
+const BOARD_LEAN_SETTLE: f32 = 1.0;
+const BOARD_LEAN_SETTLE_SECS: f32 = 0.15;
 /// The board's turn (−1 left .. 1 right) for a sideways neck offset (metres).
 /// VR Options' Play position, Seated: the view is lifted by this much (metres, about the eye's drop from standing to
 /// sitting), so that a seated player sees from Ratchet's standing eyes.
@@ -1022,6 +1042,7 @@ type CameraExtras<'w> = (
     Option<Res<'w, crate::render_settings::VrOptions>>,
     Option<Res<'w, super::loading::FlightWorld>>,
     Option<Res<'w, super::embodied::Motion>>,
+    Option<Res<'w, crate::Level>>,
 );
 
 fn follow_game_camera(
@@ -1039,7 +1060,7 @@ fn follow_game_camera(
     scene: Res<crate::scene_render::ActiveScene>,
     scene_runtime: Res<crate::scene_render::SceneRuntime>,
     fixed: Res<Time<Fixed>>,
-    (attach, vr_options, departure, motion): CameraExtras,
+    (attach, vr_options, departure, motion, level): CameraExtras,
 ) {
     // Until this frame's eye is known, culling uses the native camera (the title, a lost focus).
     super::loading::set_render_eye(None, false);
@@ -1062,6 +1083,7 @@ fn follow_game_camera(
         rig.yaw = heading(head.rotation);
         rig.world_yaw = play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2;
         rig.turn = 0.0;
+        rig.board_body = None;
         rig.rail_heading = None;
         rig.rail_center = None;
         rig.rail_pitch = 0.0;
@@ -1224,31 +1246,47 @@ fn follow_game_camera(
     // The hoverboard: its start and its respawns place it along the course, so the player's body heading (not the
     // gaze of that instant) becomes the board's front, as a recentre does, and keeps easing to it for a moment. While
     // riding, the view turns with the board (it steers about its own heading, `Tracked::board_lean`), so the player
-    // keeps facing the board's front without turning in the room.
+    // keeps facing the same way on the board without turning in the room. That way is Ratchet's body's: he rides
+    // side-on (`Rig::stance`), so the player looks over a shoulder to see ahead, and leans on the toes or the heels
+    // to turn.
     let group = play.game.hero.group;
     let on_board = group == rc_game::hero::hoverboard::GROUP;
+    let index = crate::level_load::level_index();
+    if on_board && rig.stance.is_none_or(|(l, _)| l != index) {
+        // The ride sequence 0x52 (rc_game::hero::hoverboard's `ride_seq`, without the weapon).
+        let class = level.as_ref().and_then(|l| l.0.mobys.anim.get(play.ratchet_class()));
+        let stance = class.and_then(|c| super::body::stance_yaw(c, 0x52)).unwrap_or(0.0);
+        rig.stance = Some((index, stance));
+        println!("VR_GAME board_stance yaw={stance:.3}");
+    }
+    let stance = rig.stance.filter(|_| on_board).map_or(0.0, |(_, a)| a);
     let board = Vec3::from_array(play.game.hero.position());
     let placed = rig.board_pos.is_some_and(|old| old.distance(board) > 3.0);
     let body_yaw = super::orientation::body_yaw(head, motion.as_ref().map_or([None; 2], |m| m.hands));
     let wrap = |a: f32| a.sin().atan2(a.cos());
     if on_board && (rig.hero_group != group || placed) {
-        rig.world_yaw = play.game.hero.rot[2].to_f32() - std::f32::consts::FRAC_PI_2;
-        rig.yaw = body_yaw;
+        rig.world_yaw = play.game.hero.rot[2].to_f32() + stance - std::f32::consts::FRAC_PI_2;
+        let first = rig.board_body.is_none();
+        rig.yaw = *rig.board_body.get_or_insert(body_yaw);
         rig.turn = 0.0;
         rig.board_center = None;
-        rig.board_align = BOARD_ALIGN_SECS;
+        rig.board_settle = BOARD_LEAN_SETTLE;
+        // Only the first ride eases to the body: the player has not taken a riding posture yet.
+        rig.board_align = if first { BOARD_ALIGN_SECS } else { 0.0 };
         rig.revision = rig.revision.wrapping_add(1);
         println!(
-            "VR_GAME board_heading yaw={:.3} placed={placed} body={body_yaw:.3} gaze={:.3}",
+            "VR_GAME board_heading yaw={:.3} placed={placed} first={first} body={body_yaw:.3} kept={:.3} gaze={:.3}",
             play.game.hero.rot[2].to_f32(),
+            rig.yaw,
             heading(head.rotation)
         );
     } else if on_board {
-        let error = wrap(play.game.hero.board.yaw - std::f32::consts::FRAC_PI_2 - rig.world_yaw);
+        let error = wrap(play.game.hero.board.yaw + stance - std::f32::consts::FRAC_PI_2 - rig.world_yaw);
         rig.world_yaw += (error * (1.0 - (-dt / BOARD_FOLLOW_SECS).exp())).clamp(-dt * BOARD_FOLLOW_RATE, dt * BOARD_FOLLOW_RATE);
         if rig.board_align > 0.0 {
             rig.board_align -= dt;
             rig.yaw += wrap(body_yaw - rig.yaw) * (1.0 - (-dt / BOARD_ALIGN_FOLLOW).exp());
+            rig.board_body = Some(rig.yaw);
         }
     }
     rig.board_lean = 0.0;
@@ -1256,14 +1294,22 @@ fn follow_game_camera(
         rig.board_center = None;
         rig.board_align = 0.0;
     } else {
-        let side = Quat::from_rotation_y(rig.yaw) * Vec3::X;
+        // The board's right in the room: the player's right turned back by the stance.
+        let side = Quat::from_rotation_y(rig.yaw - stance) * Vec3::X;
         let at = neck(&head);
+        let settling = rig.board_settle > 0.0;
         let (_, center) = rig.board_center.get_or_insert((head.translation, at));
         let offset = (at - *center).dot(side);
-        if offset.abs() < BOARD_LEAN_DRIFT {
-            *center += (at - *center) * (1.0 - (-dt / BOARD_LEAN_DRIFT_SECS).exp());
-        }
-        rig.board_lean = board_lean_of(offset);
+        let follow = if settling {
+            BOARD_LEAN_SETTLE_SECS
+        } else if offset.abs() < BOARD_LEAN_DRIFT {
+            BOARD_LEAN_DRIFT_SECS
+        } else {
+            BOARD_LEAN_HOLD_SECS
+        };
+        *center += (at - *center) * (1.0 - (-dt / follow).exp());
+        rig.board_settle = (rig.board_settle - dt).max(0.0);
+        rig.board_lean = if settling { 0.0 } else { board_lean_of(offset) };
     }
     rig.hero_group = group;
     rig.board_pos = on_board.then_some(board);
