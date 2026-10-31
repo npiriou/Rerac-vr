@@ -977,6 +977,14 @@
         {
           "old": "            boots: menu.port_value(Setting::Boots).map_or(o.boots, |v| v == 0),\n            camera_flip: menu.port_value(Setting::CameraFlip).map_or(o.camera_flip, |v| v == 1),\n            direction_body: menu.port_value(Setting::Direction).map_or(o.direction_body, |v| v == 0),\n            board_lean: menu.port_value(Setting::BoardLean).map_or(o.board_lean, |v| v == 0),\n            body: menu.port_value(Setting::Body).map_or(o.body, crate::render_settings::VrBody::from_index),\n            akimbo: menu.port_value(Setting::Akimbo).map_or(o.akimbo, |v| v == 1),\n            seated: menu.port_value(Setting::Seated).map_or(o.seated, |v| v == 1),\n",
           "new": "            boots: menu.port_value(Setting::Boots).map_or(o.boots, |v| v == 0),\n            camera_flip: menu.port_value(Setting::CameraFlip).map_or(o.camera_flip, |v| v == 1),\n            direction_body: menu.port_value(Setting::Direction).map_or(o.direction_body, |v| v == 0),\n            body: menu.port_value(Setting::Body).map_or(o.body, crate::render_settings::VrBody::from_index),\n            akimbo: menu.port_value(Setting::Akimbo).map_or(o.akimbo, |v| v == 1),\n            seated: menu.port_value(Setting::Seated).map_or(o.seated, |v| v == 1),\n"
+        },
+        {
+          "old": "        menu.set_port_value(Setting::Seated, o.seated as u8);\n",
+          "new": "        menu.set_port_value(Setting::Seated, o.seated as u8);\n        menu.set_port_value(Setting::Turning, o.smooth_turn as u8);\n"
+        },
+        {
+          "old": "            seated: menu.port_value(Setting::Seated).map_or(o.seated, |v| v == 1),\n",
+          "new": "            seated: menu.port_value(Setting::Seated).map_or(o.seated, |v| v == 1),\n            smooth_turn: menu.port_value(Setting::Turning).map_or(o.smooth_turn, |v| v == 1),\n"
         }
       ]
     },
@@ -2287,6 +2295,26 @@
         {
           "old": "    Entry { setting: Setting::Boots, label: text::BOOTS, values: &[text::ON, text::OFF] },\n    Entry { setting: Setting::CameraFlip, label: text::CAMERA_FLIP, values: &[text::OFF, text::ON] },\n    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n    Entry { setting: Setting::BoardLean, label: text::BOARD_LEAN, values: &[text::ON, text::OFF] },\n    Entry { setting: Setting::Body, label: text::PLAYER_BODY, values: &[text::OFF, text::CUTSCENES, text::ALWAYS] },\n    Entry { setting: Setting::Akimbo, label: text::AKIMBO, values: &[text::OFF, text::ON] },\n    Entry { setting: Setting::Seated, label: text::PLAY_POSITION, values: &[text::STANDING, text::SEATED] },\n",
           "new": "    Entry { setting: Setting::Boots, label: text::BOOTS, values: &[text::ON, text::OFF] },\n    Entry { setting: Setting::CameraFlip, label: text::CAMERA_FLIP, values: &[text::OFF, text::ON] },\n    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n    Entry { setting: Setting::Body, label: text::PLAYER_BODY, values: &[text::OFF, text::CUTSCENES, text::ALWAYS] },\n    Entry { setting: Setting::Akimbo, label: text::AKIMBO, values: &[text::OFF, text::ON] },\n    Entry { setting: Setting::Seated, label: text::PLAY_POSITION, values: &[text::STANDING, text::SEATED] },\n"
+        },
+        {
+          "old": "pub const VR_GROW: f32 = 0.85;",
+          "new": "pub const VR_GROW: f32 = 1.1;"
+        },
+        {
+          "old": "    pub const SEATED: i32 = -0x21d;\n",
+          "new": "    pub const SEATED: i32 = -0x21d;\n    pub const TURNING: i32 = -0x21e;\n    pub const SNAP: i32 = -0x21f;\n"
+        },
+        {
+          "old": "            SEATED => b\"Seated\",\n",
+          "new": "            SEATED => b\"Seated\",\n            TURNING => b\"Turning\",\n            SNAP => b\"Snap\",\n"
+        },
+        {
+          "old": "    Seated,\n",
+          "new": "    Seated,\n    /// VR: right-stick turning, value 0 in 30-degree steps (the default), 1 continuously.\n    Turning,\n"
+        },
+        {
+          "old": "    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n",
+          "new": "    Entry { setting: Setting::Direction, label: text::DIRECTION, values: &[text::BODY, text::GAZE] },\n    Entry { setting: Setting::Turning, label: text::TURNING, values: &[text::SNAP, text::SMOOTH] },\n"
         }
       ]
     },
@@ -2995,6 +3023,22 @@
         {
           "old": "        save_key(\"vr_boots\", word(self.boots));\n        save_key(\"vr_camera_flip\", word(self.camera_flip));\n        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n        save_key(\"vr_board_lean\", word(self.board_lean));\n        save_key(\"vr_body\", self.body.key());\n        save_key(\"vr_akimbo\", word(self.akimbo));\n        save_key(\"vr_play_position\", if self.seated { \"seated\" } else { \"standing\" });\n",
           "new": "        save_key(\"vr_boots\", word(self.boots));\n        save_key(\"vr_camera_flip\", word(self.camera_flip));\n        save_key(\"vr_direction\", if self.direction_body { \"body\" } else { \"gaze\" });\n        save_key(\"vr_body\", self.body.key());\n        save_key(\"vr_akimbo\", word(self.akimbo));\n        save_key(\"vr_play_position\", if self.seated { \"seated\" } else { \"standing\" });\n"
+        },
+        {
+          "old": "    pub seated: bool,\n",
+          "new": "    pub seated: bool,\n    /// Continuous right-stick turning (`vr_turning = snap | smooth`, snap by default).\n    pub smooth_turn: bool,\n"
+        },
+        {
+          "old": "            seated: load_key(\"vr_play_position\").is_some_and(|v| v.trim() == \"seated\"),\n",
+          "new": "            seated: load_key(\"vr_play_position\").is_some_and(|v| v.trim() == \"seated\"),\n            smooth_turn: load_key(\"vr_turning\").is_some_and(|v| v.trim() == \"smooth\"),\n"
+        },
+        {
+          "old": "    /// Writes both options into the port settings file.\n",
+          "new": "    /// Writes the VR options into the port settings file.\n"
+        },
+        {
+          "old": "        save_key(\"vr_play_position\", if self.seated { \"seated\" } else { \"standing\" });\n",
+          "new": "        save_key(\"vr_play_position\", if self.seated { \"seated\" } else { \"standing\" });\n        save_key(\"vr_turning\", if self.smooth_turn { \"smooth\" } else { \"snap\" });\n"
         }
       ]
     },

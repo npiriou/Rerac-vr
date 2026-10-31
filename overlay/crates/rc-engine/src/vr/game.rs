@@ -100,6 +100,7 @@ pub(super) struct Rig {
     head: Option<Vec3>,
     previous_head: Option<Vec3>,
     snap_held: bool,
+    smooth_blocked: bool,
     pub(super) revision: u64,
     reset_held: bool,
     /// The height (`center.y`) is measured for this play (once: the first time play starts, then F8).
@@ -176,10 +177,32 @@ impl Rig {
     pub(super) fn surface_up(&self) -> Vec3 {
         self.gravity_frame * Vec3::Y
     }
-    /// While snap turning is blocked, follow the stick without turning: a stick still pushed when it unblocks (quick
+    /// While stick turning is blocked, follow the stick without turning: a stick still pushed when it unblocks (quick
     /// select paging, the shop, a menu) must return to centre before it turns.
     pub(super) fn hold_snap(&mut self, x: f32) {
         self.snap_held = x.abs() >= 0.25;
+        self.smooth_blocked = self.snap_held;
+    }
+    /// Smooth turning uses a rescaled dead zone and reaches 90 degrees per second at full deflection. Keep gesture
+    /// history: continuous rig rotation is not physical hand motion. Snap turns still invalidate discontinuous poses.
+    pub(super) fn turn(&mut self, x: f32, smooth: bool, dt: f32) {
+        if !smooth {
+            self.snap(x);
+            return;
+        }
+        if !x.is_finite() || !dt.is_finite() {
+            return;
+        }
+        self.snap_held = x.abs() >= 0.25;
+        if !self.snap_held {
+            self.smooth_blocked = false;
+        }
+        if self.smooth_blocked || self.center.is_none() {
+            return;
+        }
+        let amount = ((x.abs() - 0.25) / 0.75).clamp(0.0, 1.0);
+        // Bound a stalled frame's rotation to avoid a large jump when rendering resumes.
+        self.turn -= x.signum() * amount * std::f32::consts::FRAC_PI_2 * dt.clamp(0.0, 0.05);
     }
     pub(super) fn snap(&mut self, x: f32) {
         if x.abs() < 0.25 {
@@ -412,7 +435,7 @@ pub fn prepare_game() -> anyhow::Result<()> {
         s.scene, s.desktop_preview
     );
     println!(
-        "VR_GAME first person: left stick move; right stick snap turn 30 degrees; A jump/double jump; right grip hold wrench, swing to hit, release a moving hand to throw; right stick click interacts or hold and move right hand for quick select; Y pause/skip; right trigger fires the selected Blaster/Pyrocitor or prepares a bomb for gesture release; Ratchet brown gloves; F8 recenter"
+        "VR_GAME first person: left stick move; right stick turn (Snap or Smooth in VR Options); A jump/double jump; right grip hold wrench, swing to hit, release a moving hand to throw; right stick click interacts or hold and move right hand for quick select; Y pause/skip; right trigger fires the selected Blaster/Pyrocitor or prepares a bomb for gesture release; Ratchet brown gloves; F8 recenter"
     );
     Ok(())
 }
@@ -895,7 +918,7 @@ fn heading(rotation: Quat) -> f32 {
     (-forward.x).atan2(-forward.z)
 }
 fn rig_transform(base: Transform, center: Vec3, yaw: f32, scale: f32) -> Transform {
-    // Only snap turning changes virtual yaw; physical head motion supplies pitch and roll.
+    // Stick turning changes virtual yaw; physical head motion supplies pitch and roll.
     let rotation = Quat::from_rotation_y(heading(base.rotation) - yaw);
     Transform {
         translation: base.translation - rotation * (center * scale),

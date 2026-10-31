@@ -113,7 +113,7 @@ Button names are for Meta Quest / PICO controllers. On other controllers, use th
 | Action | How |
 | --- | --- |
 | Walk | Left stick (or walk around your room) |
-| Turn | Right stick left / right (turns in steps) |
+| Turn | Right stick left / right (Snap or Smooth in VR Options) |
 | Jump / double jump | **A** |
 | Crouch | Hold **left grip** (or the **left trigger** with Akimbo off) |
 | Long jump / high jump | Hold **left grip** + **A** |
@@ -187,6 +187,7 @@ Open **Options → VR Options** from the main menu or the pause menu:
 | Boots | See Ratchet's boots when you look down | On |
 | Camera flip | Your view spins with Ratchet's flips. Only for very strong stomachs! | Off |
 | Direction | What "forward" on the stick means: where your **body** faces, or where you **gaze** | Body |
+| Turning | **Snap** turns in 30° steps. **Smooth** turns continuously, up to 90° per second as you push the right stick further | Snap |
 | Player body | See the body you play (Ratchet, Clank, Giant Clank or the Hologuise disguise) when you look down, without its head: **Cutscenes** in scenes and ship sequences, **Always** also while you play. **Off** still shows Ratchet's hands in scenes | Off |
 | Akimbo | A weapon in each hand. See **Akimbo** below | Off |
 | Play position | **Seated** lifts the view by about 45 cm, so you see from Ratchet's eyes sitting down. Your height is measured when play starts (or with F8): switch this when you sit down or stand up | Standing |

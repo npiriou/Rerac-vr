@@ -496,11 +496,12 @@ pub(super) fn sample(
     mut jump: Local<JumpInput>,
     mut skip: Local<SkipInput>,
     (mut utility_down, mut utility_consumed, mut left_squeeze): (Local<u32>, Local<bool>, Local<bool>),
-    (support, akimbo, mut left, options): (
+    (support, akimbo, mut left, options, time): (
         Option<Res<super::blaster::SupportGrip>>,
         Option<Res<super::akimbo::Akimbo>>,
         Local<LeftHand>,
         Option<Res<crate::render_settings::VrOptions>>,
+        Res<Time>,
     ),
 ) {
     *out = GamePad::default();
@@ -508,6 +509,7 @@ pub(super) fn sample(
     hand.left_grip = None;
     hand.trigger = None;
     if !focus.0 {
+        rig.hold_snap(1.0);
         hand.firing = false;
         hand.menu_click = false;
         hand.menu_held = false;
@@ -531,6 +533,7 @@ pub(super) fn sample(
         return;
     }
     let (Some(a), Some(session)) = (a, session) else {
+        rig.hold_snap(1.0);
         return;
     };
     // OpenXR returns inactive action states while unfocused. Never retain the previous pressed input.
@@ -697,7 +700,7 @@ pub(super) fn sample(
         *left_squeeze = false;
     }
     if gameplay {
-        // On the hoverboard (super::game turns the view with the board): no snap turn, the right stick holds the tricks,
+        // On the hoverboard (super::game turns the view with the board): no stick turn, the right stick holds the tricks,
         // the left trigger boosts (not R1), the right trigger fires Kalebo III's board weapon (○, as the other weapons:
         // super::blaster) and the left grip is L1.
         let board = play
@@ -878,9 +881,13 @@ pub(super) fn sample(
         } else if selection.held {
             // Release confirms the last hand-selected sector.
             *selection = HandSelect::default();
-            if shopping || board { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
-        } else {
-            if shopping || board { rig.hold_snap(camera.x) } else { rig.snap(camera.x) }
+        }
+        if !selecting {
+            if shopping || board {
+                rig.hold_snap(camera.x);
+            } else {
+                rig.turn(camera.x, options.as_ref().is_some_and(|o| o.smooth_turn), time.delta_secs());
+            }
         }
         camera = Vec2::ZERO;
         // Triangle keeps the native quick-select/context interaction priority.
